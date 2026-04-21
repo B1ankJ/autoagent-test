@@ -1,0 +1,4 @@
+[
+  {"id": "t1", "prompts": ["hello"], "mode": "api", "target_profile": "p"},
+  {"id": "t2", "prompts": ["hi", "again"], "mode": "api", "target_profile": "p", "new_session": false}
+]

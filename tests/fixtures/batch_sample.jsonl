@@ -1,0 +1,2 @@
+{"id": "t1", "prompts": ["hello"], "mode": "api", "target_profile": "p"}
+{"id": "t2", "prompts": ["hi", "再说一遍"], "mode": "api", "target_profile": "p", "new_session": false, "metadata": {"tag": "multi"}}

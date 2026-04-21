@@ -1,0 +1,3 @@
+id,prompts,mode,target_profile,new_session,metadata
+t1,hello,api,p,true,
+t2,"hi␟again",api,p,false,"{""tag"":""multi""}"
