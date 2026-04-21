@@ -17,3 +17,10 @@ def _env_defaults(monkeypatch, tmp_path: Path):
     db_mod._sessionmaker = None
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_scheduler():
+    yield
+    from autoagent.api._deps import reset_scheduler_for_tests
+    reset_scheduler_for_tests()
