@@ -1,7 +1,14 @@
 import pytest
+import yaml
+from pathlib import Path
 from pydantic import ValidationError
 
 from autoagent.profiles.schemas import parse_profile, ApiProfile, WebProfile, AndroidProfile
+from autoagent.config.settings import get_settings
+from autoagent.profiles.registry import (
+    list_profile_names, load_profile, save_profile_yaml, delete_profile,
+    validate_yaml,
+)
 
 
 def test_parse_api_profile():
@@ -56,3 +63,40 @@ def test_parse_android_profile():
 def test_invalid_platform_rejected():
     with pytest.raises(ValidationError):
         parse_profile({"name": "x", "platform": "ios"})
+
+
+def _api_yaml(name="openai_gpt4") -> str:
+    return yaml.safe_dump({
+        "name": name, "platform": "api",
+        "api": {"base_url": "https://x", "model": "m", "api_key_env": "K"},
+    })
+
+
+def test_save_and_load_profile():
+    save_profile_yaml("openai_gpt4", _api_yaml())
+    names = list_profile_names()
+    assert "openai_gpt4" in names
+    p = load_profile("openai_gpt4")
+    assert p.platform == "api"
+
+
+def test_load_missing_returns_none():
+    assert load_profile("ghost") is None
+
+
+def test_delete_profile():
+    save_profile_yaml("to_delete", _api_yaml("to_delete"))
+    assert "to_delete" in list_profile_names()
+    delete_profile("to_delete")
+    assert "to_delete" not in list_profile_names()
+
+
+def test_validate_yaml_accepts_good():
+    ok, err = validate_yaml(_api_yaml())
+    assert ok is True and err is None
+
+
+def test_validate_yaml_rejects_bad():
+    bad = "name: x\nplatform: unknown\n"
+    ok, err = validate_yaml(bad)
+    assert ok is False and err is not None
