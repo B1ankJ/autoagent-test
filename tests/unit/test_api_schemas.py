@@ -41,6 +41,18 @@ def test_batch_create_requires_same_mode():
         )
 
 
+def test_batch_create_accepts_same_mode():
+    b = BatchCreateJSON(
+        name="b", mode="api",
+        samples=[
+            Sample(id="t1", prompts=["x"], mode="api", target_profile="p"),
+            Sample(id="t2", prompts=["y"], mode="api", target_profile="p"),
+        ],
+    )
+    assert b.mode == "api"
+    assert len(b.samples) == 2
+
+
 def test_batch_summary():
     b = BatchSummary(batch_id="b1", name="n", mode="api", total=10, done=9, failed=1)
     assert b.avg_duration_ms is None
