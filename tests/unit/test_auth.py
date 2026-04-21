@@ -1,5 +1,8 @@
 import pytest
+
 from autoagent.auth.passwords import hash_password, verify_password
+from autoagent.storage.database import init_db
+from autoagent.storage.users import create_user, get_user
 
 
 def test_hash_and_verify_password():
@@ -9,8 +12,8 @@ def test_hash_and_verify_password():
     assert verify_password("wrong", h) is False
 
 
-from autoagent.storage.database import init_db
-from autoagent.storage.users import create_user, get_user
+def test_verify_password_rejects_garbage_hash():
+    assert verify_password("anything", "not-a-real-hash") is False
 
 
 @pytest.mark.asyncio
@@ -21,3 +24,4 @@ async def test_user_round_trip():
     u = await get_user("alice")
     assert u is not None
     assert u.username == "alice"
+    assert u.password_hash == h
