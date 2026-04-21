@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta, timezone
-
+import jwt
 import pytest
 
 from autoagent.auth.jwt import create_access_token, decode_token
@@ -43,6 +42,5 @@ def test_jwt_expired_rejected(monkeypatch):
     # Force immediate expiry
     monkeypatch.setattr(jwt_mod, "_expiry_hours", lambda: -1)
     token = create_access_token("alice")
-    import pytest
-    with pytest.raises(Exception):
+    with pytest.raises(jwt.ExpiredSignatureError):
         decode_token(token)
