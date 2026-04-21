@@ -1,10 +1,8 @@
 import asyncio
 from typing import Any
 
-import pytest
-
 from autoagent.executors.base import Executor, ExecutorContext
-from autoagent.models.api import Sample, SampleResult
+from autoagent.models.api import Sample
 
 
 class FakeExecutor(Executor):
@@ -42,6 +40,7 @@ async def test_timeout_marks_timeout_status():
         async def execute(self, *a, **k):
             await asyncio.sleep(10)
             return []
+
     s = Sample(id="t1", prompts=["x"], mode="api", target_profile="p", retry=0, timeout_sec=1)
     result = await Slow().run(s, profile=object(), default_timeout_sec=1)
     assert result.status == "timeout"

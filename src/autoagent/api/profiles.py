@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from autoagent.auth.deps import require_user
 from autoagent.profiles.registry import (
     delete_profile as _delete,
+)
+from autoagent.profiles.registry import (
     list_profile_names,
     load_profile_yaml,
     save_profile_yaml,
@@ -55,9 +57,9 @@ async def create_profile(name: str, body: ProfileBody) -> dict:
     try:
         save_profile_yaml(name, body.yaml)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"name": name}
 
 
@@ -66,9 +68,9 @@ async def update_profile(name: str, body: ProfileBody) -> dict:
     try:
         save_profile_yaml(name, body.yaml)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"name": name}
 
 

@@ -1,7 +1,7 @@
 import pytest
 
-from autoagent.storage.database import get_sessionmaker, init_db
 from autoagent.models.db import User
+from autoagent.storage.database import get_sessionmaker, init_db
 
 
 @pytest.mark.asyncio

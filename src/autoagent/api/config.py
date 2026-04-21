@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from autoagent.auth.deps import require_user
 from autoagent.models.api import DefaultsConfig, VLMConfig

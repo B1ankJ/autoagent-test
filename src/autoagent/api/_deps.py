@@ -26,7 +26,9 @@ def _lookup_profile(name: str) -> Any:
 def get_scheduler() -> BatchScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = BatchScheduler(executor_factory=_build_executor, profile_lookup=_lookup_profile)
+        _scheduler = BatchScheduler(
+            executor_factory=_build_executor, profile_lookup=_lookup_profile
+        )
     return _scheduler
 
 

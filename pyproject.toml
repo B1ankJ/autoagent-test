@@ -37,6 +37,12 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP"]
+# FastAPI uses function calls (Depends/Form/File/Query/Body) in parameter defaults by design.
+extend-safe-fixes = []
+
+[tool.ruff.lint.extend-per-file-ignores]
+"src/autoagent/api/*.py" = ["B008"]
+"src/autoagent/auth/deps.py" = ["B008"]
 
 [build-system]
 requires = ["setuptools>=68"]

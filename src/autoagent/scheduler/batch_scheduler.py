@@ -4,8 +4,9 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from autoagent.config.settings import get_settings
 from autoagent.executors.base import Executor, ExecutorContext
@@ -49,18 +50,29 @@ class BatchScheduler:
         self._tasks: dict[str, asyncio.Task] = {}
 
     async def submit(
-        self, *, name: str, mode: Mode, concurrency: int, samples: list[Sample],
+        self,
+        *,
+        name: str,
+        mode: Mode,
+        concurrency: int,
+        samples: list[Sample],
         target_profile_default: str | None = None,
     ) -> str:
         batch_id = f"b_{int(time.time())}_{uuid.uuid4().hex[:6]}"
         state = _RunState(
-            samples=samples, mode=mode, concurrency=max(1, concurrency),
+            samples=samples,
+            mode=mode,
+            concurrency=max(1, concurrency),
             target_profile_default=target_profile_default,
         )
         self._states[batch_id] = state
         await create_batch(
-            batch_id=batch_id, name=name, mode=mode, concurrency=state.concurrency,
-            total=len(samples), target_profile_default=target_profile_default,
+            batch_id=batch_id,
+            name=name,
+            mode=mode,
+            concurrency=state.concurrency,
+            total=len(samples),
+            target_profile_default=target_profile_default,
         )
         self._tasks[batch_id] = asyncio.create_task(self._run(batch_id, state))
         return batch_id
@@ -93,8 +105,11 @@ class BatchScheduler:
             async with sem:
                 if state.cancel_event.is_set():
                     result = SampleResult(
-                        id=sample.id, status="cancelled", prompts_sent=list(sample.prompts),
-                        mode=sample.mode, target_profile=sample.target_profile,
+                        id=sample.id,
+                        status="cancelled",
+                        prompts_sent=list(sample.prompts),
+                        mode=sample.mode,
+                        target_profile=sample.target_profile,
                     )
                 else:
                     # Resolve profile
@@ -102,19 +117,26 @@ class BatchScheduler:
                         profile = self._profile_lookup(sample.target_profile)
                     except Exception as e:
                         result = SampleResult(
-                            id=sample.id, status="failed", prompts_sent=list(sample.prompts),
-                            mode=sample.mode, target_profile=sample.target_profile,
+                            id=sample.id,
+                            status="failed",
+                            prompts_sent=list(sample.prompts),
+                            mode=sample.mode,
+                            target_profile=sample.target_profile,
                             error=f"profile lookup failed: {e}",
                         )
                     else:
                         default_timeout = (
-                            settings.default_api_timeout_sec if sample.mode == "api"
+                            settings.default_api_timeout_sec
+                            if sample.mode == "api"
                             else settings.default_gui_timeout_sec
                         )
                         ctx = ExecutorContext(verbose_logs=settings.default_verbose_logs)
                         executor = self._executor_factory(sample.mode)
                         result = await executor.run(
-                            sample, profile=profile, default_timeout_sec=default_timeout, ctx=ctx,
+                            sample,
+                            profile=profile,
+                            default_timeout_sec=default_timeout,
+                            ctx=ctx,
                         )
 
                 writer.append(result)
@@ -134,7 +156,9 @@ class BatchScheduler:
 
                     try:
                         await update_batch_progress(
-                            batch_id, done=state.done_count, failed=state.failed_count,
+                            batch_id,
+                            done=state.done_count,
+                            failed=state.failed_count,
                             total_duration_ms=state.total_duration_ms,
                             avg_duration_ms=(
                                 state.total_duration_ms
@@ -153,7 +177,8 @@ class BatchScheduler:
         try:
             await asyncio.gather(*(run_one(s) for s in state.samples))
             final_status = (
-                "cancelled" if state.cancel_event.is_set()
+                "cancelled"
+                if state.cancel_event.is_set()
                 else ("done" if state.failed_count == 0 else "failed")
             )
             await update_batch_status(batch_id, final_status)

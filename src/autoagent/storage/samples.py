@@ -5,8 +5,8 @@ from datetime import timezone
 
 from sqlalchemy import select
 
-from autoagent.models.db import Sample as SampleRow
 from autoagent.models.api import SampleResult
+from autoagent.models.db import Sample as SampleRow
 from autoagent.storage.database import get_sessionmaker
 
 
@@ -33,7 +33,12 @@ async def upsert_sample(batch_id: str, result: SampleResult) -> None:
     async with sm() as s:
         existing = await s.get(SampleRow, (batch_id, result.id))
         if existing is None:
-            existing = SampleRow(batch_id=batch_id, id=result.id, mode=result.mode, target_profile=result.target_profile)
+            existing = SampleRow(
+                batch_id=batch_id,
+                id=result.id,
+                mode=result.mode,
+                target_profile=result.target_profile,
+            )
             s.add(existing)
         existing.status = result.status
         existing.prompts_sent_json = json.dumps(result.prompts_sent)

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from autoagent.models.api import Sample, SampleResult, BatchCreateJSON, BatchSummary
+from autoagent.models.api import BatchCreateJSON, BatchSummary, Sample, SampleResult
 
 
 def test_sample_defaults():
@@ -24,8 +24,14 @@ def test_sample_mode_enum():
 
 def test_sample_result_roundtrip():
     r = SampleResult(
-        id="t1", status="done", prompts_sent=["hi"], responses=["hello"],
-        duration_ms=100, attempt_count=1, mode="api", target_profile="p",
+        id="t1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["hello"],
+        duration_ms=100,
+        attempt_count=1,
+        mode="api",
+        target_profile="p",
     )
     assert r.model_dump()["status"] == "done"
 
@@ -33,7 +39,8 @@ def test_sample_result_roundtrip():
 def test_batch_create_requires_same_mode():
     with pytest.raises(ValidationError):
         BatchCreateJSON(
-            name="b", mode="api",
+            name="b",
+            mode="api",
             samples=[
                 Sample(id="t1", prompts=["x"], mode="api", target_profile="p"),
                 Sample(id="t2", prompts=["y"], mode="gui_pc_web", target_profile="p"),
@@ -43,7 +50,8 @@ def test_batch_create_requires_same_mode():
 
 def test_batch_create_accepts_same_mode():
     b = BatchCreateJSON(
-        name="b", mode="api",
+        name="b",
+        mode="api",
         samples=[
             Sample(id="t1", prompts=["x"], mode="api", target_profile="p"),
             Sample(id="t2", prompts=["y"], mode="api", target_profile="p"),

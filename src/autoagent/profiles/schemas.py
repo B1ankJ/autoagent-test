@@ -1,9 +1,9 @@
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-
 # ---- shared fragments ----
+
 
 class Locator(BaseModel):
     type: Literal["resource_id", "text", "xpath", "class", "last_child_with_class"]
@@ -39,12 +39,13 @@ class SendButtonReenable(BaseModel):
 
 
 CompleteDetection = Annotated[
-    Union[DomStable, UiTreeStable, PixelStable, SendButtonReenable],
+    DomStable | UiTreeStable | PixelStable | SendButtonReenable,
     Field(discriminator="type"),
 ]
 
 
 # ---- API profile ----
+
 
 class ApiConfig(BaseModel):
     base_url: str
@@ -64,6 +65,7 @@ class ApiProfile(BaseModel):
 
 # ---- Web profile ----
 
+
 class WebReadyCheck(BaseModel):
     type: Literal["dom_selector"]
     selector: str
@@ -81,7 +83,7 @@ class WebSendMethodClick(BaseModel):
 
 
 WebSendMethod = Annotated[
-    Union[WebSendMethodKeyboard, WebSendMethodClick],
+    WebSendMethodKeyboard | WebSendMethodClick,
     Field(discriminator="type"),
 ]
 
@@ -106,6 +108,7 @@ class WebProfile(BaseModel):
 
 
 # ---- Android profile ----
+
 
 class AndroidReadyCheckTree(BaseModel):
     type: Literal["ui_tree_contains"]
@@ -137,7 +140,7 @@ class AndroidProfile(BaseModel):
 # ---- Union + parser ----
 
 Profile = Annotated[
-    Union[ApiProfile, WebProfile, AndroidProfile],
+    ApiProfile | WebProfile | AndroidProfile,
     Field(discriminator="platform"),
 ]
 

@@ -11,7 +11,11 @@ log = logging.getLogger(__name__)
 
 
 async def send_webhook(
-    url: str, result: SampleResult, *, max_retries: int = 3, base_delay: float = 0.5,
+    url: str,
+    result: SampleResult,
+    *,
+    max_retries: int = 3,
+    base_delay: float = 0.5,
 ) -> bool:
     delay = base_delay
     async with httpx.AsyncClient(timeout=10) as client:

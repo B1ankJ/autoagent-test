@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def _env_defaults(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("ADMIN_USERNAME", "admin")
@@ -10,9 +11,11 @@ def _env_defaults(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("LOGS_ROOT", str(tmp_path / "logs"))
     from autoagent.config.settings import get_settings
+
     get_settings.cache_clear()
     # Reset DB singletons so fresh tmp path is used
     import autoagent.storage.database as db_mod
+
     db_mod._engine = None
     db_mod._sessionmaker = None
     yield
@@ -23,4 +26,5 @@ def _env_defaults(monkeypatch, tmp_path: Path):
 def _reset_scheduler():
     yield
     from autoagent.api._deps import reset_scheduler_for_tests
+
     reset_scheduler_for_tests()

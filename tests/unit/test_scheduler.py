@@ -2,12 +2,12 @@ import asyncio
 
 import pytest
 
+from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Sample
 from autoagent.scheduler.batch_scheduler import BatchScheduler
-from autoagent.storage.database import init_db
 from autoagent.storage.batches import get_batch
+from autoagent.storage.database import init_db
 from autoagent.storage.samples import list_samples_for_batch
-from autoagent.executors.base import Executor, ExecutorContext
 
 
 class EchoExec(Executor):
@@ -23,7 +23,9 @@ class EchoExec(Executor):
 @pytest.fixture
 async def scheduler(monkeypatch):
     await init_db()
-    sch = BatchScheduler(executor_factory=lambda mode: EchoExec(), profile_lookup=lambda name: object())
+    sch = BatchScheduler(
+        executor_factory=lambda mode: EchoExec(), profile_lookup=lambda name: object()
+    )
     yield sch
 
 
@@ -42,8 +44,6 @@ async def test_run_batch_completes_all(scheduler):
 
 async def test_concurrency_limits_parallelism():
     # Executor that tracks concurrent running count
-    import itertools
-    current = itertools.count()
     max_seen = [0]
     now_running = [0]
 

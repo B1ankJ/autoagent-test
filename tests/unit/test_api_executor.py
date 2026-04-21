@@ -27,7 +27,13 @@ def _mock_chat_response(mock: HTTPXMock, content: str) -> None:
         json={
             "id": "cmpl-1",
             "object": "chat.completion",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
         },
     )
@@ -54,6 +60,7 @@ async def test_multi_turn_history(monkeypatch, httpx_mock: HTTPXMock):
     # Second request must carry prior messages
     reqs = httpx_mock.get_requests()
     import json as _json
+
     body2 = _json.loads(reqs[1].content)
     assert len(body2["messages"]) >= 3  # user, assistant, user
 
@@ -66,6 +73,7 @@ async def test_multi_turn_single_resets_history(monkeypatch, httpx_mock: HTTPXMo
     profile = _make_profile(multi_turn_mode="single")
     await ApiExecutor().execute(sample, profile, ExecutorContext())
     import json as _json
+
     req2 = httpx_mock.get_requests()[1]
     body2 = _json.loads(req2.content)
     assert len(body2["messages"]) == 1

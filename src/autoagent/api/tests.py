@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from autoagent.api._deps import get_scheduler
@@ -17,7 +18,10 @@ router = APIRouter(prefix="/tests", tags=["tests"], dependencies=[Depends(requir
 async def run_sync(sample: Sample) -> SampleResult:
     sch = get_scheduler()
     batch_id = await sch.submit(
-        name=f"sync-{sample.id}", mode=sample.mode, concurrency=1, samples=[sample],
+        name=f"sync-{sample.id}",
+        mode=sample.mode,
+        concurrency=1,
+        samples=[sample],
     )
     await sch.wait_done(batch_id, timeout_sec=(sample.timeout_sec or 600) + 30)
     results = await list_samples_for_batch(batch_id)
@@ -30,7 +34,10 @@ async def run_sync(sample: Sample) -> SampleResult:
 async def run_async(sample: Sample) -> AsyncTestResponse:
     sch = get_scheduler()
     batch_id = await sch.submit(
-        name=f"async-{sample.id}", mode=sample.mode, concurrency=1, samples=[sample],
+        name=f"async-{sample.id}",
+        mode=sample.mode,
+        concurrency=1,
+        samples=[sample],
     )
     return AsyncTestResponse(task_id=batch_id)
 

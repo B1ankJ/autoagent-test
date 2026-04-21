@@ -11,8 +11,6 @@ from pytest_httpx import HTTPXMock
 @pytest.fixture
 async def client(monkeypatch):
     monkeypatch.setenv("OPENAI_TEST_KEY", "sk-test")
-    from autoagent.main import app
-
     # Manually drive the ASGI lifespan so init_db + admin bootstrap run.
     # We use a background task for the lifespan coroutine and coordinate via
     # anyio events/streams, but we must NOT yield inside the task group because
@@ -20,6 +18,8 @@ async def client(monkeypatch):
     # cancel-scope ownership check.  Instead we start the lifespan task with
     # asyncio directly and cancel it after the test.
     import asyncio
+
+    from autoagent.main import app
 
     send_queue, receive_queue = anyio.create_memory_object_stream(1)
     startup_complete = anyio.Event()
@@ -68,21 +68,37 @@ async def test_e2e_full_batch_via_http(client, httpx_mock: HTTPXMock):
         )
 
     # 1. Login
-    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"})
+    r = await client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+    )
     assert r.status_code == 200
     h = {"Authorization": f"Bearer {r.json()['token']}"}
 
     # 2. Create profile
-    profile_yaml = yaml.safe_dump({
-        "name": "openai_compat", "platform": "api",
-        "api": {"base_url": "https://api.example.com/v1", "model": "m", "api_key_env": "OPENAI_TEST_KEY"},
-    })
+    profile_yaml = yaml.safe_dump(
+        {
+            "name": "openai_compat",
+            "platform": "api",
+            "api": {
+                "base_url": "https://api.example.com/v1",
+                "model": "m",
+                "api_key_env": "OPENAI_TEST_KEY",
+            },
+        }
+    )
     r = await client.post("/api/v1/profiles/openai_compat", json={"yaml": profile_yaml}, headers=h)
     assert r.status_code == 201
 
     # 3. Upload batch
     jsonl = "\n".join(
-        json.dumps({"id": f"t{i}", "prompts": [f"prompt{i}"], "mode": "api", "target_profile": "openai_compat"})
+        json.dumps(
+            {
+                "id": f"t{i}",
+                "prompts": [f"prompt{i}"],
+                "mode": "api",
+                "target_profile": "openai_compat",
+            }
+        )
         for i in range(3)
     )
     files = {"file": ("b.jsonl", jsonl, "application/x-ndjson")}

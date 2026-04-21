@@ -14,11 +14,22 @@ async def client(monkeypatch):
     monkeypatch.setenv("OPENAI_TEST_KEY", "sk-test")
     await init_db()
     await upsert_user("admin", hash_password("pw"))
-    save_profile_yaml("p_api", yaml.safe_dump({
-        "name": "p_api", "platform": "api",
-        "api": {"base_url": "https://api.example.com/v1", "model": "m", "api_key_env": "OPENAI_TEST_KEY"},
-    }))
+    save_profile_yaml(
+        "p_api",
+        yaml.safe_dump(
+            {
+                "name": "p_api",
+                "platform": "api",
+                "api": {
+                    "base_url": "https://api.example.com/v1",
+                    "model": "m",
+                    "api_key_env": "OPENAI_TEST_KEY",
+                },
+            }
+        ),
+    )
     from autoagent.main import app
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
@@ -54,6 +65,7 @@ async def test_async_test_lifecycle(client, httpx_mock: HTTPXMock):
     task_id = r.json()["task_id"]
 
     import asyncio
+
     for _ in range(40):
         await asyncio.sleep(0.1)
         r = await client.get(f"/api/v1/tests/{task_id}", headers=h)

@@ -18,7 +18,9 @@ class Batch(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     mode = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="queued")  # queued|running|done|failed|cancelled
+    status = Column(
+        String, nullable=False, default="queued"
+    )  # queued|running|done|failed|cancelled
     concurrency = Column(Integer, nullable=False, default=1)
     total = Column(Integer, nullable=False, default=0)
     done = Column(Integer, nullable=False, default=0)
@@ -35,7 +37,9 @@ class Sample(Base):
     __tablename__ = "samples"
     batch_id = Column(String, primary_key=True)
     id = Column(String, primary_key=True)
-    status = Column(String, nullable=False, default="queued")  # queued|running|done|failed|timeout|extraction_failed|cancelled
+    status = Column(
+        String, nullable=False, default="queued"
+    )  # queued|running|done|failed|timeout|extraction_failed|cancelled
     prompts_sent_json = Column(Text, nullable=True)
     responses_json = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)

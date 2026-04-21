@@ -11,12 +11,15 @@ async def client():
     await init_db()
     await upsert_user("admin", hash_password("admin_pw_1234"))
     from autoagent.main import app
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
 
 async def test_login_success(client):
-    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"})
+    r = await client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+    )
     assert r.status_code == 200
     body = r.json()
     assert "token" in body

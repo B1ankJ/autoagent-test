@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from autoagent.config.settings import get_settings
 from autoagent.models.api import SampleResult
@@ -8,8 +7,14 @@ from autoagent.results.writer import ResultWriter
 
 def _res(sid: str, status: str = "done") -> SampleResult:
     return SampleResult(
-        id=sid, status=status, prompts_sent=["p"], responses=["r"],
-        duration_ms=10, attempt_count=1, mode="api", target_profile="pf",
+        id=sid,
+        status=status,
+        prompts_sent=["p"],
+        responses=["r"],
+        duration_ms=10,
+        attempt_count=1,
+        mode="api",
+        target_profile="pf",
     )
 
 

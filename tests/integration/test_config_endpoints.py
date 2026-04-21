@@ -11,6 +11,7 @@ async def client():
     await init_db()
     await upsert_user("admin", hash_password("pw"))
     from autoagent.main import app
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
@@ -26,7 +27,13 @@ async def test_defaults_roundtrip(client):
     assert r.status_code == 200
     assert r.json()["retry"] == 2
 
-    new_vals = {"api_timeout_sec": 30, "gui_timeout_sec": 300, "retry": 5, "concurrency": 2, "verbose_logs": False}
+    new_vals = {
+        "api_timeout_sec": 30,
+        "gui_timeout_sec": 300,
+        "retry": 5,
+        "concurrency": 2,
+        "verbose_logs": False,
+    }
     r = await client.put("/api/v1/config/defaults", json=new_vals, headers=h)
     assert r.status_code == 200
 

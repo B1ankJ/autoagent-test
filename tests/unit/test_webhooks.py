@@ -6,8 +6,14 @@ from autoagent.webhooks.sender import send_webhook
 
 def _res() -> SampleResult:
     return SampleResult(
-        id="t1", status="done", prompts_sent=["p"], responses=["r"],
-        duration_ms=10, attempt_count=1, mode="api", target_profile="pf",
+        id="t1",
+        status="done",
+        prompts_sent=["p"],
+        responses=["r"],
+        duration_ms=10,
+        attempt_count=1,
+        mode="api",
+        target_profile="pf",
     )
 
 

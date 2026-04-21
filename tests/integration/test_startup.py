@@ -1,5 +1,4 @@
 import anyio
-import pytest
 from httpx import ASGITransport, AsyncClient
 
 
@@ -37,7 +36,9 @@ async def test_bootstrap_admin_and_health():
             r = await ac.get("/health")
             assert r.status_code == 200
             # Admin user was bootstrapped by lifespan — can log in immediately
-            r = await ac.post("/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"})
+            r = await ac.post(
+                "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+            )
             assert r.status_code == 200
 
         await send_queue.send({"type": "lifespan.shutdown"})

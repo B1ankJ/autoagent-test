@@ -12,12 +12,15 @@ async def client():
     await init_db()
     await upsert_user("admin", hash_password("admin_pw_1234"))
     from autoagent.main import app
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
 
 async def _login(client) -> str:
-    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"})
+    r = await client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+    )
     return r.json()["token"]
 
 
@@ -25,10 +28,17 @@ async def test_profiles_crud(client):
     token = await _login(client)
     h = {"Authorization": f"Bearer {token}"}
 
-    profile_yaml = yaml.safe_dump({
-        "name": "openai_gpt4", "platform": "api",
-        "api": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o", "api_key_env": "OPENAI_KEY"},
-    })
+    profile_yaml = yaml.safe_dump(
+        {
+            "name": "openai_gpt4",
+            "platform": "api",
+            "api": {
+                "base_url": "https://api.openai.com/v1",
+                "model": "gpt-4o",
+                "api_key_env": "OPENAI_KEY",
+            },
+        }
+    )
 
     # List initially empty
     r = await client.get("/api/v1/profiles", headers=h)
@@ -53,7 +63,9 @@ async def test_profiles_crud(client):
     assert r.json() == {"ok": True, "error": None}
 
     # Validate (bad)
-    r = await client.post("/api/v1/profiles/validate", json={"yaml": "name: x\nplatform: ios\n"}, headers=h)
+    r = await client.post(
+        "/api/v1/profiles/validate", json={"yaml": "name: x\nplatform: ios\n"}, headers=h
+    )
     assert r.json()["ok"] is False
 
     # Delete

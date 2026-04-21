@@ -48,7 +48,9 @@ def save_profile_yaml(name: str, yaml_text: str) -> Profile:
     # Enforce name consistency
     data["name"] = name
     profile = parse_profile(data)
-    _path(name).write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    _path(name).write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     return profile
 
 

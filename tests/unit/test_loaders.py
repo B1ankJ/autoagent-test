@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from autoagent.loaders.jsonl_loader import load_jsonl
-from autoagent.loaders.json_loader import load_json
 from autoagent.loaders.csv_loader import load_csv
+from autoagent.loaders.json_loader import load_json
+from autoagent.loaders.jsonl_loader import load_jsonl
 
 FIX = Path(__file__).parent.parent / "fixtures"
 
