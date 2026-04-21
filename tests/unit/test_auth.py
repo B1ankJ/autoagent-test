@@ -1,5 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
+from autoagent.auth.jwt import create_access_token, decode_token
 from autoagent.auth.passwords import hash_password, verify_password
 from autoagent.storage.database import init_db
 from autoagent.storage.users import create_user, get_user
@@ -25,3 +28,21 @@ async def test_user_round_trip():
     assert u is not None
     assert u.username == "alice"
     assert u.password_hash == h
+
+
+def test_jwt_round_trip():
+    token = create_access_token("alice")
+    payload = decode_token(token)
+    assert payload["sub"] == "alice"
+    assert "exp" in payload
+
+
+def test_jwt_expired_rejected(monkeypatch):
+    import autoagent.auth.jwt as jwt_mod
+
+    # Force immediate expiry
+    monkeypatch.setattr(jwt_mod, "_expiry_hours", lambda: -1)
+    token = create_access_token("alice")
+    import pytest
+    with pytest.raises(Exception):
+        decode_token(token)
