@@ -1,4 +1,6 @@
-import os
+import pytest
+from pydantic import ValidationError
+
 from autoagent.config.settings import get_settings
 
 
@@ -19,6 +21,5 @@ def test_missing_jwt_secret_fails(monkeypatch):
     monkeypatch.setenv("ADMIN_USERNAME", "a")
     monkeypatch.setenv("ADMIN_PASSWORD", "b")
     get_settings.cache_clear()
-    import pytest
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         get_settings()

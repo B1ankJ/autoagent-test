@@ -8,13 +8,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    admin_username: str
+    admin_username: str = Field(min_length=1)
     admin_password: str
     jwt_secret: str = Field(min_length=32)
     jwt_expires_hours: int = 24
 
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = Field(default=8000, ge=1, le=65535)
 
     data_root: Path = Path("./data")
     logs_root: Path = Path("./logs")
