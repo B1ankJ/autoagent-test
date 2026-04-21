@@ -12,6 +12,9 @@ dist/
 htmlcov/
 data/db.sqlite
 data/db.sqlite-*
+data/profiles/*
+!data/profiles/.gitkeep
+data/results/
 logs/*
 !logs/.gitkeep
 node_modules/
