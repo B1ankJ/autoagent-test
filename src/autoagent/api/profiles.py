@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
@@ -54,6 +54,8 @@ async def validate_profile(body: ProfileBody) -> ValidateResponse:
 async def create_profile(name: str, body: ProfileBody) -> dict:
     try:
         save_profile_yaml(name, body.yaml)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"name": name}
@@ -63,12 +65,14 @@ async def create_profile(name: str, body: ProfileBody) -> dict:
 async def update_profile(name: str, body: ProfileBody) -> dict:
     try:
         save_profile_yaml(name, body.yaml)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"name": name}
 
 
-@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def del_profile(name: str) -> None:
     if not _delete(name):
         raise HTTPException(status_code=404, detail="profile not found")
