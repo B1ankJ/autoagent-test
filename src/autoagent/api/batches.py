@@ -53,13 +53,16 @@ async def create_batch_json(body: BatchCreateJSON) -> BatchCreatedResponse:
 @router.post("/upload", response_model=BatchCreatedResponse, status_code=201)
 async def create_batch_file(
     name: str = Form(...),
-    mode: str = Form(...),
+    mode: Mode = Form(...),
     concurrency: int = Form(1),
     target_profile_default: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> BatchCreatedResponse:
-    text = (await file.read()).decode("utf-8")
-    samples = _parse_file(file.filename or "batch.jsonl", text)
+    try:
+        text = (await file.read()).decode("utf-8")
+        samples = _parse_file(file.filename or "batch.jsonl", text)
+    except (UnicodeDecodeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
     _apply_default_profile(samples, target_profile_default)
     # Validate all modes match
     for s in samples:
@@ -103,6 +106,9 @@ async def get_one(batch_id: str) -> BatchDetail:
 
 @router.get("/{batch_id}/results")
 async def download_results(batch_id: str) -> FileResponse:
+    b = await get_batch(batch_id)
+    if b is None:
+        raise HTTPException(status_code=404, detail="batch not found")
     path = get_settings().data_root / "results" / f"{batch_id}.jsonl"
     if not path.exists():
         raise HTTPException(status_code=404, detail="results file not found")
