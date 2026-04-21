@@ -1,9 +1,12 @@
+import re
 from pathlib import Path
 
 import yaml
 
 from autoagent.config.settings import get_settings
 from autoagent.profiles.schemas import Profile, parse_profile
+
+_NAME_RE = re.compile(r"[A-Za-z0-9_\-]{1,64}")
 
 
 def _dir() -> Path:
@@ -13,7 +16,7 @@ def _dir() -> Path:
 
 
 def _path(name: str) -> Path:
-    if "/" in name or ".." in name or name == "":
+    if not _NAME_RE.fullmatch(name):
         raise ValueError(f"invalid profile name: {name!r}")
     return _dir() / f"{name}.yaml"
 
