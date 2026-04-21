@@ -1,0 +1,31 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    admin_username: str
+    admin_password: str
+    jwt_secret: str = Field(min_length=32)
+    jwt_expires_hours: int = 24
+
+    host: str = "0.0.0.0"
+    port: int = 8000
+
+    data_root: Path = Path("./data")
+    logs_root: Path = Path("./logs")
+
+    default_api_timeout_sec: int = 60
+    default_gui_timeout_sec: int = 180
+    default_retry: int = 2
+    default_concurrency: int = 1
+    default_verbose_logs: bool = True
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
