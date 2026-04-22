@@ -836,7 +836,7 @@ Expected: 11 passed.
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/autoagent/executors/action_runner.py tests/unit/test_action_runner.py
@@ -853,7 +853,7 @@ Implements `dom_stable` and `send_button_reenable` completion strategies.
 - Create: `src/autoagent/executors/complete_detector.py`
 - Create: `tests/unit/test_complete_detector.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/unit/test_complete_detector.py`:
 
@@ -948,14 +948,14 @@ async def test_send_button_reenable_requires_button_selector() -> None:
         )
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_complete_detector.py -v
 ```
 Expected: ImportError.
 
-- [ ] **Step 3: Implement the detector**
+- [x] **Step 3: Implement the detector**
 
 `src/autoagent/executors/complete_detector.py`:
 
@@ -1054,7 +1054,7 @@ async def _send_button_reenable(
     raise TimeoutError(f"send_button_reenable not reached within {max_wait_sec}s")
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_complete_detector.py -v
