@@ -13,7 +13,7 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Plan 1 — Backend MVP:** ✅ complete (tag `backend-mvp-v0.1.0`, 2026-04-22). All 25 tasks done. 66 tests passing, ruff clean.
 - **Plan 2 — React Web UI:** ✅ complete (tag `web-ui-v0.2.0`, 2026-04-22). Single-binary deploy (FastAPI serves built SPA from `src/autoagent/static/` with SPA fallback). 2s polling via TanStack Query for batch progress (WebSocket deferred to Plan 3). 68 backend tests + 8 frontend tests green; browser smoke (login → profiles → dry_run batch → download → config → logout) passed.
   Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
-- **Plan 3 — Web GUI Executor (Playwright):** feature-complete and in release-candidate verification. Playwright-backed `WebExecutor`, in-process event bus + SSE, screenshot APIs, web connectivity testing, `BatchDetail` SSE streaming, and `SampleDetail` screenshot/action-log UI are in the repo. Verification status: backend full suite `128 passed` when run outside the sandbox so Chromium can launch; backend fast suite `123 passed, 5 deselected`; frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all green. Remaining work is manual browser smoke, final doc pass, and release tagging.
+- **Plan 3 — Web GUI Executor (Playwright):** ✅ complete (tag `web-gui-executor-v0.3.0`, 2026-04-22). Playwright-backed `WebExecutor`, in-process event bus + SSE, screenshot APIs, web connectivity testing, `BatchDetail` SSE streaming, and `SampleDetail` screenshot/action-log UI are in the repo. Verification status: backend full suite `128 passed` when run outside the sandbox so Chromium can launch; backend fast suite `123 passed, 5 deselected`; frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all green; manual browser smoke passed end-to-end.
 - **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
 
@@ -66,6 +66,8 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Result format:** one JSONL file per batch at `<data_dir>/results/<batch_id>.jsonl`. Writer is append-only and thread-safe.
 - **Profiles:** YAML files under `<data_dir>/profiles/<name>.yaml`. Names restricted by allowlist regex in `profiles/registry.py::_path`.
 - **Playwright verification:** in this environment, real-browser pytest cases may need to run outside the sandbox because Chromium launch is blocked inside the sandbox. When verifying Plan 3 locally, use `python3.11 -m pytest -v` outside the sandbox for the full suite, or `python3.11 -m pytest -q -m "not playwright"` for the fast subset.
+- **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.
+- **SSE progress:** `GET /api/v1/batches/{id}/events` is the live progress stream. Frontend `useBatchStream` reconciles updates via `seq`; WebSocket is not used.
 
 ## Common commands
 

@@ -3238,7 +3238,7 @@ cd web && pnpm test && pnpm lint && pnpm format:check && pnpm build && cd ..
 ```
 Expected: all green, `src/autoagent/static/` regenerated.
 
-- [ ] **Step 5: Manual browser smoke — web mode end-to-end**
+- [x] **Step 5: Manual browser smoke — web mode end-to-end**
 
 Assuming `tests/fixtures/fake_chat.html` is reachable:
 
@@ -3260,7 +3260,7 @@ In a browser:
 7. Open SampleDetail — screenshots strip shows thumbnails; Action log populated.
 8. Log out, revisit — redirect to `/login`.
 
-- [ ] **Step 6: Update CLAUDE.md**
+- [x] **Step 6: Update CLAUDE.md**
 
 Replace the Plan 3 line under "Development status":
 
@@ -3276,14 +3276,14 @@ Extend "Conventions" with:
 - **SSE progress:** `GET /api/v1/batches/{id}/events` is a streaming endpoint; frontend hook `useBatchStream` reconciles via `seq`. WebSocket is not used.
 ```
 
-- [ ] **Step 7: Commit docs**
+- [x] **Step 7: Commit docs**
 
 ```bash
 git add CLAUDE.md
 git commit -m "docs: mark Plan 3 complete (Web GUI Executor)"
 ```
 
-- [ ] **Step 8: Tag**
+- [x] **Step 8: Tag**
 
 ```bash
 git tag -a web-gui-executor-v0.3.0 -m "Plan 3 complete: Web GUI Executor (Playwright)"

@@ -9,6 +9,7 @@ export function SampleDetail() {
   const navigate = useNavigate()
   const { data } = useBatchStream(id)
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
+  const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
 
   if (!data) {
     return <div>加载中...</div>
@@ -57,7 +58,7 @@ export function SampleDetail() {
 
       <Card title="Prompts + Responses">
         <Collapse
-          items={sample.prompts.map((prompt, index) => ({
+          items={promptRounds.map((prompt, index) => ({
             key: String(index),
             label: `第 ${index + 1} 轮`,
             children: (

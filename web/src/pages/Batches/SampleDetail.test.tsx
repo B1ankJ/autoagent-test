@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
 import { renderWithProviders } from '../../test/test-utils'
@@ -63,6 +64,47 @@ describe('SampleDetail', () => {
         'src',
         '/api/v1/batches/b1/samples/s1/screenshots/001_ready.png',
       )
+    })
+  })
+
+  it('renders prompt rounds from prompts_sent when prompts is absent', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b2',
+        name: 'Batch 2',
+        mode: 'gui_pc_web',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 3,
+        samples: [
+          {
+            id: 's2',
+            prompts_sent: ['hello'],
+            mode: 'gui_pc_web',
+            target_profile: 'web_demo',
+            status: 'done',
+            responses: ['echo: hello'],
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([])
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b2/samples/s2' },
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /第 1 轮/i }))
+    await waitFor(() => {
+      expect(screen.getByText('hello')).toBeInTheDocument()
+      expect(screen.getByText('echo: hello')).toBeInTheDocument()
     })
   })
 })

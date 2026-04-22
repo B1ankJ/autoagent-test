@@ -4,7 +4,7 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 is feature-complete and in release-candidate verification.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Verified status: backend full suite `128 passed` (Playwright cases require running outside the sandbox), backend fast suite `123 passed, 5 deselected`, frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all pass. Remaining Plan 3 work is final manual browser smoke, final docs pass, and release tagging.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Verified status: backend full suite `128 passed` (Playwright cases require running outside the sandbox), backend fast suite `123 passed, 5 deselected`, frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all pass, and manual browser smoke passed end-to-end.
 
 ## Requirements
 
