@@ -12,9 +12,10 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 
 - **Plan 1 — Backend MVP:** ✅ complete (tag `backend-mvp-v0.1.0`, 2026-04-22). All 25 tasks done. 66 tests passing, ruff clean.
 - **Plan 2 — React Web UI:** in progress on branch/worktree `plan-2-web-ui` (`.worktrees/plan-2-web-ui`).
-  Completed: Tasks 1-6 (scaffold, static mount, API client, auth/resource hooks, routing shell, login page).
-  Verification status: backend `python3.11 -m pytest -q` = 68 passed; frontend `cd web && pnpm test` = 6 passed; `pnpm build`, `pnpm lint`, and `pnpm format:check` passing.
-  Next task: Task 7 (`ModeTag` + `Profiles/List.tsx`), then Task 8 (`YamlEditor` + `Profiles/Edit.tsx`).
+  Completed: Tasks 1-9 (scaffold, static mount, API client, auth/resource hooks, routing shell, login page, profiles list, profile edit, quick test page).
+  Extra alignment completed: `/api/v1/profiles` now returns `[{name, platform}]`; frontend API types/hooks were corrected to match backend status enums and response shapes.
+  Verification status: backend `python3.11 -m pytest -q` = 68 passed; frontend `cd web && pnpm test` = 7 passed; `pnpm build`, `pnpm lint`, and `pnpm format:check` passing.
+  Next task: Task 10 (`StatusTag` + `Batches/List.tsx`), then Task 11 (`Batches/New.tsx`).
 - **Plan 3 — Web GUI Executor (Playwright):** not started.
 - **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
@@ -78,4 +79,4 @@ Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32
 2. Consult `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md` for architecture intent.
 3. Match existing code style — most modules are small and single-purpose; prefer adding a new module over growing an existing one past ~200 lines.
 4. Plan 5 work should start with the "secrets + auth hardening" task (see "Deferred work").
-5. If continuing Plan 2, start in `.worktrees/plan-2-web-ui` and resume from Task 7 in `docs/superpowers/plans/2026-04-22-plan-2-web-ui.md`.
+5. If continuing Plan 2, start in `.worktrees/plan-2-web-ui` and resume from Task 10 in `docs/superpowers/plans/2026-04-22-plan-2-web-ui.md`.
