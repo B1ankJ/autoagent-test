@@ -596,7 +596,7 @@ python3.11 -c "from pathlib import Path; assert Path('tests/fixtures/fake_chat.h
 ```
 Expected: `ok`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/fixtures/fake_chat.html tests/fixtures/__init__.py
@@ -613,7 +613,7 @@ Executes `goto`, `wait_for`, `click`, `sleep`, `fill`, `press` against a Playwri
 - Create: `src/autoagent/executors/action_runner.py`
 - Create: `tests/unit/test_action_runner.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/unit/test_action_runner.py`:
 
@@ -729,14 +729,14 @@ async def test_log_captures_failure() -> None:
     assert "boom" in runner.log[0]["error"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_action_runner.py -v
 ```
 Expected: ImportError.
 
-- [ ] **Step 3: Implement `ActionRunner`**
+- [x] **Step 3: Implement `ActionRunner`**
 
 `src/autoagent/executors/action_runner.py`:
 
@@ -823,14 +823,14 @@ class ActionRunner:
         return val
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_action_runner.py -v
 ```
 Expected: 11 passed.
 
-- [ ] **Step 5: Lint**
+- [x] **Step 5: Lint**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
