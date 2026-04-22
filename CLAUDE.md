@@ -13,7 +13,7 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Plan 1 — Backend MVP:** ✅ complete (tag `backend-mvp-v0.1.0`, 2026-04-22). All 25 tasks done. 66 tests passing, ruff clean.
 - **Plan 2 — React Web UI:** ✅ complete (tag `web-ui-v0.2.0`, 2026-04-22). Single-binary deploy (FastAPI serves built SPA from `src/autoagent/static/` with SPA fallback). 2s polling via TanStack Query for batch progress (WebSocket deferred to Plan 3). 68 backend tests + 8 frontend tests green; browser smoke (login → profiles → dry_run batch → download → config → logout) passed.
   Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
-- **Plan 3 — Web GUI Executor (Playwright):** not started.
+- **Plan 3 — Web GUI Executor (Playwright):** spec + plan committed (`docs/superpowers/specs/2026-04-22-plan-3-web-gui-executor-design.md`, `docs/superpowers/plans/2026-04-22-plan-3-web-gui-executor.md`). 20 TDD tasks: WebExecutor (Playwright 1.46+), in-process event bus + SSE (replaces 2s polling), auto-downgrade concurrency to 1 for `user_data_dir` profiles, verbose-linked screenshots, frontend integration. Implementation not started.
 - **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
 
