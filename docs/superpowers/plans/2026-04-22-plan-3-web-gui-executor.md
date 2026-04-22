@@ -2971,7 +2971,7 @@ git commit -m "feat(web): gui_pc_web in mode dropdown + platform-filtered profil
 - Modify: `web/src/pages/Profiles/Edit.tsx`
 - Modify: `web/src/pages/Profiles/ConnectivityTestModal.tsx`
 
-- [ ] **Step 1: Relax the regex that enables the button**
+- [x] **Step 1: Relax the regex that enables the button**
 
 Current code checks `/^platform:\s*api\b/m`. Replace with:
 
@@ -2986,7 +2986,7 @@ const platformFromYaml: 'api' | 'web' | null = (() => {
 
 Pass `platformFromYaml` into the modal.
 
-- [ ] **Step 2: Modal sends appropriate mode + timeout**
+- [x] **Step 2: Modal sends appropriate mode + timeout**
 
 In `ConnectivityTestModal.tsx`, accept a new prop `platform: 'api' | 'web' | null`. Compute:
 
@@ -2998,13 +2998,13 @@ const httpTimeoutMs = platform === 'web' ? 240_000 : 60_000
 
 Use these in the `/tests/sync` POST. Display "等待浏览器启动 + 响应(最长 3 分钟)" hint when `platform === 'web'`.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cd web && pnpm test
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ..
@@ -3020,7 +3020,7 @@ git commit -m "feat(web): connectivity test button supports platform=web (180s t
 - Create: `web/src/components/ScreenshotStrip.tsx`
 - Modify: `web/src/pages/Batches/SampleDetail.tsx`
 
-- [ ] **Step 1: ScreenshotStrip component**
+- [x] **Step 1: ScreenshotStrip component**
 
 `web/src/components/ScreenshotStrip.tsx`:
 
@@ -3088,7 +3088,7 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
 }
 ```
 
-- [ ] **Step 2: Add ActionLogTable inline + render in SampleDetail**
+- [x] **Step 2: Add ActionLogTable inline + render in SampleDetail**
 
 In `web/src/pages/Batches/SampleDetail.tsx`, import `ScreenshotStrip` and render below the existing response block. Add an `ActionLog` table reading `sample.metadata.action_log`:
 
@@ -3130,13 +3130,13 @@ type ActionLogEntry = {
 )}
 ```
 
-- [ ] **Step 3: Run tests + build**
+- [x] **Step 3: Run tests + build**
 
 ```bash
 cd web && pnpm test && pnpm build && pnpm lint
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ..
@@ -3154,7 +3154,7 @@ Keep `useBatch` exported for back-compat internally, but point `BatchDetail.tsx`
 - Modify: `web/src/api/batches.ts` (re-export `useBatchStream`)
 - Modify: `web/src/pages/Batches/Detail.tsx`
 
-- [ ] **Step 1: Re-export `useBatchStream` from `api/batches.ts`**
+- [x] **Step 1: Re-export `useBatchStream` from `api/batches.ts`**
 
 At the bottom of `web/src/api/batches.ts`:
 
@@ -3162,7 +3162,7 @@ At the bottom of `web/src/api/batches.ts`:
 export { useBatchStream } from '../hooks/useBatchStream'
 ```
 
-- [ ] **Step 2: Switch consumer**
+- [x] **Step 2: Switch consumer**
 
 In `web/src/pages/Batches/Detail.tsx`, replace:
 
@@ -3180,7 +3180,7 @@ import { useBatchStream } from '../../api/batches'
 const { data, isLoading, error } = useBatchStream(id)
 ```
 
-- [ ] **Step 3: Verify existing `Detail.test.tsx` still passes**
+- [x] **Step 3: Verify existing `Detail.test.tsx` still passes**
 
 ```bash
 cd web && pnpm test
@@ -3189,13 +3189,13 @@ Expected: existing `Detail.test.tsx` still green. If it relied on `refetchInterv
 
 If the test fails due to SSE fetch noise, adjust the test to also mock `fetch` for `/api/v1/batches/:id/events` to return an empty stream.
 
-- [ ] **Step 4: Lint + build**
+- [x] **Step 4: Lint + build**
 
 ```bash
 cd web && pnpm lint && pnpm build
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd ..
@@ -3210,28 +3210,28 @@ git commit -m "feat(web): BatchDetail uses useBatchStream (SSE) instead of polli
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Run backend full suite (including playwright-marked)**
+- [x] **Step 1: Run backend full suite (including playwright-marked)**
 
 ```bash
 python3.11 -m pytest -v
 ```
 Expected: ~95 passed (68 prior + ~25 new). If any `@pytest.mark.playwright` test fails, confirm `python3.11 -m playwright install chromium` has been run.
 
-- [ ] **Step 2: Run backend fast suite (without Chromium)**
+- [x] **Step 2: Run backend fast suite (without Chromium)**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright"
 ```
 Expected: ~88 passed.
 
-- [ ] **Step 3: Run backend lint**
+- [x] **Step 3: Run backend lint**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
 ```
 Expected: clean.
 
-- [ ] **Step 4: Run frontend**
+- [x] **Step 4: Run frontend**
 
 ```bash
 cd web && pnpm test && pnpm lint && pnpm format:check && pnpm build && cd ..
