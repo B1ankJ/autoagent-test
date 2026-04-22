@@ -82,6 +82,8 @@ cd web && pnpm lint                    # frontend lint
 
 Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32 chars). See `.env.example`.
 
+Optional env: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
+
 ## When starting a new task in this repo
 
 1. Check the plan file for the plan currently in progress (see "Development status").
