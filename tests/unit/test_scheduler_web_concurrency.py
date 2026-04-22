@@ -76,9 +76,7 @@ async def test_web_profile_with_user_data_dir_forces_concurrency_1(
     ]
 
     caplog.set_level(logging.WARNING, logger="autoagent.scheduler.batch_scheduler")
-    batch_id = await scheduler.submit(
-        name="t", mode="gui_pc_web", concurrency=4, samples=samples
-    )
+    batch_id = await scheduler.submit(name="t", mode="gui_pc_web", concurrency=4, samples=samples)
     await scheduler.wait_done(batch_id, timeout_sec=30)
 
     assert executor._peak == 1, f"expected serial execution, got peak={executor._peak}"

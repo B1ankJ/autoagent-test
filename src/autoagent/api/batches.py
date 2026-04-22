@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sse_starlette.sse import EventSourceResponse
 
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
@@ -23,6 +25,10 @@ from autoagent.storage.batches import get_batch, list_batches
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
+
+
+def _json_dumps(obj: object) -> str:
+    return json.dumps(obj, separators=(",", ":"))
 
 
 def _parse_file(filename: str, text: str):
@@ -153,3 +159,27 @@ async def cancel(batch_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="batch not found or already finished")
     return {"batch_id": batch_id, "status": "cancelling"}
+
+
+@router.get("/{batch_id}/events")
+async def stream_batch_events(batch_id: str) -> EventSourceResponse:
+    bus = get_event_bus()
+
+    async def generator():
+        async for event in bus.subscribe(batch_id):
+            yield {
+                "id": str(event.seq),
+                "event": event.kind,
+                "data": _json_dumps(
+                    {
+                        "seq": event.seq,
+                        "kind": event.kind,
+                        "payload": event.payload,
+                        "ts": event.ts,
+                    }
+                ),
+            }
+            if event.kind == "batch_done":
+                break
+
+    return EventSourceResponse(generator())

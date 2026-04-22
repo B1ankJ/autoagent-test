@@ -2146,7 +2146,7 @@ Serve `GET /batches/{id}/events` as a Server-Sent Events stream.
 - Modify: `src/autoagent/api/batches.py`
 - Create: `tests/integration/test_sse_endpoint.py`
 
-- [ ] **Step 1: Write the integration test**
+- [x] **Step 1: Write the integration test**
 
 `tests/integration/test_sse_endpoint.py`:
 
@@ -2226,14 +2226,14 @@ async def test_sse_requires_auth() -> None:
         assert r.status_code == 401
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```bash
 python3.11 -m pytest tests/integration/test_sse_endpoint.py -v
 ```
 Expected: 404 (endpoint doesn't exist).
 
-- [ ] **Step 3: Add the SSE endpoint**
+- [x] **Step 3: Add the SSE endpoint**
 
 In `src/autoagent/api/batches.py`, add imports at top:
 
@@ -2275,20 +2275,20 @@ def json_dumps(obj) -> str:
 
 (or use `json.dumps` inline with compact separators — the helper keeps the route tidy).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 python3.11 -m pytest tests/integration/test_sse_endpoint.py -v
 ```
 Expected: 2 passed.
 
-- [ ] **Step 5: Run broader suite to catch regressions**
+- [x] **Step 5: Run broader suite to catch regressions**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright"
 ```
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
