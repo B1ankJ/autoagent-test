@@ -4,7 +4,7 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Verified status: backend full suite `128 passed` (Playwright cases require running outside the sandbox), backend fast suite `123 passed, 5 deselected`, frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all pass, and manual browser smoke passed end-to-end.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android execution work has started with dependency/doc prep and will land in Tier 1 (`android-executor-tier1-v0.4.0`) and Tier 2 (`android-executor-v0.4.0`) milestones.
 
 ## Requirements
 
@@ -29,6 +29,20 @@ python3.11 -m playwright install chromium --with-deps
 ```
 
 Run once per machine. `--with-deps` installs OS libs on Linux and is a no-op on macOS.
+
+### Android executor prerequisite (Plan 4 Tier 1)
+
+Android mode requires:
+
+```bash
+brew install android-platform-tools   # macOS
+python3.11 -m pip install -e '.[dev]'
+adb devices
+```
+
+Tier 1 uses `uiautomator2` plus a connected emulator or real device. If you plan to use
+`input_method: adb_keyboard`, install `com.android.adbkeyboard` on the device manually; this
+repo does not bundle that APK.
 
 ## Run
 
