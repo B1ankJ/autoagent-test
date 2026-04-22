@@ -22,7 +22,7 @@ export function useBatch(id: string | undefined) {
     enabled: !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'running' || status === 'pending' ? 2000 : false
+      return status === 'running' || status === 'queued' ? 2000 : false
     },
   })
 }

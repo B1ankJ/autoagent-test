@@ -1,12 +1,12 @@
 import { Tag } from 'antd'
-import { Mode } from '../types/api'
+import { ProfilePlatform } from '../types/api'
 
-const COLORS: Record<Mode, string> = {
+const COLORS: Record<ProfilePlatform, string> = {
   api: 'blue',
   web: 'purple',
   android: 'green',
 }
 
-export function ModeTag({ mode }: { mode: Mode }) {
+export function ModeTag({ mode }: { mode: ProfilePlatform }) {
   return <Tag color={COLORS[mode]}>{mode}</Tag>
 }

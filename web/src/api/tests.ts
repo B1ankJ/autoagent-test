@@ -28,7 +28,7 @@ export function useAsyncResult(taskId: string | undefined) {
     enabled: !!taskId,
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'running' || status === 'pending' || !status ? 1000 : false
+      return status === 'running' || status === 'queued' || !status ? 1000 : false
     },
   })
 }
