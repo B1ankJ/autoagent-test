@@ -25,6 +25,7 @@ Recorded in auto-memory (`project_plan5_security.md`). Summary:
 2. Flip `default_verbose_logs` default from `True` → `False`.
 3. JWT hardening in `auth/deps.py` + `auth/jwt.py`: narrow `except Exception` → `jwt.PyJWTError`; add `audience`/`issuer` claims; add `leeway=` for clock skew.
 4. Login endpoint (`api/auth.py`) timing side-channel: always run dummy `verify_password` on unknown-user path to prevent username enumeration.
+5. CORS hardening in `main.py`: replace `allow_origins=["*"]` with an env-driven allowlist (default `[]`) or remove `CORSMiddleware` entirely now that the SPA ships same-origin. Flagged by Plan 2 pre-merge review.
 
 ## Layout
 
