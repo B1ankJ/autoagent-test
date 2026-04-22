@@ -1,17 +1,31 @@
 import { screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
-import { client } from '../../api/client'
 import { renderWithProviders } from '../../test/test-utils'
 import { BatchDetail } from './Detail'
+
+const useBatchStream = vi.fn()
+const useCancelBatch = vi.fn()
+
+vi.mock('../../api/batches', async () => {
+  const actual = await vi.importActual<typeof import('../../api/batches')>('../../api/batches')
+  return {
+    ...actual,
+    useCancelBatch: () => useCancelBatch(),
+    statusIsTerminal: actual.statusIsTerminal,
+    useBatchStream: (...args: unknown[]) => useBatchStream(...args),
+  }
+})
 
 describe('BatchDetail', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    useBatchStream.mockReset()
+    useCancelBatch.mockReset()
   })
 
-  it('renders batch info', async () => {
-    vi.spyOn(client, 'get').mockResolvedValue({
+  it('renders batch info from stream hook', async () => {
+    useBatchStream.mockReturnValue({
       data: {
         batch_id: 'b1',
         name: 'Test',
@@ -22,8 +36,11 @@ describe('BatchDetail', () => {
         failed: 0,
         concurrency: 1,
         samples: [],
+        seq: 4,
       },
-    } as never)
+      isLoading: false,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
 
     renderWithProviders(
       <Routes>
@@ -35,6 +52,7 @@ describe('BatchDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('Test')).toBeInTheDocument()
     })
+    expect(useBatchStream).toHaveBeenCalledWith('b1')
     expect(screen.getByText('done')).toBeInTheDocument()
     expect(screen.getByText(/3 \/ 3 完成/)).toBeInTheDocument()
   })

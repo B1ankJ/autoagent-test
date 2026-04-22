@@ -8,6 +8,7 @@ import {
   BatchSummary,
 } from '../types/api'
 import { client } from './client'
+export { useBatchStream } from '../hooks/useBatchStream'
 
 export function useBatches() {
   return useQuery({

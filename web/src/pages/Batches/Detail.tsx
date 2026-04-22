@@ -11,7 +11,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate, useParams } from 'react-router-dom'
-import { statusIsTerminal, useBatch, useCancelBatch } from '../../api/batches'
+import { statusIsTerminal, useBatchStream, useCancelBatch } from '../../api/batches'
 import { DownloadButton } from '../../components/DownloadButton'
 import { StatusTag } from '../../components/StatusTag'
 import { Sample } from '../../types/api'
@@ -19,7 +19,7 @@ import { Sample } from '../../types/api'
 export function BatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { data, isLoading } = useBatch(id)
+  const { data, isLoading } = useBatchStream(id)
   const cancel = useCancelBatch()
   const { message } = App.useApp()
 

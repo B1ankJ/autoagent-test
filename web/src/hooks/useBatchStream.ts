@@ -47,9 +47,13 @@ export function useBatchStream(id: string | undefined) {
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      let active = true
+      while (active) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) {
+          active = false
+          continue
+        }
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
         const chunks = buffer.split('\n\n')
         buffer = chunks.pop() ?? ''
