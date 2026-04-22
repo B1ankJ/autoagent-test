@@ -94,6 +94,12 @@ class AsyncTestResponse(BaseModel):
     status: Literal["queued"] = "queued"
 
 
+class ScreenshotInfo(BaseModel):
+    name: str
+    label: str
+    taken_at: datetime
+
+
 class VLMConfig(BaseModel):
     base_url: str
     model: str

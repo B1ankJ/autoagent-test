@@ -2307,7 +2307,7 @@ git commit -m "feat(api): SSE endpoint /batches/{id}/events via sse-starlette"
 - Modify: `src/autoagent/models/api.py` (add `ScreenshotInfo`)
 - Create: `tests/integration/test_screenshots_endpoint.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/integration/test_screenshots_endpoint.py`:
 
@@ -2425,13 +2425,13 @@ async def test_list_missing_dir_returns_empty(
         assert r.json() == []
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 ```bash
 python3.11 -m pytest tests/integration/test_screenshots_endpoint.py -v
 ```
 
-- [ ] **Step 3: Add `ScreenshotInfo` model**
+- [x] **Step 3: Add `ScreenshotInfo` model**
 
 Open `src/autoagent/models/api.py`. Add:
 
@@ -2444,7 +2444,7 @@ class ScreenshotInfo(BaseModel):
 
 Place near the other small response models. `datetime` is already imported.
 
-- [ ] **Step 4: Implement endpoints**
+- [x] **Step 4: Implement endpoints**
 
 In `src/autoagent/api/batches.py`, add imports/constants at top:
 
@@ -2498,7 +2498,7 @@ async def download_screenshot(batch_id: str, sample_id: str, name: str) -> FileR
     )
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 python3.11 -m pytest tests/integration/test_screenshots_endpoint.py -v
@@ -2506,7 +2506,7 @@ python3.11 -m pytest -q -m "not playwright"
 ```
 Expected: 4 new tests pass; overall suite passes.
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .

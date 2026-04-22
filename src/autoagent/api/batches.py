@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -20,11 +22,13 @@ from autoagent.models.api import (
     BatchDetail,
     BatchSummary,
     Mode,
+    ScreenshotInfo,
 )
 from autoagent.storage.batches import get_batch, list_batches
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
+_SCREENSHOT_RE = re.compile(r"^\d{2,3}_[a-z0-9_]+\.png$")
 
 
 def _json_dumps(obj: object) -> str:
@@ -183,3 +187,41 @@ async def stream_batch_events(batch_id: str) -> EventSourceResponse:
                 break
 
     return EventSourceResponse(generator())
+
+
+@router.get("/{batch_id}/samples/{sample_id}/screenshots", response_model=list[ScreenshotInfo])
+async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo]:
+    settings = get_settings()
+    sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
+    if not sample_dir.is_dir():
+        return []
+
+    out: list[ScreenshotInfo] = []
+    for entry in sorted(sample_dir.iterdir()):
+        if not entry.is_file() or not _SCREENSHOT_RE.match(entry.name):
+            continue
+        label = entry.stem.split("_", 1)[1] if "_" in entry.stem else entry.stem
+        taken = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
+        out.append(ScreenshotInfo(name=entry.name, label=label, taken_at=taken))
+    return out
+
+
+@router.get("/{batch_id}/samples/{sample_id}/screenshots/{name}")
+async def download_screenshot(batch_id: str, sample_id: str, name: str) -> FileResponse:
+    if not _SCREENSHOT_RE.match(name):
+        raise HTTPException(status_code=400, detail="invalid screenshot name")
+
+    settings = get_settings()
+    root = settings.logs_root.resolve()
+    target = (root / batch_id / sample_id / name).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="path traversal blocked") from e
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(
+        target,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
