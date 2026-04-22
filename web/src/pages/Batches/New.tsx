@@ -66,9 +66,9 @@ export function BatchNew() {
   const uploadProfileOptions = availableProfiles
     .filter((profile) => profile.platform === uploadPlatform)
     .map((profile) => ({
-    value: profile.name,
-    label: profile.name,
-  }))
+      value: profile.name,
+      label: profile.name,
+    }))
 
   const onJsonSubmit = async (values: JsonFormValues) => {
     try {

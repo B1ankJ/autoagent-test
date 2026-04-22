@@ -118,11 +118,7 @@ export function TestsQuick() {
               <Radio value="async">异步</Radio>
             </Radio.Group>
           </Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={runAsync.isPending}
-          >
+          <Button type="primary" htmlType="submit" loading={runAsync.isPending}>
             运行
           </Button>
         </Form>
