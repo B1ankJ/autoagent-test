@@ -87,3 +87,32 @@ async def _send_button_reenable(
         await asyncio.sleep(poll_interval_sec)
 
     raise TimeoutError(f"send_button_reenable not reached within {max_wait_sec}s")
+
+
+async def wait_for_ui_tree_stable(
+    device: Any,
+    *,
+    stable_sec: float,
+    max_wait_sec: float,
+    poll_interval_sec: float = 0.1,
+) -> str:
+    deadline = time.monotonic() + max_wait_sec
+    last_xml: str | None = None
+    stable_since: float | None = None
+
+    while time.monotonic() < deadline:
+        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        now = time.monotonic()
+        if xml == last_xml:
+            if stable_since is None:
+                if stable_sec <= 0:
+                    return xml
+                stable_since = now
+            elif now - stable_since >= stable_sec:
+                return xml
+        else:
+            last_xml = xml
+            stable_since = None
+        await asyncio.sleep(poll_interval_sec)
+
+    raise TimeoutError(f"ui_tree_stable not reached within {max_wait_sec}s")
