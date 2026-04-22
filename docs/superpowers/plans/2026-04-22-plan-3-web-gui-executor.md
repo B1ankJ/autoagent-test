@@ -2524,7 +2524,7 @@ When caller hits `/tests/sync` with a `mode=gui_pc_web` sample, the scheduler al
 - Modify: `src/autoagent/api/tests.py` (timeout extension note)
 - Create: `tests/integration/test_tests_sync_web.py`
 
-- [ ] **Step 1: Write the integration test**
+- [x] **Step 1: Write the integration test**
 
 `tests/integration/test_tests_sync_web.py`:
 
@@ -2604,7 +2604,7 @@ complete_detection:
         assert body["responses"] == ["echo: hi"]
 ```
 
-- [ ] **Step 2: Confirm the current `/tests/sync` handler tolerates long timeouts**
+- [x] **Step 2: Confirm the current `/tests/sync` handler tolerates long timeouts**
 
 Open `src/autoagent/api/tests.py`. The current `wait_done` call uses `timeout_sec=(sample.timeout_sec or 600) + 30`, which already accommodates web samples. No code change needed, but add a comment for clarity:
 
@@ -2614,14 +2614,14 @@ Open `src/autoagent/api/tests.py`. The current `wait_done` call uses `timeout_se
     await sch.wait_done(batch_id, timeout_sec=(sample.timeout_sec or 600) + 30)
 ```
 
-- [ ] **Step 3: Run the test (real Chromium required)**
+- [x] **Step 3: Run the test (real Chromium required)**
 
 ```bash
 python3.11 -m pytest tests/integration/test_tests_sync_web.py -v
 ```
 Expected: 1 passed. If profile save fails due to registry path, confirm `get_settings().data_root` is writable in the test env; if necessary, add a `monkeypatch` to point `data_root` at `tmp_path`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/autoagent/api/tests.py tests/integration/test_tests_sync_web.py

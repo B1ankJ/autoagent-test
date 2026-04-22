@@ -23,6 +23,8 @@ async def run_sync(sample: Sample) -> SampleResult:
         concurrency=1,
         samples=[sample],
     )
+    # sample.timeout_sec is the per-sample timeout; we wait slightly longer
+    # to absorb executor startup/teardown, including Playwright launch time.
     await sch.wait_done(batch_id, timeout_sec=(sample.timeout_sec or 600) + 30)
     results = await list_samples_for_batch(batch_id)
     if not results:
