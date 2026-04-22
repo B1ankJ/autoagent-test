@@ -59,6 +59,7 @@ export interface BatchDetail extends BatchSummary {
   concurrency: number
   target_profile_default?: string
   samples: Sample[]
+  seq: number
 }
 
 export interface BatchCreateJSON {
@@ -98,6 +99,12 @@ export interface SingleTestAsyncCreated {
 }
 
 export type SingleTestAsyncStatus = SingleTestSyncResponse
+
+export interface ScreenshotInfo {
+  name: string
+  label: string
+  taken_at: string
+}
 
 export interface VLMConfig {
   base_url: string

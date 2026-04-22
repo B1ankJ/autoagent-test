@@ -2638,7 +2638,7 @@ git commit -m "test(integration): /tests/sync dispatches web profile to WebExecu
 - Create: `web/src/hooks/useBatchStream.ts`
 - Create: `web/src/hooks/useBatchStream.test.ts`
 
-- [ ] **Step 1: Extend types**
+- [x] **Step 1: Extend types**
 
 In `web/src/types/api.ts`, add:
 
@@ -2652,7 +2652,7 @@ export interface ScreenshotInfo {
 
 Find `BatchDetail` and add `seq: number` as a required field.
 
-- [ ] **Step 2: Add the screenshots API client**
+- [x] **Step 2: Add the screenshots API client**
 
 `web/src/api/screenshots.ts`:
 
@@ -2702,7 +2702,7 @@ export function screenshotPath(batchId: string, sampleId: string, name: string):
 }
 ```
 
-- [ ] **Step 3: Implement `useBatchStream`**
+- [x] **Step 3: Implement `useBatchStream`**
 
 `web/src/hooks/useBatchStream.ts`:
 
@@ -2801,7 +2801,7 @@ function applyEvent(
 }
 ```
 
-- [ ] **Step 4: Write a unit test for seq dedup + batch_done shutdown**
+- [x] **Step 4: Write a unit test for seq dedup + batch_done shutdown**
 
 `web/src/hooks/useBatchStream.test.ts`:
 
@@ -2896,14 +2896,14 @@ describe('useBatchStream', () => {
 })
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 cd web && pnpm test
 ```
 Expected: prior 8 + 2 new = 10 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ..
