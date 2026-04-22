@@ -103,12 +103,13 @@ export interface VLMConfig {
   base_url: string
   model: string
   api_key_env: string
+  extra_headers?: Record<string, string>
 }
 
 export interface GlobalDefaults {
   api_timeout_sec?: number
   gui_timeout_sec?: number
   retry?: number
+  concurrency?: number
   verbose_logs?: boolean
-  [key: string]: unknown
 }

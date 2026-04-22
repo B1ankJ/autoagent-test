@@ -5,7 +5,7 @@ import { client } from './client'
 export function useVLM() {
   return useQuery({
     queryKey: ['config', 'vlm'],
-    queryFn: async () => (await client.get<VLMConfig>('/config/vlm')).data,
+    queryFn: async () => (await client.get<VLMConfig | null>('/config/vlm')).data,
   })
 }
 
