@@ -65,6 +65,8 @@ def test_parse_android_profile():
         }
     )
     assert isinstance(p, AndroidProfile)
+    assert p.input_method == "auto"
+    assert p.serial is None
 
 
 def test_invalid_platform_rejected():

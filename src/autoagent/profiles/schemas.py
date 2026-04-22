@@ -128,6 +128,8 @@ class AndroidProfile(BaseModel):
     platform: Literal["android"]
     package: str
     activity: str | None = None
+    serial: str | None = None
+    input_method: Literal["auto", "adb_keyboard", "u2_send_keys"] = "auto"
     ready_check: AndroidReadyCheckTree
     recovery_path: list[ActionStep]
     input_locator: Locator
