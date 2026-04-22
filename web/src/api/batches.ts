@@ -3,6 +3,7 @@ import {
   BatchCreatedResponse,
   BatchCreateJSON,
   BatchDetail,
+  ExecutionMode,
   BatchStatus,
   BatchSummary,
 } from '../types/api'
@@ -43,7 +44,7 @@ export function useUploadBatch() {
   return useMutation({
     mutationFn: async (args: {
       name: string
-      mode: 'api'
+      mode: ExecutionMode
       concurrency: number
       target_profile_default?: string
       file: File

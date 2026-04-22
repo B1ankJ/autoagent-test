@@ -2919,7 +2919,7 @@ git commit -m "feat(web): useBatchStream + screenshots API + types"
 - Modify: `web/src/pages/Batches/New.tsx`
 - Modify: `web/src/pages/Tests/Quick.tsx`
 
-- [ ] **Step 1: Extend mode dropdown in BatchNew**
+- [x] **Step 1: Extend mode dropdown in BatchNew**
 
 In `web/src/pages/Batches/New.tsx`, find the mode `Select` options. Add `{ label: 'Web (GUI)', value: 'gui_pc_web' }` after the `api` option.
 
@@ -2935,7 +2935,7 @@ const profileOptions = (profiles ?? [])
   .map((p) => ({ label: p.name, value: p.name }))
 ```
 
-- [ ] **Step 2: Same change in Tests/Quick**
+- [x] **Step 2: Same change in Tests/Quick**
 
 `web/src/pages/Tests/Quick.tsx`: add `gui_pc_web` option and apply the same platform filter.
 
@@ -2948,14 +2948,14 @@ const resp = await client.post<SampleResult>('/tests/sync', payload, {
 })
 ```
 
-- [ ] **Step 3: Run tests + build**
+- [x] **Step 3: Run tests + build**
 
 ```bash
 cd web && pnpm test && pnpm build
 ```
 Expected: all tests pass; build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ..

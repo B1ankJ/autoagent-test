@@ -17,9 +17,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateBatchJson, useUploadBatch } from '../../api/batches'
 import { useProfiles } from '../../api/profiles'
+import { ExecutionMode } from '../../types/api'
 
 interface JsonFormValues {
   name: string
+  mode: ExecutionMode
   concurrency: number
   target_profile_default?: string
   webhook_url?: string
@@ -33,6 +35,7 @@ interface JsonFormValues {
 
 interface UploadFormValues {
   name: string
+  mode: ExecutionMode
   concurrency: number
   target_profile_default?: string
 }
@@ -44,9 +47,25 @@ export function BatchNew() {
   const createJson = useCreateBatchJson()
   const uploadBatch = useUploadBatch()
   const [uploaded, setUploaded] = useState<UploadFile | null>(null)
+  const [jsonForm] = Form.useForm<JsonFormValues>()
+  const [uploadForm] = Form.useForm<UploadFormValues>()
 
-  const apiProfiles = (profiles.data ?? []).filter((profile) => profile.platform === 'api')
-  const profileOptions = apiProfiles.map((profile) => ({
+  const availableProfiles = (profiles.data ?? []).filter(
+    (profile) => profile.platform === 'api' || profile.platform === 'web',
+  )
+  const jsonMode = Form.useWatch('mode', jsonForm) ?? 'api'
+  const uploadMode = Form.useWatch('mode', uploadForm) ?? 'api'
+  const jsonPlatform = jsonMode === 'gui_pc_web' ? 'web' : 'api'
+  const uploadPlatform = uploadMode === 'gui_pc_web' ? 'web' : 'api'
+  const jsonProfileOptions = availableProfiles
+    .filter((profile) => profile.platform === jsonPlatform)
+    .map((profile) => ({
+      value: profile.name,
+      label: profile.name,
+    }))
+  const uploadProfileOptions = availableProfiles
+    .filter((profile) => profile.platform === uploadPlatform)
+    .map((profile) => ({
     value: profile.name,
     label: profile.name,
   }))
@@ -55,14 +74,14 @@ export function BatchNew() {
     try {
       const result = await createJson.mutateAsync({
         name: values.name,
-        mode: 'api',
+        mode: values.mode,
         concurrency: values.concurrency,
         target_profile_default: values.target_profile_default,
         webhook_url: values.webhook_url,
         samples: values.samples.map((sample) => ({
           id: sample.id,
           prompts: sample.prompts.split('\n').filter(Boolean),
-          mode: 'api',
+          mode: values.mode,
           target_profile: sample.target_profile ?? values.target_profile_default ?? '',
           new_session: sample.new_session,
         })),
@@ -83,7 +102,7 @@ export function BatchNew() {
     try {
       const result = await uploadBatch.mutateAsync({
         name: values.name,
-        mode: 'api',
+        mode: values.mode,
         concurrency: values.concurrency,
         target_profile_default: values.target_profile_default,
         file: uploaded.originFileObj,
@@ -95,10 +114,10 @@ export function BatchNew() {
     }
   }
 
-  if (apiProfiles.length === 0) {
+  if (availableProfiles.length === 0) {
     return (
       <Card>
-        <Typography.Paragraph>至少创建一个 API Profile 才能跑批次。</Typography.Paragraph>
+        <Typography.Paragraph>至少创建一个可用 Profile 才能跑批次。</Typography.Paragraph>
         <Button type="primary" onClick={() => navigate('/profiles/new')}>
           去新建 Profile
         </Button>
@@ -117,12 +136,25 @@ export function BatchNew() {
             children: (
               <Card>
                 <Form<JsonFormValues>
+                  form={jsonForm}
                   layout="vertical"
-                  initialValues={{ concurrency: 1, samples: [{ id: 's1', prompts: '' }] }}
+                  initialValues={{
+                    mode: 'api',
+                    concurrency: 1,
+                    samples: [{ id: 's1', prompts: '' }],
+                  }}
                   onFinish={onJsonSubmit}
                 >
                   <Form.Item name="name" label="名称" rules={[{ required: true }]}>
                     <Input />
+                  </Form.Item>
+                  <Form.Item name="mode" label="模式" rules={[{ required: true }]}>
+                    <Select
+                      options={[
+                        { label: 'API', value: 'api' },
+                        { label: 'Web (GUI)', value: 'gui_pc_web' },
+                      ]}
+                    />
                   </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
@@ -132,7 +164,7 @@ export function BatchNew() {
                     label="默认 Profile"
                     rules={[{ required: true }]}
                   >
-                    <Select options={profileOptions} />
+                    <Select options={jsonProfileOptions} />
                   </Form.Item>
                   <Form.Item name="webhook_url" label="Webhook URL（可选）">
                     <Input />
@@ -189,18 +221,27 @@ export function BatchNew() {
             children: (
               <Card>
                 <Form<UploadFormValues>
+                  form={uploadForm}
                   layout="vertical"
-                  initialValues={{ concurrency: 1 }}
+                  initialValues={{ mode: 'api', concurrency: 1 }}
                   onFinish={onUploadSubmit}
                 >
                   <Form.Item name="name" label="名称" rules={[{ required: true }]}>
                     <Input />
                   </Form.Item>
+                  <Form.Item name="mode" label="模式" rules={[{ required: true }]}>
+                    <Select
+                      options={[
+                        { label: 'API', value: 'api' },
+                        { label: 'Web (GUI)', value: 'gui_pc_web' },
+                      ]}
+                    />
+                  </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
                   </Form.Item>
                   <Form.Item name="target_profile_default" label="默认 Profile">
-                    <Select options={profileOptions} allowClear />
+                    <Select options={uploadProfileOptions} allowClear />
                   </Form.Item>
                   <Form.Item label="文件 (.jsonl / .json / .csv)">
                     <Upload.Dragger

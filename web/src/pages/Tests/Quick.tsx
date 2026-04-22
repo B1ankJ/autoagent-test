@@ -12,41 +12,53 @@ import {
   Typography,
 } from 'antd'
 import { useState } from 'react'
+import { client } from '../../api/client'
 import { useProfiles } from '../../api/profiles'
-import { useAsyncResult, useRunAsync, useRunSync } from '../../api/tests'
-import { SingleTestSyncResponse } from '../../types/api'
+import { useAsyncResult, useRunAsync } from '../../api/tests'
+import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
 
 interface FormValues {
   id?: string
+  mode: ExecutionMode
   target_profile: string
   prompts: string
   kind: 'sync' | 'async'
 }
 
 export function TestsQuick() {
+  const [form] = Form.useForm<FormValues>()
   const profiles = useProfiles()
-  const runSync = useRunSync()
   const runAsync = useRunAsync()
   const [asyncTaskId, setAsyncTaskId] = useState<string | undefined>()
   const asyncResult = useAsyncResult(asyncTaskId)
   const { message } = App.useApp()
   const [lastSyncResult, setLastSyncResult] = useState<SingleTestSyncResponse | null>(null)
+  const mode = Form.useWatch('mode', form) ?? 'api'
+  const selectedPlatform = mode === 'gui_pc_web' ? 'web' : 'api'
 
-  const apiProfiles = (profiles.data ?? []).filter((profile) => profile.platform === 'api')
+  const profileOptions = (profiles.data ?? [])
+    .filter((profile) => profile.platform === selectedPlatform)
+    .map((profile) => ({ value: profile.name, label: profile.name }))
 
   const onSubmit = async (values: FormValues) => {
     const sample = {
       id: values.id || `quick-${Date.now()}`,
       prompts: values.prompts.split('\n').filter(Boolean),
-      mode: 'api' as const,
+      mode: values.mode,
       target_profile: values.target_profile,
+      retry: 0,
+      timeout_sec: values.mode === 'gui_pc_web' ? 180 : 60,
     }
 
     if (values.kind === 'sync') {
       try {
         setAsyncTaskId(undefined)
         setLastSyncResult(null)
-        const result = await runSync.mutateAsync(sample)
+        const result = (
+          await client.post<SingleTestSyncResponse>('/tests/sync', sample, {
+            timeout: values.mode === 'gui_pc_web' ? 240_000 : 60_000,
+          })
+        ).data
         setLastSyncResult(result)
       } catch (error) {
         message.error((error as Error).message)
@@ -77,15 +89,25 @@ export function TestsQuick() {
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Typography.Title level={3}>单次测试</Typography.Title>
       <Card>
-        <Form<FormValues> layout="vertical" onFinish={onSubmit} initialValues={{ kind: 'sync' }}>
+        <Form<FormValues>
+          form={form}
+          layout="vertical"
+          onFinish={onSubmit}
+          initialValues={{ kind: 'sync', mode: 'api' }}
+        >
           <Form.Item name="id" label="ID（可留空自动生成）">
             <Input />
           </Form.Item>
-          <Form.Item name="target_profile" label="Profile" rules={[{ required: true }]}>
+          <Form.Item name="mode" label="模式">
             <Select
-              options={apiProfiles.map((profile) => ({ value: profile.name, label: profile.name }))}
-              placeholder="选择 API profile"
+              options={[
+                { label: 'API', value: 'api' },
+                { label: 'Web (GUI)', value: 'gui_pc_web' },
+              ]}
             />
+          </Form.Item>
+          <Form.Item name="target_profile" label="Profile" rules={[{ required: true }]}>
+            <Select options={profileOptions} placeholder="选择 profile" />
           </Form.Item>
           <Form.Item name="prompts" label="Prompts（每行一条）" rules={[{ required: true }]}>
             <Input.TextArea rows={4} />
@@ -99,7 +121,7 @@ export function TestsQuick() {
           <Button
             type="primary"
             htmlType="submit"
-            loading={runSync.isPending || runAsync.isPending}
+            loading={runAsync.isPending}
           >
             运行
           </Button>
