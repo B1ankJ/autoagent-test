@@ -1,12 +1,14 @@
+import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from autoagent.api._deps import get_device_monitor
 from autoagent.api.auth import router as auth_router
 from autoagent.api.batches import router as batches_router
 from autoagent.api.config import router as config_router
@@ -33,7 +35,13 @@ async def lifespan(app: FastAPI):
         log.info("bootstrapped admin user %s", settings.admin_username)
     else:
         log.info("admin user %s already exists", settings.admin_username)
-    yield
+    monitor_task = asyncio.create_task(get_device_monitor().run())
+    try:
+        yield
+    finally:
+        monitor_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await monitor_task
 
 
 app = FastAPI(title="AutoAgent Test", version="0.1.0", lifespan=lifespan)

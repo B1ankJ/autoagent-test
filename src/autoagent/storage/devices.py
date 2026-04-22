@@ -47,7 +47,9 @@ async def upsert_discovered_device(
 async def list_devices() -> list[DeviceInfo]:
     sm = get_sessionmaker()
     async with sm() as s:
-        rows = await s.execute(select(Device).order_by(desc(Device.online), desc(Device.last_seen_at)))
+        rows = await s.execute(
+            select(Device).order_by(desc(Device.online), desc(Device.last_seen_at))
+        )
         return [_to_info(row) for row in rows.scalars().all()]
 
 
@@ -73,3 +75,13 @@ async def update_device_label(serial: str, label: str | None) -> DeviceInfo | No
         await s.commit()
         await s.refresh(row)
         return _to_info(row)
+
+
+async def mark_missing_devices_offline(seen_serials: set[str]) -> None:
+    sm = get_sessionmaker()
+    async with sm() as s:
+        rows = await s.execute(select(Device))
+        for row in rows.scalars().all():
+            if row.serial not in seen_serials:
+                row.online = False
+        await s.commit()
