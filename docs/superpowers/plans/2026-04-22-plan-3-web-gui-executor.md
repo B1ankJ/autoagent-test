@@ -502,7 +502,7 @@ Expected: all bus tests pass; existing batch tests still pass (they don't assert
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/autoagent/events src/autoagent/models/api.py tests/unit/test_event_bus.py
@@ -519,11 +519,11 @@ Shared fixture used by real-Playwright integration tests in Tasks 9 and 14.
 - Create: `tests/fixtures/fake_chat.html`
 - Create: `tests/fixtures/__init__.py` (empty, so the dir is a pkg and `pytest` discovers it cleanly)
 
-- [ ] **Step 1: Create the fixture directory marker**
+- [x] **Step 1: Create the fixture directory marker**
 
 `tests/fixtures/__init__.py`: empty file.
 
-- [ ] **Step 2: Create the HTML fixture**
+- [x] **Step 2: Create the HTML fixture**
 
 `tests/fixtures/fake_chat.html`:
 
@@ -588,7 +588,7 @@ Key properties for tests:
 - Clicking `#send` appends `div[data-role="assistant"]` inside `#responses`, types out the reply character-by-character (~30 ms each), then after a 1.1s quiet period re-enables `#send`. Both `dom_stable` (with `stable_sec=1`) and `send_button_reenable` fire at the same end-of-generation moment.
 - `#new-chat` clears responses — target for `new_session_action`.
 
-- [ ] **Step 3: Smoke-open the fixture**
+- [x] **Step 3: Smoke-open the fixture**
 
 Run:
 ```bash

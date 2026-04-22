@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Fake Chat</title>
+</head>
+<body>
+<h1>Fake Chat</h1>
+<div id="responses" data-testid="responses"></div>
+<textarea id="input" data-testid="input" rows="3" cols="40"></textarea>
+<br />
+<button id="send" data-testid="send" disabled>Send</button>
+<button id="new-chat" data-testid="new-chat">New chat</button>
+<script>
+  const input = document.getElementById('input');
+  const send = document.getElementById('send');
+  const newChat = document.getElementById('new-chat');
+  const responses = document.getElementById('responses');
+
+  input.addEventListener('input', () => {
+    send.disabled = input.value.trim().length === 0;
+  });
+
+  send.addEventListener('click', () => {
+    const prompt = input.value;
+    input.value = '';
+    send.disabled = true;
+    const bubble = document.createElement('div');
+    bubble.setAttribute('data-role', 'assistant');
+    responses.appendChild(bubble);
+    const reply = 'echo: ' + prompt;
+    let i = 0;
+    const tick = () => {
+      bubble.textContent = reply.slice(0, i);
+      i += 1;
+      if (i <= reply.length) {
+        setTimeout(tick, 30);
+      } else {
+        setTimeout(() => {
+          send.disabled = false;
+        }, 1100);
+      }
+    };
+    tick();
+  });
+
+  newChat.addEventListener('click', () => {
+    responses.innerHTML = '';
+  });
+</script>
+</body>
+</html>
