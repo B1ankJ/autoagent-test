@@ -15,11 +15,11 @@ async def wait_for_complete(
     send_button_selector: str | None = None,
     poll_interval_sec: float = 0.2,
     max_wait_sec: float | None = None,
-) -> None:
+) -> str | None:
     """Block until the chosen strategy reports completion. Raises TimeoutError on timeout."""
 
     if isinstance(strategy, DomStable):
-        await _dom_stable(
+        return await _dom_stable(
             page,
             response_selector=response_selector,
             stable_sec=float(strategy.stable_sec),
@@ -35,6 +35,7 @@ async def wait_for_complete(
             max_wait_sec=float(max_wait_sec if max_wait_sec is not None else 180),
             poll_interval_sec=poll_interval_sec,
         )
+        return None
     else:
         raise ValueError(f"unsupported completion strategy: {type(strategy).__name__}")
 
@@ -46,7 +47,7 @@ async def _dom_stable(
     stable_sec: float,
     max_wait_sec: float,
     poll_interval_sec: float,
-) -> None:
+) -> str:
     deadline = time.monotonic() + max_wait_sec
     last_text: str | None = None
     stable_since: float | None = None
@@ -58,7 +59,7 @@ async def _dom_stable(
             if stable_since is None:
                 stable_since = now
             elif now - stable_since >= stable_sec:
-                return
+                return text
         else:
             last_text = text
             stable_since = None

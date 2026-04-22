@@ -1208,7 +1208,7 @@ Fills in the skeleton from Task 2 using the building blocks from Tasks 5–7. Us
 - Modify: `src/autoagent/executors/web_executor.py`
 - Create: `tests/unit/test_web_executor_unit.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/unit/test_web_executor_unit.py`:
 
@@ -1442,13 +1442,13 @@ async def test_verbose_logs_captures_per_action_screenshot(
     assert page.screenshot.await_count >= 5
 ```
 
-- [ ] **Step 2: Run tests to verify they fail (WebExecutor.execute is still NotImplementedError)**
+- [x] **Step 2: Run tests to verify they fail (WebExecutor.execute is still NotImplementedError)**
 
 ```bash
 python3.11 -m pytest tests/unit/test_web_executor_unit.py -v
 ```
 
-- [ ] **Step 3: Implement `WebExecutor.execute`**
+- [x] **Step 3: Implement `WebExecutor.execute`**
 
 Replace `src/autoagent/executors/web_executor.py` with:
 
@@ -1593,21 +1593,21 @@ def _send_button_selector(method: Any) -> str | None:
     return None
 ```
 
-- [ ] **Step 4: Run unit tests**
+- [x] **Step 4: Run unit tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_web_executor_unit.py -v
 ```
 Expected: all pass. If any fail, reconcile mock expectations vs. actual Playwright calls. The `_patch_playwright` helper monkeypatches the module-level `async_playwright`; if the executor imports `async_playwright` differently, adjust the test's `monkeypatch.setattr` target.
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright"
 ```
 Expected: 68 prior + 11 (action_runner) + 5 (detector) + 7 (store) + ~8 (web executor unit) + ~7 (bus) + 3 (factory) = ~109 passed.
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
