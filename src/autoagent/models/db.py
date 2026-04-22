@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -51,6 +51,18 @@ class Sample(Base):
     logs_dir = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
+
+
+class Device(Base):
+    __tablename__ = "devices"
+    serial = Column(String, primary_key=True)
+    label = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    android_version = Column(String, nullable=True)
+    online = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    last_seen_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class ConfigKV(Base):

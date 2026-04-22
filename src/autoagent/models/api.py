@@ -100,6 +100,20 @@ class ScreenshotInfo(BaseModel):
     taken_at: datetime
 
 
+class DeviceInfo(BaseModel):
+    serial: str
+    label: str | None = None
+    model: str | None = None
+    android_version: str | None = None
+    online: bool
+    enabled: bool
+    last_seen_at: datetime | None = None
+
+
+class DeviceLabelUpdate(BaseModel):
+    label: str | None = None
+
+
 class VLMConfig(BaseModel):
     base_url: str
     model: str
