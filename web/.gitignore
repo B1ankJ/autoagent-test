@@ -1,5 +1,7 @@
 node_modules
 dist
 *.log
+*.tsbuildinfo
+.tsbuild
 .env
 .env.local
