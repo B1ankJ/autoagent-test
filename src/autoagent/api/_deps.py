@@ -5,6 +5,7 @@ from typing import Any
 from autoagent.devices.adb import list_devices as adb_list_devices
 from autoagent.devices.monitor import DeviceMonitor
 from autoagent.devices.pool import DevicePool
+from autoagent.executors.android_executor import AndroidExecutor
 from autoagent.executors.api_executor import ApiExecutor
 from autoagent.executors.base import Executor
 from autoagent.executors.web_executor import WebExecutor
@@ -28,7 +29,9 @@ def _build_executor(mode: str) -> Executor:
         return ApiExecutor()
     if mode == "gui_pc_web":
         return WebExecutor()
-    raise ValueError(f"mode {mode} not supported in this build (see later plans for web/android)")
+    if mode == "gui_android":
+        return AndroidExecutor()
+    raise ValueError(f"mode {mode} not supported in this build")
 
 
 def _lookup_profile(name: str) -> Any:

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+
+from autoagent.executors.android_locator import selector_kwargs
+from autoagent.profiles.schemas import Locator
+
 
 class AdbKeyboardNotInstalled(RuntimeError):
     pass
@@ -21,3 +26,11 @@ class AndroidInput:
 
     async def __aexit__(self, *_exc_info) -> None:
         return None
+
+    async def set_text(self, locator: Locator, text: str) -> None:
+        method = resolve_input_method(self.configured_method, text)
+        target = self.device(**selector_kwargs(locator))
+        if method in {"u2_send_keys", "adb_keyboard"}:
+            await asyncio.to_thread(target.set_text, text)
+            return
+        raise ValueError(f"unsupported input method: {method}")
