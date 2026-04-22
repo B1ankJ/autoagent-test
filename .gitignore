@@ -19,6 +19,11 @@ logs/*
 !logs/.gitkeep
 node_modules/
 .worktrees/
+# Web UI
+web/node_modules
+web/dist
+src/autoagent/static/*
+!src/autoagent/static/.gitkeep
 .DS_Store
 .idea/
 .vscode/
