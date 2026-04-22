@@ -1,8 +1,11 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from autoagent.api.auth import router as auth_router
 from autoagent.api.batches import router as batches_router
@@ -50,6 +53,36 @@ app.include_router(config_router, prefix="/api/v1")
 app.include_router(devices_router, prefix="/api/v1")
 
 
+def _mount_static(app: FastAPI) -> None:
+    static_dir = Path(os.environ.get("AUTOAGENT_STATIC_DIR", "src/autoagent/static"))
+    index_file = static_dir / "index.html"
+    if not index_file.exists():
+
+        @app.get("/", include_in_schema=False)
+        async def _ui_missing() -> dict:
+            return {"status": "ok", "ui": "not_built"}
+
+        return
+
+    @app.get("/", include_in_schema=False)
+    async def _index() -> FileResponse:
+        return FileResponse(index_file)
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def _spa(path: str) -> FileResponse:
+        if path.startswith("api/") or path == "health":
+            raise HTTPException(status_code=404)
+
+        candidate = static_dir / path
+        if candidate.is_file():
+            return FileResponse(candidate)
+
+        return FileResponse(index_file)
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+_mount_static(app)

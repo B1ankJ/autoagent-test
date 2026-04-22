@@ -7,6 +7,7 @@ from autoagent.profiles.registry import (
 )
 from autoagent.profiles.registry import (
     list_profile_names,
+    load_profile,
     load_profile_yaml,
     save_profile_yaml,
     validate_yaml,
@@ -19,8 +20,9 @@ class ProfileBody(BaseModel):
     yaml: str
 
 
-class ProfileListResponse(BaseModel):
-    names: list[str]
+class ProfileSummary(BaseModel):
+    name: str
+    platform: str
 
 
 class ProfileYamlResponse(BaseModel):
@@ -33,9 +35,15 @@ class ValidateResponse(BaseModel):
     error: str | None = None
 
 
-@router.get("", response_model=ProfileListResponse)
-async def list_profiles() -> ProfileListResponse:
-    return ProfileListResponse(names=list_profile_names())
+@router.get("", response_model=list[ProfileSummary])
+async def list_profiles() -> list[ProfileSummary]:
+    profiles: list[ProfileSummary] = []
+    for name in list_profile_names():
+        profile = load_profile(name)
+        if profile is None:
+            continue
+        profiles.append(ProfileSummary(name=profile.name, platform=profile.platform))
+    return profiles
 
 
 @router.get("/{name}", response_model=ProfileYamlResponse)

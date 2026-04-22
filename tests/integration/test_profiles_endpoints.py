@@ -43,7 +43,7 @@ async def test_profiles_crud(client):
     # List initially empty
     r = await client.get("/api/v1/profiles", headers=h)
     assert r.status_code == 200
-    assert r.json()["names"] == []
+    assert r.json() == []
 
     # Create
     r = await client.post("/api/v1/profiles/openai_gpt4", json={"yaml": profile_yaml}, headers=h)
@@ -51,7 +51,7 @@ async def test_profiles_crud(client):
 
     # List shows it
     r = await client.get("/api/v1/profiles", headers=h)
-    assert "openai_gpt4" in r.json()["names"]
+    assert r.json() == [{"name": "openai_gpt4", "platform": "api"}]
 
     # Get
     r = await client.get("/api/v1/profiles/openai_gpt4", headers=h)

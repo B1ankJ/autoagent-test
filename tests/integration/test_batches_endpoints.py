@@ -77,6 +77,7 @@ async def test_json_batch_flow(client, httpx_mock: HTTPXMock):
     final = await _wait_done(client, h, batch_id)
     assert final["done"] == 2 and final["failed"] == 0
     assert final["status"] == "done"
+    assert final["concurrency"] == 1
 
     r = await client.get(f"/api/v1/batches/{batch_id}/results", headers=h)
     assert r.status_code == 200

@@ -11,7 +11,8 @@ AutoAgent Test — backend service for batch testing conversational AI products 
 Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update this section when a plan completes or a new one starts.
 
 - **Plan 1 — Backend MVP:** ✅ complete (tag `backend-mvp-v0.1.0`, 2026-04-22). All 25 tasks done. 66 tests passing, ruff clean.
-- **Plan 2 — React Web UI:** not started.
+- **Plan 2 — React Web UI:** ✅ complete (tag `web-ui-v0.2.0`, 2026-04-22). Single-binary deploy (FastAPI serves built SPA from `src/autoagent/static/` with SPA fallback). 2s polling via TanStack Query for batch progress (WebSocket deferred to Plan 3). 68 backend tests + 8 frontend tests green; browser smoke (login → profiles → dry_run batch → download → config → logout) passed.
+  Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
 - **Plan 3 — Web GUI Executor (Playwright):** not started.
 - **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
@@ -24,6 +25,7 @@ Recorded in auto-memory (`project_plan5_security.md`). Summary:
 2. Flip `default_verbose_logs` default from `True` → `False`.
 3. JWT hardening in `auth/deps.py` + `auth/jwt.py`: narrow `except Exception` → `jwt.PyJWTError`; add `audience`/`issuer` claims; add `leeway=` for clock skew.
 4. Login endpoint (`api/auth.py`) timing side-channel: always run dummy `verify_password` on unknown-user path to prevent username enumeration.
+5. CORS hardening in `main.py`: replace `allow_origins=["*"]` with an env-driven allowlist (default `[]`) or remove `CORSMiddleware` entirely now that the SPA ships same-origin. Flagged by Plan 2 pre-merge review.
 
 ## Layout
 
@@ -47,6 +49,14 @@ tests/
 docs/superpowers/{specs,plans}/   Design specs and implementation plans
 ```
 
+## Frontend (Plan 2)
+
+- `web/` — Vite + React + TypeScript + AntD 5. Built into `src/autoagent/static/`.
+- State: TanStack Query v5 with 2s polling for batch progress. Token storage: `localStorage["autoagent_token"]`.
+- Dev: `cd web && pnpm dev` (port 5173, proxies `/api/v1` to 8000).
+- Build: `cd web && pnpm build` (writes to `src/autoagent/static/`).
+- Test: `cd web && pnpm test` (Vitest + RTL).
+
 ## Conventions
 
 - **Python interpreter:** always use `python3.11` (not `python3`). Only 3.11 has the project's dependencies installed. This applies to `pytest`, `ruff`, `uvicorn`, and anything importing `autoagent`.
@@ -64,7 +74,11 @@ python3.11 -m pytest -q                # run all tests
 python3.11 -m pytest tests/unit -v     # unit only
 python3.11 -m ruff check .             # lint
 python3.11 -m ruff format .            # format
-python3.11 -m uvicorn autoagent.main:app --reload   # run dev server
+python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server
+cd web && pnpm dev                     # frontend dev server (5173)
+cd web && pnpm build                   # build UI into src/autoagent/static/
+cd web && pnpm test                    # frontend unit tests
+cd web && pnpm lint                    # frontend lint
 ```
 
 Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32 chars). See `.env.example`.
@@ -75,3 +89,4 @@ Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32
 2. Consult `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md` for architecture intent.
 3. Match existing code style — most modules are small and single-purpose; prefer adding a new module over growing an existing one past ~200 lines.
 4. Plan 5 work should start with the "secrets + auth hardening" task (see "Deferred work").
+5. Plan 2 is complete and tagged `web-ui-v0.2.0`; the next active plan is Plan 3 (Web GUI Executor).
