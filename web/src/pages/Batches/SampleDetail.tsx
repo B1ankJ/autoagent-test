@@ -1,12 +1,13 @@
-import { Button, Card, Collapse, Descriptions, Space, Typography } from 'antd'
+import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useBatch } from '../../api/batches'
+import { useBatchStream } from '../../hooks/useBatchStream'
+import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
 
 export function SampleDetail() {
   const { id, sid } = useParams()
   const navigate = useNavigate()
-  const { data } = useBatch(id)
+  const { data } = useBatchStream(id)
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
 
   if (!data) {
@@ -78,6 +79,34 @@ export function SampleDetail() {
           }))}
         />
       </Card>
+
+      <Card title="截图">
+        <ScreenshotStrip batchId={data.batch_id} sampleId={sample.id} />
+      </Card>
+
+      {Array.isArray(sample.metadata?.action_log) && sample.metadata.action_log.length ? (
+        <Card title="动作日志">
+          <Table
+            size="small"
+            rowKey={(_record, index) => String(index)}
+            pagination={false}
+            dataSource={sample.metadata.action_log as Array<Record<string, unknown>>}
+            columns={[
+              {
+                title: 'Action',
+                dataIndex: 'action',
+                render: (value?: string) => value ?? '-',
+              },
+              {
+                title: 'Target',
+                dataIndex: 'selector',
+                render: (value?: string, record?: Record<string, unknown>) =>
+                  value ?? (record?.url as string | undefined) ?? '-',
+              },
+            ]}
+          />
+        </Card>
+      ) : null}
 
       {sample.metadata ? (
         <Card title="Metadata">
