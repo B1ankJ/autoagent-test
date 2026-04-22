@@ -6,6 +6,7 @@ import pytest
 
 from autoagent.executors.action_runner import ActionRunner
 from autoagent.profiles.schemas import ActionStep
+from autoagent.utils.env_expand import expand_env_value
 
 
 def _mk_page() -> AsyncMock:
@@ -72,6 +73,11 @@ async def test_fill_missing_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = ActionRunner(page)
     with pytest.raises(ValueError, match="MISSING_ENV_Q"):
         await runner.run([ActionStep(action="fill", selector="#x", text="$MISSING_ENV_Q")])
+
+
+def test_expand_env_value_reads_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CHAT_TOKEN", "abc")
+    assert expand_env_value("$CHAT_TOKEN") == "abc"
 
 
 async def test_press_key() -> None:

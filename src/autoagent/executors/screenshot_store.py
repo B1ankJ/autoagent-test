@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 _ALLOWED = re.compile(r"[a-z0-9_]+")
@@ -11,6 +12,22 @@ def slug_label(label: str) -> str:
     parts = _ALLOWED.findall(lowered)
     joined = "_".join(parts)
     return joined or "step"
+
+
+@dataclass(frozen=True)
+class ScreenshotResult:
+    path: Path
+    label: str
+    is_sensitive: bool = False
+    error: str | None = None
+
+    def to_metadata(self) -> dict[str, object]:
+        return {
+            "name": self.path.name,
+            "label": self.label,
+            "is_sensitive": self.is_sensitive,
+            "error": self.error,
+        }
 
 
 class ScreenshotStore:

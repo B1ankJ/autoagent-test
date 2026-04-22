@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import re
 import time
 from typing import Any
 
 from autoagent.profiles.schemas import ActionStep
-
-ENV_VAR_RE = re.compile(r"^\$([A-Z_][A-Z0-9_]*)$")
+from autoagent.utils.env_expand import expand_env_value
 
 
 class ActionRunner:
@@ -59,7 +56,7 @@ class ActionRunner:
             await asyncio.sleep(ms / 1000)
         elif action == "fill":
             selector = step.selector  # type: ignore[attr-defined]
-            text = self._expand_env(step.text)  # type: ignore[attr-defined]
+            text = expand_env_value(step.text)  # type: ignore[attr-defined]
             timeout_ms = int(getattr(step, "timeout_sec", 5) * 1000)
             await self.page.fill(selector, text, timeout=timeout_ms)
         elif action == "press":
@@ -67,14 +64,3 @@ class ActionRunner:
             await self.page.keyboard.press(key)
         else:
             raise ValueError(f"unknown action: {action}")
-
-    @staticmethod
-    def _expand_env(text: str) -> str:
-        match = ENV_VAR_RE.match(text)
-        if not match:
-            return text
-        name = match.group(1)
-        value = os.environ.get(name)
-        if value is None:
-            raise ValueError(f"environment variable {name} is not set")
-        return value

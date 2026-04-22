@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from autoagent.models.api import Sample, SampleResult
@@ -14,6 +15,28 @@ from autoagent.models.api import Sample, SampleResult
 class ExecutorContext:
     logs_dir: str | None = None
     verbose_logs: bool = True
+    api_timeout_sec: int = 60
+    gui_timeout_sec: int = 180
+    action_log: list[dict[str, Any]] = field(default_factory=list)
+    action_replay_path: Path | None = None
+    screenshot_index: list[Any] = field(default_factory=list)
+    device_serial: str | None = None
+
+
+def _merge_ctx_metadata(sample: Sample, ctx: ExecutorContext) -> dict[str, Any]:
+    metadata = dict(sample.metadata)
+    if ctx.action_log:
+        metadata["action_log"] = ctx.action_log
+    if ctx.action_replay_path is not None:
+        metadata["action_replay_available"] = True
+    if ctx.device_serial:
+        metadata["device_serial"] = ctx.device_serial
+    if ctx.screenshot_index:
+        metadata["screenshots"] = [
+            item.to_metadata() if hasattr(item, "to_metadata") else item
+            for item in ctx.screenshot_index
+        ]
+    return metadata
 
 
 class Executor(ABC):
@@ -50,7 +73,7 @@ class Executor(ABC):
                 attempt_count=1,
                 mode=sample.mode,
                 target_profile=sample.target_profile,
-                metadata=dict(sample.metadata),
+                metadata=_merge_ctx_metadata(sample, ctx),
                 logs_dir=ctx.logs_dir,
                 started_at=started,
                 ended_at=datetime.now(timezone.utc),
@@ -81,7 +104,7 @@ class Executor(ABC):
             attempt_count=attempts,
             mode=sample.mode,
             target_profile=sample.target_profile,
-            metadata=dict(sample.metadata),
+            metadata=_merge_ctx_metadata(sample, ctx),
             error=last_error,
             logs_dir=ctx.logs_dir,
             started_at=started,
