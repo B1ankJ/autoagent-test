@@ -86,6 +86,7 @@ class BatchDetail(BatchSummary):
     concurrency: int = 1
     target_profile_default: str | None = None
     samples: list[SampleResult] = Field(default_factory=list)
+    seq: int = 0
 
 
 class AsyncTestResponse(BaseModel):

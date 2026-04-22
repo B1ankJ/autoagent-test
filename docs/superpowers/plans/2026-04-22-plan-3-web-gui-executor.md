@@ -237,7 +237,7 @@ python3.11 -m ruff check . && python3.11 -m ruff format --check .
 ```
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/autoagent/executors/web_executor.py src/autoagent/api/_deps.py tests/unit/test_executor_factory.py
@@ -256,7 +256,7 @@ In-process pub/sub with per-batch monotonic `seq` and a small ring buffer (for `
 - Create: `tests/unit/test_event_bus.py`
 - Modify: `src/autoagent/models/api.py` (add `seq` to `BatchDetail`)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/unit/test_event_bus.py`:
 
@@ -381,14 +381,14 @@ async def test_payloads_passthrough(payload: dict) -> None:
     assert got[0].payload == payload
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_event_bus.py -v
 ```
 Expected: ImportError for `autoagent.events.bus`.
 
-- [ ] **Step 3: Implement the bus**
+- [x] **Step 3: Implement the bus**
 
 `src/autoagent/events/__init__.py`: empty file.
 
@@ -479,7 +479,7 @@ def reset_bus_for_tests() -> None:
     _instance = None
 ```
 
-- [ ] **Step 4: Add `seq` to `BatchDetail`**
+- [x] **Step 4: Add `seq` to `BatchDetail`**
 
 Open `src/autoagent/models/api.py`, find `class BatchDetail(BaseModel):`. Add field:
 
@@ -489,14 +489,14 @@ Open `src/autoagent/models/api.py`, find `class BatchDetail(BaseModel):`. Add fi
 
 Place after the existing fields, before any method definitions. This is a non-breaking additive change; existing tests continue to pass.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_event_bus.py tests/integration/test_batches_endpoints.py -v
 ```
 Expected: all bus tests pass; existing batch tests still pass (they don't assert on `seq`).
 
-- [ ] **Step 6: Lint**
+- [x] **Step 6: Lint**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
