@@ -32,11 +32,14 @@ class WebExecutor(Executor):
             if profile.browser.user_data_dir:
                 context = await pw.chromium.launch_persistent_context(
                     user_data_dir=profile.browser.user_data_dir,
+                    channel="chromium",
                     headless=profile.browser.headless,
                 )
                 browser = None
             else:
-                browser = await pw.chromium.launch(headless=profile.browser.headless)
+                browser = await pw.chromium.launch(
+                    channel="chromium", headless=profile.browser.headless
+                )
                 context = await browser.new_context()
 
             try:

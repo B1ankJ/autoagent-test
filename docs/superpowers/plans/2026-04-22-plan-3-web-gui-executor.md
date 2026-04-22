@@ -1624,7 +1624,7 @@ Exercises the full pipeline against `fake_chat.html` with a real Chromium.
 **Files:**
 - Create: `tests/integration/test_web_executor_e2e.py`
 
-- [ ] **Step 1: Write the integration test**
+- [x] **Step 1: Write the integration test**
 
 `tests/integration/test_web_executor_e2e.py`:
 
@@ -1730,14 +1730,14 @@ async def test_bad_selector_triggers_recovery(tmp_path: Path) -> None:
     assert files, "expected at least one error_* screenshot under logs dir"
 ```
 
-- [ ] **Step 2: Run the integration test (real Chromium required)**
+- [x] **Step 2: Run the integration test (real Chromium required)**
 
 ```bash
 python3.11 -m pytest tests/integration/test_web_executor_e2e.py -v
 ```
 Expected: 4 passed. If `browserType.launch: Executable doesn't exist` appears, re-run `python3.11 -m playwright install chromium`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/integration/test_web_executor_e2e.py
