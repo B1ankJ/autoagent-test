@@ -120,6 +120,8 @@ async def get_one(batch_id: str) -> BatchDetail:
         name=b.name,
         mode=b.mode,
         status=b.status,
+        concurrency=b.concurrency,
+        target_profile_default=b.target_profile_default,
         total=b.total,
         done=b.done,
         failed=b.failed,

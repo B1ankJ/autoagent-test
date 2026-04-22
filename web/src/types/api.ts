@@ -56,6 +56,8 @@ export interface BatchSummary {
 }
 
 export interface BatchDetail extends BatchSummary {
+  concurrency: number
+  target_profile_default?: string
   samples: Sample[]
 }
 
