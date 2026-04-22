@@ -18,6 +18,7 @@ data/results/
 logs/*
 !logs/.gitkeep
 node_modules/
+.worktrees/
 .DS_Store
 .idea/
 .vscode/
