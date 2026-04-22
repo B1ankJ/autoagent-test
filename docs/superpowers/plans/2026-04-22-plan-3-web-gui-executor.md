@@ -1061,7 +1061,7 @@ python3.11 -m pytest tests/unit/test_complete_detector.py -v
 ```
 Expected: 5 passed.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
