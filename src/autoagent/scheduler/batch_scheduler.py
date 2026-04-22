@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.config.settings import get_settings
+from autoagent.events.bus import get_event_bus
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Mode, Sample, SampleResult
 from autoagent.results.writer import ResultWriter
@@ -131,12 +132,19 @@ class BatchScheduler:
     async def _run(self, batch_id: str, state: _RunState) -> None:
         settings = get_settings()
         await update_batch_status(batch_id, "running")
+        bus = get_event_bus()
         writer = ResultWriter(batch_id)
         sem = asyncio.Semaphore(state.concurrency)
         start = time.monotonic()
+        final_status = "failed"
 
         async def run_one(sample: Sample) -> None:
             async with sem:
+                await bus.publish(
+                    batch_id,
+                    "sample_update",
+                    {"sample_id": sample.id, "status": "running"},
+                )
                 if state.cancel_event.is_set():
                     result = SampleResult(
                         id=sample.id,
@@ -201,6 +209,28 @@ class BatchScheduler:
                         )
                     except Exception:
                         log.exception("failed to update batch progress")
+                    try:
+                        await bus.publish(
+                            batch_id,
+                            "sample_update",
+                            {
+                                "sample_id": sample.id,
+                                "status": result.status,
+                                "duration_ms": result.duration_ms,
+                            },
+                        )
+                        await bus.publish(
+                            batch_id,
+                            "batch_progress",
+                            {
+                                "done": state.done_count,
+                                "failed": state.failed_count,
+                                "total": len(state.samples),
+                                "running": 0,
+                            },
+                        )
+                    except Exception:
+                        log.exception("failed to publish batch progress events")
 
                 if sample.callback_url:
                     try:
@@ -218,5 +248,9 @@ class BatchScheduler:
             await update_batch_status(batch_id, final_status)
         finally:
             writer.close()
+            try:
+                await bus.publish(batch_id, "batch_done", {"status": final_status})
+            except Exception:
+                log.exception("failed to publish batch_done for %s", batch_id)
             state.done_event.set()
             log.info("batch %s complete in %.1fs", batch_id, time.monotonic() - start)

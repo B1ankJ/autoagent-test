@@ -1946,7 +1946,7 @@ Wire scheduler state transitions into the `BatchEventBus`. Makes BatchDetail GET
 - Modify: `src/autoagent/api/batches.py` (GET `/batches/{id}` returns `seq`)
 - Create: `tests/integration/test_scheduler_events.py`
 
-- [ ] **Step 1: Write the integration test**
+- [x] **Step 1: Write the integration test**
 
 `tests/integration/test_scheduler_events.py`:
 
@@ -2025,14 +2025,14 @@ async def test_batch_detail_endpoint_exposes_seq() -> None:
     assert bus.last_seq("b_fake") == 1
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```bash
 python3.11 -m pytest tests/integration/test_scheduler_events.py -v
 ```
 Expected: fail because scheduler doesn't publish yet.
 
-- [ ] **Step 3: Wire publishes in scheduler**
+- [x] **Step 3: Wire publishes in scheduler**
 
 Open `src/autoagent/scheduler/batch_scheduler.py`. At top, add:
 
@@ -2111,7 +2111,7 @@ To avoid referencing an unbound name, restructure: capture `final_status` before
             log.info("batch %s complete in %.1fs", batch_id, time.monotonic() - start)
 ```
 
-- [ ] **Step 4: Expose `seq` on BatchDetail GET**
+- [x] **Step 4: Expose `seq` on BatchDetail GET**
 
 Open `src/autoagent/api/batches.py`. Find the GET `/batches/{id}` handler. Import `get_event_bus` from `autoagent.events.bus` at top. In the handler, after constructing the `BatchDetail` instance (or inside the `**dict`), set:
 
@@ -2121,14 +2121,14 @@ Open `src/autoagent/api/batches.py`. Find the GET `/batches/{id}` handler. Impor
 
 If the handler returns a newly built `BatchDetail(...)`, add `seq=get_event_bus().last_seq(batch_id)` to the kwargs. Run `grep -n "BatchDetail(" src/autoagent/api/batches.py` to confirm the exact construction site and adapt.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 python3.11 -m pytest tests/integration/test_scheduler_events.py tests/integration/test_batches_endpoints.py -v
 ```
 Expected: new events test passes; existing batch tests still pass.
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .

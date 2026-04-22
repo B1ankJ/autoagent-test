@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
+from autoagent.events.bus import get_event_bus
 from autoagent.loaders.csv_loader import load_csv
 from autoagent.loaders.json_loader import load_json
 from autoagent.loaders.jsonl_loader import load_jsonl
@@ -130,6 +131,7 @@ async def get_one(batch_id: str) -> BatchDetail:
         started_at=b.started_at,
         ended_at=b.ended_at,
         samples=samples,
+        seq=get_event_bus().last_seq(batch_id),
     )
 
 
