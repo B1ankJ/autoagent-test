@@ -70,9 +70,11 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 
 ```bash
 python3.11 -m pytest -q                # run all tests
+python3.11 -m pytest -q -m "not playwright"   # skip real-browser tests
 python3.11 -m pytest tests/unit -v     # unit only
 python3.11 -m ruff check .             # lint
 python3.11 -m ruff format .            # format
+python3.11 -m playwright install chromium     # one-time: download Chromium
 python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server
 cd web && pnpm dev                     # frontend dev server (5173)
 cd web && pnpm build                   # build UI into src/autoagent/static/

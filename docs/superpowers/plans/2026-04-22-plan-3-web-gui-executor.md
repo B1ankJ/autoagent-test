@@ -73,7 +73,7 @@ web/src/
 - Modify: `CLAUDE.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add deps to `pyproject.toml`**
+- [x] **Step 1: Add deps to `pyproject.toml`**
 
 In the `dependencies` list add `"playwright>=1.46,<2.0"` and `"sse-starlette>=2.1,<3.0"`. In `[tool.pytest.ini_options]` add:
 
@@ -81,7 +81,7 @@ In the `dependencies` list add `"playwright>=1.46,<2.0"` and `"sse-starlette>=2.
 markers = ["playwright: requires real Chromium via `python3.11 -m playwright install chromium`"]
 ```
 
-- [ ] **Step 2: Install Python deps**
+- [x] **Step 2: Install Python deps**
 
 Run:
 ```bash
@@ -89,7 +89,7 @@ python3.11 -m pip install -e '.[dev]'
 ```
 Expected: exits 0, `playwright` and `sse-starlette` appear in `pip list`.
 
-- [ ] **Step 3: Install Chromium**
+- [x] **Step 3: Install Chromium**
 
 Run:
 ```bash
@@ -97,7 +97,7 @@ python3.11 -m playwright install chromium
 ```
 Expected: download + install completes; `python3.11 -c "from playwright.async_api import async_playwright; print('ok')"` prints `ok`.
 
-- [ ] **Step 4: Verify baseline still green**
+- [x] **Step 4: Verify baseline still green**
 
 Run:
 ```bash
@@ -107,7 +107,7 @@ python3.11 -m ruff format --check .
 ```
 Expected: 68 passed, ruff clean.
 
-- [ ] **Step 5: Update CLAUDE.md common commands**
+- [x] **Step 5: Update CLAUDE.md common commands**
 
 In the ``` ```bash ``` block under `## Common commands`, add:
 
@@ -116,7 +116,7 @@ python3.11 -m pytest -q -m "not playwright"                         # skip real-
 python3.11 -m playwright install chromium                           # one-time: download Chromium
 ```
 
-- [ ] **Step 6: Update README Quickstart**
+- [x] **Step 6: Update README Quickstart**
 
 After the existing install instructions, add a new block:
 

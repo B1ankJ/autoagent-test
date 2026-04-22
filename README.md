@@ -4,7 +4,7 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 in progress on branch/worktree `plan-2-web-ui`.** API mode is fully wired. The React web UI lives in `web/`, builds into `src/autoagent/static/`, and is already served by FastAPI in this branch.
+**Plan 1 complete. Plan 2 complete. Plan 3 planned but not yet implemented.** API mode is fully wired. The React web UI lives in `web/`, builds into `src/autoagent/static/`, and is served by FastAPI after a frontend build.
 
 ## Requirements
 
@@ -19,6 +19,16 @@ cp .env.example .env
 
 pip install -e ".[dev]"
 ```
+
+### Web executor prerequisite (Plan 3)
+
+Web mode uses Playwright. After `pip install`:
+
+```bash
+python3.11 -m playwright install chromium --with-deps
+```
+
+Run once per machine. `--with-deps` installs OS libs on Linux and is a no-op on macOS.
 
 ## Run
 
@@ -159,7 +169,6 @@ See:
 
 ## Next plans
 
-- Plan 2: React Web UI
 - Plan 3: Web GUI Executor (Playwright)
 - Plan 4: Android Executor (uiautomator2 + OCR)
 - Plan 5: Packaging, monthly backups, Docker
