@@ -1752,7 +1752,7 @@ git commit -m "test(integration): real-Playwright e2e against fake_chat.html"
 - Modify: `src/autoagent/scheduler/batch_scheduler.py`
 - Create: `tests/unit/test_scheduler_web_concurrency.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/unit/test_scheduler_web_concurrency.py`:
 
@@ -1846,14 +1846,14 @@ async def test_web_profile_with_user_data_dir_forces_concurrency_1(
     assert any("user_data_dir" in r.message.lower() for r in caplog.records)
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 ```bash
 python3.11 -m pytest tests/unit/test_scheduler_web_concurrency.py -v
 ```
 Expected: fails (peak == 4 currently).
 
-- [ ] **Step 3: Implement the downgrade**
+- [x] **Step 3: Implement the downgrade**
 
 Modify `src/autoagent/scheduler/batch_scheduler.py`. Add a helper near the top of the file (after imports):
 
@@ -1919,7 +1919,7 @@ to:
 
 And change the `create_batch` call to use `state.concurrency` (already is).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_scheduler_web_concurrency.py -v
@@ -1927,7 +1927,7 @@ python3.11 -m pytest tests/integration/test_batches_endpoints.py -v
 ```
 Expected: new test passes; existing batch integration tests still pass (they use `mode=api`).
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .

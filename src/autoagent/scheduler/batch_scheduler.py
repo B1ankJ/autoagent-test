@@ -23,6 +23,39 @@ from autoagent.webhooks.sender import send_webhook
 log = logging.getLogger(__name__)
 
 
+def _resolve_concurrency(
+    requested: int,
+    mode: str,
+    samples: list[Sample],
+    profile_lookup: Callable[[str], Any],
+    *,
+    logger: logging.Logger = log,
+) -> int:
+    if mode != "gui_pc_web" or not samples:
+        return max(1, requested)
+
+    seen: set[str] = set()
+    for sample in samples:
+        if sample.target_profile in seen:
+            continue
+        seen.add(sample.target_profile)
+        try:
+            profile = profile_lookup(sample.target_profile)
+        except Exception:
+            continue
+        user_data_dir = getattr(getattr(profile, "browser", None), "user_data_dir", None)
+        if user_data_dir:
+            if requested > 1:
+                logger.warning(
+                    "batch: profile %s has user_data_dir=%s; forcing concurrency=1 (requested %d)",
+                    profile.name,
+                    user_data_dir,
+                    requested,
+                )
+            return 1
+    return max(1, requested)
+
+
 @dataclass
 class _RunState:
     samples: list[Sample]
@@ -59,10 +92,11 @@ class BatchScheduler:
         target_profile_default: str | None = None,
     ) -> str:
         batch_id = f"b_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        effective = _resolve_concurrency(concurrency, mode, samples, self._profile_lookup)
         state = _RunState(
             samples=samples,
             mode=mode,
-            concurrency=max(1, concurrency),
+            concurrency=effective,
             target_profile_default=target_profile_default,
         )
         self._states[batch_id] = state
