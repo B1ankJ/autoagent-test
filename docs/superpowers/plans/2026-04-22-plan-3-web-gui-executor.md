@@ -1079,7 +1079,7 @@ Manages directory + filename generation for per-sample screenshots.
 - Create: `src/autoagent/executors/screenshot_store.py`
 - Create: `tests/unit/test_screenshot_store.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/unit/test_screenshot_store.py`:
 
@@ -1135,13 +1135,13 @@ def test_logs_dir_property(tmp_path: Path) -> None:
     assert store.logs_dir == str((tmp_path / "b1" / "s1").resolve())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_screenshot_store.py -v
 ```
 
-- [ ] **Step 3: Implement the store**
+- [x] **Step 3: Implement the store**
 
 `src/autoagent/executors/screenshot_store.py`:
 
@@ -1183,14 +1183,14 @@ class ScreenshotStore:
         return self._dir / f"{n}_{slug_label(label)}.png"
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_screenshot_store.py -v
 ```
 Expected: 7 passed.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
