@@ -1,9 +1,15 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Route, Routes } from 'react-router-dom'
 import { client } from '../../api/client'
 import { renderWithProviders } from '../../test/test-utils'
 import { ProfileEdit } from './Edit'
+
+vi.mock('./ConnectivityTestModal', () => ({
+  ConnectivityTestModal: ({ open, profileName }: { open: boolean; profileName: string }) =>
+    open ? <div>modal:{profileName}</div> : null,
+}))
 
 vi.mock('../../components/YamlEditor', () => ({
   YamlEditor: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
@@ -27,5 +33,26 @@ describe('ProfileEdit', () => {
     await waitFor(() => {
       expect(spy).toHaveBeenCalledWith('/profiles/validate', expect.any(Object))
     })
+  })
+
+  it('enables connectivity test for web profiles', async () => {
+    vi.spyOn(client, 'get').mockResolvedValueOnce({
+      data: { yaml: 'platform: web\nname: web_demo\n' },
+    } as never)
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/profiles/:name" element={<ProfileEdit />} />
+      </Routes>,
+      { initialPath: '/profiles/web_demo' },
+    )
+
+    const button = screen.getByRole('button', { name: '连通性测试' })
+    await waitFor(() => {
+      expect(button).toBeEnabled()
+    })
+
+    await userEvent.click(button)
+    expect(screen.getByText('modal:web_demo')).toBeInTheDocument()
   })
 })

@@ -25,7 +25,11 @@ export function ProfileEdit() {
     }
   }, [data])
 
-  const isApiProfile = useMemo(() => /^platform:\s*api\b/m.test(yaml), [yaml])
+  const profileMode = useMemo(() => {
+    if (/^platform:\s*web\b/m.test(yaml)) return 'gui_pc_web' as const
+    if (/^platform:\s*api\b/m.test(yaml)) return 'api' as const
+    return null
+  }, [yaml])
 
   const onValidate = async () => {
     const result = await validate.mutateAsync(yaml)
@@ -74,7 +78,7 @@ export function ProfileEdit() {
             <Button type="primary" onClick={onSave} loading={save.isPending}>
               保存
             </Button>
-            <Button disabled={isNew || !isApiProfile} onClick={() => setTestOpen(true)}>
+            <Button disabled={isNew || !profileMode} onClick={() => setTestOpen(true)}>
               连通性测试
             </Button>
             <Button onClick={() => navigate('/profiles')}>返回</Button>
@@ -84,6 +88,7 @@ export function ProfileEdit() {
       <ConnectivityTestModal
         open={testOpen}
         profileName={routeName ?? ''}
+        mode={profileMode ?? 'api'}
         onClose={() => setTestOpen(false)}
       />
     </Space>

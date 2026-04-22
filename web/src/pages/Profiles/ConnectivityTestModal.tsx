@@ -1,14 +1,16 @@
 import { Alert, Button, Input, Modal, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useRunSync } from '../../api/tests'
+import { ExecutionMode } from '../../types/api'
 
 interface Props {
   open: boolean
   profileName: string
+  mode: ExecutionMode
   onClose: () => void
 }
 
-export function ConnectivityTestModal({ open, profileName, onClose }: Props) {
+export function ConnectivityTestModal({ open, profileName, mode, onClose }: Props) {
   const [prompt, setPrompt] = useState('hello')
   const run = useRunSync()
 
@@ -16,8 +18,9 @@ export function ConnectivityTestModal({ open, profileName, onClose }: Props) {
     await run.mutateAsync({
       id: `conn-${Date.now()}`,
       prompts: [prompt],
-      mode: 'api',
+      mode,
       target_profile: profileName,
+      timeout_sec: mode === 'gui_pc_web' ? 180 : 60,
     })
   }
 
