@@ -4,6 +4,7 @@ from typing import Any
 
 from autoagent.executors.api_executor import ApiExecutor
 from autoagent.executors.base import Executor
+from autoagent.executors.web_executor import WebExecutor
 from autoagent.profiles.registry import load_profile
 from autoagent.scheduler.batch_scheduler import BatchScheduler
 
@@ -13,6 +14,8 @@ _scheduler: BatchScheduler | None = None
 def _build_executor(mode: str) -> Executor:
     if mode == "api":
         return ApiExecutor()
+    if mode == "gui_pc_web":
+        return WebExecutor()
     raise ValueError(f"mode {mode} not supported in this build (see later plans for web/android)")
 
 

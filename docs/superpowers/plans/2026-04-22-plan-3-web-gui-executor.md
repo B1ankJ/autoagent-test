@@ -132,7 +132,7 @@ python3.11 -m playwright install chromium --with-deps
 Run once per machine. `--with-deps` installs OS libs on Linux and is a no-op on macOS.
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pyproject.toml CLAUDE.md README.md
@@ -150,7 +150,7 @@ Introduce a minimal `WebExecutor` that fails fast; wire it into the scheduler's 
 - Modify: `src/autoagent/api/_deps.py`
 - Create: `tests/unit/test_executor_factory.py`
 
-- [ ] **Step 1: Write the failing factory test**
+- [x] **Step 1: Write the failing factory test**
 
 `tests/unit/test_executor_factory.py`:
 
@@ -175,14 +175,14 @@ def test_unsupported_mode_raises() -> None:
         _build_executor("gui_android")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 python3.11 -m pytest tests/unit/test_executor_factory.py -v
 ```
 Expected: all three tests error on `ImportError: cannot import name 'WebExecutor'`.
 
-- [ ] **Step 3: Create the skeleton executor**
+- [x] **Step 3: Create the skeleton executor**
 
 `src/autoagent/executors/web_executor.py`:
 
@@ -208,7 +208,7 @@ class WebExecutor(Executor):
         raise NotImplementedError("WebExecutor.execute is filled in by Task 8")
 ```
 
-- [ ] **Step 4: Wire the factory**
+- [x] **Step 4: Wire the factory**
 
 Modify `src/autoagent/api/_deps.py`. Replace `_build_executor` body:
 
@@ -223,14 +223,14 @@ def _build_executor(mode: str) -> Executor:
     raise ValueError(f"mode {mode} not supported in this build (see later plans for android)")
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_executor_factory.py tests/integration/test_batches_endpoints.py -v
 ```
 Expected: factory tests pass; existing batch tests still pass (they use `api` mode).
 
-- [ ] **Step 6: Lint**
+- [x] **Step 6: Lint**
 
 ```bash
 python3.11 -m ruff check . && python3.11 -m ruff format --check .
