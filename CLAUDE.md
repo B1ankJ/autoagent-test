@@ -12,10 +12,11 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 
 - **Plan 1 — Backend MVP:** ✅ complete (tag `backend-mvp-v0.1.0`, 2026-04-22). All 25 tasks done. 66 tests passing, ruff clean.
 - **Plan 2 — React Web UI:** in progress on branch/worktree `plan-2-web-ui` (`.worktrees/plan-2-web-ui`).
-  Completed: Tasks 1-12 (through batch detail page, polling, cancel, and result download).
+  Completed: Tasks 1-17 (through sample detail, config page, dashboard, single-binary production smoke verification, and README Web UI docs).
   Extra alignment completed: `/api/v1/profiles` now returns `[{name, platform}]`; `/api/v1/batches/{id}` now includes `concurrency` and `target_profile_default`; frontend API types/hooks were corrected to match backend status enums and response shapes.
-  Verification status: backend `python3.11 -m pytest -q` = 68 passed; targeted backend regression `tests/integration/test_batches_endpoints.py::test_json_batch_flow` passing; frontend `cd web && pnpm test` = 8 passed; `pnpm build`, `pnpm lint`, and `pnpm format:check` passing.
-  Next task: Task 13 (`Batches/SampleDetail.tsx`), then Task 14+ (Config page, README polish, final verification).
+  Verification status: backend `python3.11 -m pytest -q` = 68 passed; `python3.11 -m ruff check .` and `python3.11 -m ruff format --check .` clean; frontend `cd web && pnpm test` = 8 passed; `pnpm build`, `pnpm lint`, and `pnpm format:check` passing; production smoke confirmed with `python3.11 -m uvicorn --app-dir src autoagent.main:app --port 8000` serving both `/` and SPA fallback `/batches` while `/api/v1/profiles` still works under auth.
+  Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
+  Next task: Task 18 manual browser smoke, then Plan 2 completion docs/tag.
 - **Plan 3 — Web GUI Executor (Playwright):** not started.
 - **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
@@ -51,6 +52,14 @@ tests/
 docs/superpowers/{specs,plans}/   Design specs and implementation plans
 ```
 
+## Frontend (Plan 2)
+
+- `web/` — Vite + React + TypeScript + AntD 5. Built into `src/autoagent/static/`.
+- State: TanStack Query v5 with 2s polling for batch progress. Token storage: `localStorage["autoagent_token"]`.
+- Dev: `cd web && pnpm dev` (port 5173, proxies `/api/v1` to 8000).
+- Build: `cd web && pnpm build` (writes to `src/autoagent/static/`).
+- Test: `cd web && pnpm test` (Vitest + RTL).
+
 ## Conventions
 
 - **Python interpreter:** always use `python3.11` (not `python3`). Only 3.11 has the project's dependencies installed. This applies to `pytest`, `ruff`, `uvicorn`, and anything importing `autoagent`.
@@ -68,7 +77,11 @@ python3.11 -m pytest -q                # run all tests
 python3.11 -m pytest tests/unit -v     # unit only
 python3.11 -m ruff check .             # lint
 python3.11 -m ruff format .            # format
-python3.11 -m uvicorn autoagent.main:app --reload   # run dev server
+python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server
+cd web && pnpm dev                     # frontend dev server (5173)
+cd web && pnpm build                   # build UI into src/autoagent/static/
+cd web && pnpm test                    # frontend unit tests
+cd web && pnpm lint                    # frontend lint
 ```
 
 Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32 chars). See `.env.example`.
@@ -79,4 +92,4 @@ Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32
 2. Consult `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md` for architecture intent.
 3. Match existing code style — most modules are small and single-purpose; prefer adding a new module over growing an existing one past ~200 lines.
 4. Plan 5 work should start with the "secrets + auth hardening" task (see "Deferred work").
-5. If continuing Plan 2, start in `.worktrees/plan-2-web-ui` and resume from Task 13 in `docs/superpowers/plans/2026-04-22-plan-2-web-ui.md`.
+5. If continuing Plan 2, start in `.worktrees/plan-2-web-ui` and resume from Task 18 in `docs/superpowers/plans/2026-04-22-plan-2-web-ui.md`.

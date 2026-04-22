@@ -1,10 +1,10 @@
-# AutoAgent Test — Backend MVP
+# AutoAgent Test
 
-Backend service for batch testing of conversational AI products via OpenAI-compatible APIs.
+Backend service for batch testing of conversational AI products via OpenAI-compatible APIs, with a React + TypeScript web UI built into the FastAPI binary.
 
 ## Status
 
-**Backend only (Plan 1/5).** Web UI (Plan 2), Web GUI executor (Plan 3), and Android executor (Plan 4) are separate plans. API mode is the only executor currently wired.
+**Plan 1 complete. Plan 2 in progress on branch/worktree `plan-2-web-ui`.** API mode is fully wired. The React web UI lives in `web/`, builds into `src/autoagent/static/`, and is already served by FastAPI in this branch.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ pip install -e ".[dev]"
 ## Run
 
 ```bash
-uvicorn autoagent.main:app --host 0.0.0.0 --port 8000 --reload
+python3.11 -m uvicorn --app-dir src autoagent.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The admin user is bootstrapped on first start from `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
@@ -92,6 +92,64 @@ pytest tests/unit   # unit only
 ruff check .        # lint
 ruff format .       # format
 ```
+
+## Web UI
+
+The web UI lives in `web/` and is built into `src/autoagent/static/` where FastAPI serves it.
+
+### Dev
+
+```bash
+# Terminal 1 — backend
+python3.11 -m uvicorn --app-dir src autoagent.main:app --reload
+
+# Terminal 2 — frontend dev server with proxy
+cd web
+pnpm install
+pnpm dev
+# open http://localhost:5173
+```
+
+### Production build
+
+```bash
+cd web && pnpm build
+# outputs to src/autoagent/static/
+# now a single uvicorn serves both API and UI on :8000
+```
+
+### Web UI Smoke Test
+
+```bash
+cd web && pnpm build
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=admin_pw_1234
+export JWT_SECRET=$(python3.11 -c "import secrets; print(secrets.token_hex(32))")
+python3.11 -m uvicorn --app-dir src autoagent.main:app
+```
+
+Then:
+
+1. Open `http://localhost:8000/`; unauthenticated access should land on `/login`.
+2. Log in with the admin credentials above.
+3. Go to Profiles, create `openai_gpt4`, and paste:
+
+```yaml
+name: openai_gpt4
+platform: api
+api:
+  base_url: https://api.openai.com/v1
+  model: gpt-4o
+  api_key_env: OPENAI_KEY
+```
+
+4. Click `校验` and then `保存`.
+5. Export `OPENAI_KEY=sk-...` in the backend shell, restart the backend, then run `连通性测试` with prompt `hello`.
+6. Go to `Tests / Quick`, choose sync mode, and verify a response appears.
+7. Go to `Batches / 新建批次`, upload a 3-line JSONL, and verify the batch reaches `done`.
+8. Click `下载结果` and verify a `.jsonl` file is downloaded.
+9. Go to `Config`, change a default, save, and reload to confirm persistence.
+10. Click `登出`; revisiting `/` should redirect back to `/login`.
 
 ## Architecture
 
