@@ -43,9 +43,7 @@ export function SampleDetail() {
             {String(sample.new_session ?? false)}
           </Descriptions.Item>
           <Descriptions.Item label="运行设备">
-            {sample.device_serial ??
-              (sample.metadata?.device_serial as string | undefined) ??
-              '-'}
+            {sample.device_serial ?? (sample.metadata?.device_serial as string | undefined) ?? '-'}
           </Descriptions.Item>
           <Descriptions.Item label="等待设备">
             {String(sample.waiting_for_device ?? false)}

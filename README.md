@@ -4,7 +4,7 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 now includes persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, and sample detail device/replay metadata. Remaining Tier 1 work is the fake-chat APK real-device loop and final verification.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, and `pixel_stable`. Remaining work is final manual verification on a real device + real app, then release tagging.
 
 ## Requirements
 

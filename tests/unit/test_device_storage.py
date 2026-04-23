@@ -5,9 +5,9 @@ import pytest
 from autoagent.storage.database import init_db
 from autoagent.storage.devices import (
     list_devices,
-    upsert_discovered_device,
     update_device_enabled,
     update_device_label,
+    upsert_discovered_device,
 )
 
 

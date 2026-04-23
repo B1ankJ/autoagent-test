@@ -31,7 +31,8 @@ export function DevicesPage() {
             },
             {
               title: 'Label',
-              render: (_, row) => row.label ?? <Typography.Text type="secondary">-</Typography.Text>,
+              render: (_, row) =>
+                row.label ?? <Typography.Text type="secondary">-</Typography.Text>,
             },
             {
               title: 'Model',

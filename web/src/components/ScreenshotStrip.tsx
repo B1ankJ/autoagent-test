@@ -24,7 +24,7 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
   return (
     <Image.PreviewGroup>
       <Space wrap>
-        {screenshots.data.map((shot) => (
+        {screenshots.data.map((shot) =>
           shot.is_sensitive ? (
             <div
               key={shot.name}
@@ -47,8 +47,8 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
               src={screenshotPath(batchId, sampleId, shot.name)}
               alt={shot.label}
             />
-          )
-        ))}
+          ),
+        )}
       </Space>
     </Image.PreviewGroup>
   )

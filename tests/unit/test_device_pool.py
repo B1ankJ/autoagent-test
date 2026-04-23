@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool
+from autoagent.devices.pool import DeviceDisabled, DevicePool
 from autoagent.models.api import DeviceInfo
 
 

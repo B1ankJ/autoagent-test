@@ -82,12 +82,15 @@ export function useBatchStream(id: string | undefined) {
   return query
 }
 
-export function applyEvent(prev: BatchDetail | undefined, event: SseEvent): BatchDetail | undefined {
+export function applyEvent(
+  prev: BatchDetail | undefined,
+  event: SseEvent,
+): BatchDetail | undefined {
   if (!prev) return prev
 
   const next: BatchDetail = { ...prev, seq: event.seq }
   if (event.kind === 'sample_update') {
-    const payload = event.payload as SampleUpdate
+    const payload = event.payload as unknown as SampleUpdate
     next.samples = next.samples.map((sample) =>
       sample.id === payload.sample_id
         ? {

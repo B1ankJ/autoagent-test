@@ -36,11 +36,7 @@ def list_devices() -> list[AdbDevice]:
             continue
         parts = line.split()
         serial, state, *extras = parts
-        kv = {
-            item.split(":", 1)[0]: item.split(":", 1)[1]
-            for item in extras
-            if ":" in item
-        }
+        kv = {item.split(":", 1)[0]: item.split(":", 1)[1] for item in extras if ":" in item}
         rows.append(
             AdbDevice(
                 serial=serial,

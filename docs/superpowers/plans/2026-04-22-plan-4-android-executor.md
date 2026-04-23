@@ -2803,20 +2803,22 @@ git commit -m "test(android): add tier2 ocr fixtures and coverage"
 
 ### Task 24: Tier 2 verification, docs, and final tag
 
+> Execution note (2026-04-23): code-side Tier 2 implementation and non-Android verification are complete in-session. By user request, the final real-device/manual smoke will be run later against a real device + real target app, so this task tracks a "code-complete, pending manual verification" state instead of prematurely marking Plan 4 done.
+
 **Files:**
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/specs/2026-04-22-plan-4-android-executor-design.md`
 
-- [ ] **Step 1: Update docs to mark Plan 4 complete**
+- [x] **Step 1: Update docs to mark the repo as code-complete pending final manual verification**
 
-Set the repo status lines to:
+Set the repo status lines to reflect that Plan 4 implementation is in the repo but final release remains pending manual validation:
 
 ```md
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 complete.**
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.**
 ```
 
-In `CLAUDE.md`, add the Tier 2 smoke checklist:
+In `CLAUDE.md`, add the Tier 2 smoke checklist and note that the branch is code-complete pending real-device verification:
 
 ```md
 - Tier 2 Android smoke:
@@ -2825,12 +2827,11 @@ In `CLAUDE.md`, add the Tier 2 smoke checklist:
   3. verify `pixel_stable` or `ui_tree_stable` completes without false positives
 ```
 
-- [ ] **Step 2: Run the full Plan 4 verification matrix**
+- [x] **Step 2: Run the code-side Plan 4 verification matrix**
 
 Run:
 ```bash
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
-python3.11 -m pytest -v -m android
 python3.11 -m pytest -v -m slow
 python3.11 -m ruff check .
 python3.11 -m ruff format --check .
@@ -2839,7 +2840,7 @@ pnpm --dir web lint
 pnpm --dir web format:check
 pnpm --dir web build
 ```
-Expected: all pass.
+Expected: all listed commands pass. `python3.11 -m pytest -v -m android` remains deferred to the final manual verification round on a real device.
 
 - [ ] **Step 3: Run the final manual smoke**
 

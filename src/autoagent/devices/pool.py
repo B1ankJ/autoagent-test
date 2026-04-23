@@ -37,9 +37,14 @@ class DevicePool:
     async def acquire(self, preferred: str | None, timeout_sec: float = 60):
         deadline = time.monotonic() + timeout_sec
         while True:
-            candidates = [device for device in self._list_devices() if device.online and device.enabled]
+            candidates = [
+                device for device in self._list_devices() if device.online and device.enabled
+            ]
             if preferred:
-                if any(device.serial == preferred and not device.enabled for device in self._list_devices()):
+                if any(
+                    device.serial == preferred and not device.enabled
+                    for device in self._list_devices()
+                ):
                     raise DeviceDisabled(f"device {preferred} unavailable")
                 candidates = [device for device in candidates if device.serial == preferred]
                 if not candidates:

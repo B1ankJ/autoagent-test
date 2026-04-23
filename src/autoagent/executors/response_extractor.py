@@ -21,10 +21,7 @@ class ExtractionResult:
 def _is_suspect(text: str) -> bool:
     stripped = text.strip()
     return (
-        not stripped
-        or len(stripped) < 3
-        or stripped.endswith(("...", "…"))
-        or "\ufffc" in stripped
+        not stripped or len(stripped) < 3 or stripped.endswith(("...", "…")) or "\ufffc" in stripped
     )
 
 
