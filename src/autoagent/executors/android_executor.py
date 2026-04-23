@@ -11,7 +11,7 @@ from typing import Any
 import uiautomator2 as u2
 
 from autoagent.executors.android_action_runner import AndroidActionRunner
-from autoagent.executors.android_input import AndroidInput, resolve_input_method
+from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.complete_detector import (
     capture_screenshot_bytes,
@@ -112,7 +112,7 @@ class AndroidExecutor(Executor):
                     sample_log.info("android sample %s running new_session_action", sample.id)
                     await action_runner.run(profile.new_session_action)
                 for idx, prompt in enumerate(sample.prompts, start=1):
-                    resolved_input = resolve_input_method(profile.input_method, prompt)
+                    resolved_input = await input_ctl.preview_method(prompt)
                     sample_log.info(
                         "android sample %s prompt %s set_text start: method=%s locator=%s:%s",
                         sample.id,

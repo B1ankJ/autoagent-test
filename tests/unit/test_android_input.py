@@ -14,13 +14,22 @@ def test_auto_uses_adb_keyboard_for_non_ascii() -> None:
     assert resolve_input_method("auto", "你好") == "adb_keyboard"
 
 
+def test_auto_prefers_adb_keyboard_for_ascii_when_available() -> None:
+    assert resolve_input_method("auto", "hello", adb_keyboard_available=True) == "adb_keyboard"
+
+
+def test_auto_falls_back_for_ascii_when_adb_keyboard_unavailable() -> None:
+    assert resolve_input_method("auto", "hello", adb_keyboard_available=False) == "u2_send_keys"
+
+
 @pytest.mark.asyncio
 async def test_set_text_supports_xpath_locator() -> None:
     device = MagicMock()
     xpath_target = MagicMock()
     device.xpath.return_value = xpath_target
+    device.serial = "serial-1"
 
-    async with AndroidInput(device, "auto") as ctl:
+    async with AndroidInput(device, "u2_send_keys") as ctl:
         await ctl.set_text(
             Locator(type="xpath", value='//node[@class="android.widget.EditText"]'),
             "hello",
@@ -36,6 +45,7 @@ async def test_set_text_escapes_shell_input_spaces() -> None:
     device = MagicMock()
     target = MagicMock()
     device.return_value = target
+    device.serial = "serial-1"
 
     async with AndroidInput(device, "u2_send_keys") as ctl:
         await ctl.set_text(
@@ -54,6 +64,7 @@ async def test_set_text_adb_keyboard_switches_and_restores_ime(
     device = MagicMock()
     target = MagicMock()
     device.return_value = target
+    device.serial = "serial-1"
 
     events: list[str] = []
 
@@ -95,6 +106,74 @@ async def test_set_text_adb_keyboard_switches_and_restores_ime(
     )
     assert restored == [(device.serial, "com.example/.Ime")]
     assert events == ["ensure", "click", "shell:am"]
+
+
+@pytest.mark.asyncio
+async def test_set_text_auto_prefers_adb_keyboard_for_ascii(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    device = MagicMock()
+    target = MagicMock()
+    device.return_value = target
+    device.serial = "serial-1"
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: True,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    restored: list[tuple[object, object]] = []
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: restored.append((_serial, _ime)),
+    )
+
+    async with AndroidInput(device, "auto") as ctl:
+        await ctl.set_text(
+            Locator(type="resource_id", value="demo:id/input"),
+            "hello",
+        )
+        await ctl.restore_pending_ime()
+
+    device.shell.assert_called_once_with(
+        [
+            "am",
+            "broadcast",
+            "-a",
+            "ADB_INPUT_B64",
+            "--es",
+            "msg",
+            "aGVsbG8=",
+        ]
+    )
+    assert restored == [(device.serial, "com.example/.Ime")]
+
+
+@pytest.mark.asyncio
+async def test_set_text_auto_falls_back_to_shell_input_for_ascii_when_adb_keyboard_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    device = MagicMock()
+    target = MagicMock()
+    device.return_value = target
+    device.serial = "serial-1"
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+
+    async with AndroidInput(device, "auto") as ctl:
+        await ctl.set_text(
+            Locator(type="resource_id", value="demo:id/input"),
+            "hello",
+        )
+
+    target.click.assert_called_once()
+    device.shell.assert_called_once_with(["input", "text", "hello"])
 
 
 def test_ensure_adb_keyboard_ready_waits_until_ime_is_active(

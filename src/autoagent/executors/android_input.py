@@ -15,9 +15,16 @@ class AdbKeyboardNotInstalled(RuntimeError):
     pass
 
 
-def resolve_input_method(configured: str, prompt: str) -> str:
+def resolve_input_method(
+    configured: str,
+    prompt: str,
+    *,
+    adb_keyboard_available: bool | None = None,
+) -> str:
     if configured != "auto":
         return configured
+    if adb_keyboard_available is not False:
+        return "adb_keyboard"
     return "adb_keyboard" if any(ord(ch) > 127 for ch in prompt) else "u2_send_keys"
 
 
@@ -39,8 +46,20 @@ class AndroidInput:
             await asyncio.to_thread(set_ime, self.device.serial, self._pending_restore_ime)
             self._pending_restore_ime = None
 
+    async def preview_method(self, text: str) -> str:
+        adb_keyboard_available: bool | None = None
+        if self.configured_method == "auto":
+            adb_keyboard_available = await asyncio.to_thread(
+                is_package_installed, self.device.serial, "com.android.adbkeyboard"
+            )
+        return resolve_input_method(
+            self.configured_method,
+            text,
+            adb_keyboard_available=adb_keyboard_available,
+        )
+
     async def set_text(self, locator: Locator, text: str) -> None:
-        method = resolve_input_method(self.configured_method, text)
+        method = await self.preview_method(text)
         target = resolve_target(self.device, locator)
         if method == "u2_send_keys":
             await asyncio.to_thread(target.click)

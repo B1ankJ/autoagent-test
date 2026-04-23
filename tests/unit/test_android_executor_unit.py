@@ -60,6 +60,10 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         lambda _device: "com.example/.Ime",
     )
     monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+    monkeypatch.setattr(
         "autoagent.executors.android_input.set_ime",
         lambda _serial, _ime: None,
     )
@@ -174,6 +178,10 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
     )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
     device.screenshot.return_value = b"raw-frame"
 
     profile = AndroidProfile(
@@ -263,6 +271,10 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
     )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
 
     profile = AndroidProfile(
         name="fake_android",
@@ -332,6 +344,10 @@ async def test_execute_writes_exception_to_executor_log(
     monkeypatch.setattr(
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
     )
     monkeypatch.setattr(
         "autoagent.executors.android_input.ensure_adb_keyboard_ready",
@@ -415,6 +431,10 @@ async def test_execute_reuses_existing_logs_dir_without_nesting(
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
     )
 
     profile = AndroidProfile(
