@@ -7,6 +7,7 @@ import { SampleDetail } from './SampleDetail'
 
 const useBatchStream = vi.fn()
 const listScreenshots = vi.fn()
+const downloadSampleActions = vi.fn()
 
 vi.mock('../../hooks/useBatchStream', () => ({
   useBatchStream: (...args: unknown[]) => useBatchStream(...args),
@@ -17,6 +18,14 @@ vi.mock('../../api/screenshots', () => ({
   screenshotPath: (batchId: string, sampleId: string, name: string) =>
     `/api/v1/batches/${batchId}/samples/${sampleId}/screenshots/${name}`,
 }))
+
+vi.mock('../../api/batches', async () => {
+  const actual = await vi.importActual('../../api/batches')
+  return {
+    ...actual,
+    downloadSampleActions: (...args: unknown[]) => downloadSampleActions(...args),
+  }
+})
 
 describe('SampleDetail', () => {
   it('shows screenshot links for the selected sample', async () => {
@@ -38,7 +47,9 @@ describe('SampleDetail', () => {
             mode: 'gui_pc_web',
             target_profile: 'web_demo',
             status: 'done',
+            device_serial: 'emulator-5554',
             responses: ['world'],
+            metadata: { action_replay_available: true },
           },
         ],
       },
@@ -58,6 +69,9 @@ describe('SampleDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('截图')).toBeInTheDocument()
     })
+    expect(screen.getByText('运行设备')).toBeInTheDocument()
+    expect(screen.getByText('emulator-5554')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /下载回放/i })).toBeInTheDocument()
     await waitFor(() => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
       expect(screen.getByRole('img', { name: 'ready' })).toHaveAttribute(
@@ -65,6 +79,9 @@ describe('SampleDetail', () => {
         '/api/v1/batches/b1/samples/s1/screenshots/001_ready.png',
       )
     })
+
+    await userEvent.click(screen.getByRole('button', { name: /下载回放/i }))
+    expect(downloadSampleActions).toHaveBeenCalledWith('b1', 's1')
   })
 
   it('renders prompt rounds from prompts_sent when prompts is absent', async () => {

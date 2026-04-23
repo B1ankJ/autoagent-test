@@ -39,6 +39,8 @@ export interface Sample {
   prompts_sent?: string[]
   started_at?: string
   ended_at?: string
+  device_serial?: string | null
+  waiting_for_device?: boolean
 }
 
 export interface BatchSummary {
@@ -121,6 +123,7 @@ export interface ScreenshotInfo {
   name: string
   label: string
   taken_at: string
+  is_sensitive?: boolean | null
 }
 
 export interface VLMConfig {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BatchDetail } from '../types/api'
+import { BatchDetail, SampleUpdate } from '../types/api'
 
 type SseEvent = {
   seq: number
@@ -82,10 +82,23 @@ export function useBatchStream(id: string | undefined) {
   return query
 }
 
-function applyEvent(prev: BatchDetail | undefined, event: SseEvent): BatchDetail | undefined {
+export function applyEvent(prev: BatchDetail | undefined, event: SseEvent): BatchDetail | undefined {
   if (!prev) return prev
 
   const next: BatchDetail = { ...prev, seq: event.seq }
+  if (event.kind === 'sample_update') {
+    const payload = event.payload as SampleUpdate
+    next.samples = next.samples.map((sample) =>
+      sample.id === payload.sample_id
+        ? {
+            ...sample,
+            status: payload.status ?? sample.status,
+            device_serial: payload.device_serial ?? sample.device_serial,
+            waiting_for_device: payload.waiting_for_device ?? sample.waiting_for_device,
+          }
+        : sample,
+    )
+  }
   if (event.kind === 'batch_progress') {
     const payload = event.payload as { done?: number; failed?: number }
     if (typeof payload.done === 'number') next.done = payload.done

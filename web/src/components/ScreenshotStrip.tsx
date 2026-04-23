@@ -25,12 +25,29 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
     <Image.PreviewGroup>
       <Space wrap>
         {screenshots.data.map((shot) => (
-          <Image
-            key={shot.name}
-            width={160}
-            src={screenshotPath(batchId, sampleId, shot.name)}
-            alt={shot.label}
-          />
+          shot.is_sensitive ? (
+            <div
+              key={shot.name}
+              style={{
+                width: 160,
+                height: 96,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px dashed #d9d9d9',
+                borderRadius: 8,
+              }}
+            >
+              <Typography.Text type="secondary">敏感截图已隐藏</Typography.Text>
+            </div>
+          ) : (
+            <Image
+              key={shot.name}
+              width={160}
+              src={screenshotPath(batchId, sampleId, shot.name)}
+              alt={shot.label}
+            />
+          )
         ))}
       </Space>
     </Image.PreviewGroup>

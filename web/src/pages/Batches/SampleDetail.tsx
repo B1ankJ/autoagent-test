@@ -1,5 +1,6 @@
 import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
+import { downloadSampleActions } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
@@ -40,6 +41,14 @@ export function SampleDetail() {
           <Descriptions.Item label="Duration (ms)">{sample.duration_ms ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="New session">
             {String(sample.new_session ?? false)}
+          </Descriptions.Item>
+          <Descriptions.Item label="运行设备">
+            {sample.device_serial ??
+              (sample.metadata?.device_serial as string | undefined) ??
+              '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="等待设备">
+            {String(sample.waiting_for_device ?? false)}
           </Descriptions.Item>
           {sample.started_at ? (
             <Descriptions.Item label="Started">{sample.started_at}</Descriptions.Item>
@@ -84,6 +93,12 @@ export function SampleDetail() {
       <Card title="截图">
         <ScreenshotStrip batchId={data.batch_id} sampleId={sample.id} />
       </Card>
+
+      {sample.metadata?.action_replay_available ? (
+        <Button onClick={() => downloadSampleActions(data.batch_id, sample.id)}>
+          下载回放 JSONL
+        </Button>
+      ) : null}
 
       {Array.isArray(sample.metadata?.action_log) && sample.metadata.action_log.length ? (
         <Card title="动作日志">

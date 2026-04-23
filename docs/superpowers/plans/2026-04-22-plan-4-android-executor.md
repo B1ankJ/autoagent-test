@@ -1890,7 +1890,7 @@ python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -
 ```
 Expected: PASS on a machine with a connected device/emulator; deselect or skip in CI fast runs.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/fixtures/fake_chat_apk tests/integration/test_android_executor_e2e.py
@@ -2107,7 +2107,7 @@ import { DevicesPage } from './pages/Devices/Index'
 
 In `web/src/components/AppLayout.tsx`, add a `Devices` menu item.
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -2115,7 +2115,7 @@ pnpm --dir web test -- src/pages/Devices/Index.test.tsx
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/src/pages/Devices/Index.tsx web/src/pages/Devices/Index.test.tsx web/src/App.tsx web/src/components/AppLayout.tsx
@@ -2205,7 +2205,7 @@ pnpm --dir web test -- src/pages/Profiles/Edit.test.tsx src/pages/Batches/New.te
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/src/pages/Batches/New.tsx web/src/pages/Batches/New.test.tsx web/src/pages/Tests/Quick.tsx web/src/pages/Tests/Quick.test.tsx web/src/pages/Profiles/Edit.tsx web/src/pages/Profiles/ConnectivityTestModal.tsx web/src/pages/Profiles/Edit.test.tsx
@@ -2223,7 +2223,7 @@ git commit -m "feat(web): add android mode and connectivity support"
 - Modify: `web/src/components/ScreenshotStrip.tsx`
 - Modify: `web/src/api/batches.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `web/src/hooks/useBatchStream.test.ts`:
 
@@ -2257,7 +2257,7 @@ expect(screen.getByText(/运行设备/i)).toBeInTheDocument()
 expect(screen.getByRole('button', { name: /下载回放/i })).toBeInTheDocument()
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2265,7 +2265,7 @@ pnpm --dir web test -- src/hooks/useBatchStream.test.ts src/pages/Batches/Sample
 ```
 Expected: FAIL because `applyEvent()` ignores `sample_update` and `SampleDetail` does not show Android metadata.
 
-- [ ] **Step 3: Implement sample-update merging and sample detail UI**
+- [x] **Step 3: Implement sample-update merging and sample detail UI**
 
 In `web/src/hooks/useBatchStream.ts`, add `sample_update` handling:
 
@@ -2305,7 +2305,7 @@ Add a replay download button:
 
 In `web/src/components/ScreenshotStrip.tsx`, render a locked placeholder when `shot.is_sensitive` is true.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
