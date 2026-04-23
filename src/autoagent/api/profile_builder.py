@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -412,6 +413,31 @@ def _runtime_screens_for_validation(
     return screens
 
 
+def _collect_validation_screens_from_logs(
+    session: ProfileBuilderSessionView,
+    logs_dir: str | None,
+) -> list[ProfileBuilderRuntimeScreen]:
+    if not logs_dir:
+        return _runtime_screens_for_validation(session)
+    source_dir = Path(logs_dir)
+    if not source_dir.exists():
+        return _runtime_screens_for_validation(session)
+    artifact_dir = Path(session.artifact_dir)
+    copies = [
+        ("before_input_1.png", "validate_before_input.png"),
+        ("after_input_1.png", "validate_after_input.png"),
+        ("after_send_1.png", "validate_after_send.png"),
+        ("after_result_1.png", "validate_after_result.png"),
+        ("on_error.png", "validate_on_error.png"),
+    ]
+    for source_name, target_name in copies:
+        source_path = source_dir / source_name
+        if not source_path.exists():
+            continue
+        shutil.copy2(source_path, artifact_dir / target_name)
+    return _runtime_screens_for_validation(session)
+
+
 def _ready_check_text(idle_xml: str) -> str:
     try:
         root = ElementTree.fromstring(idle_xml)
@@ -470,12 +496,12 @@ def _draft_profile_from_candidates(
     input_locator = input_candidates[0]["locator"]
     placeholder_locator = _input_placeholder_locator(idle_xml)
     new_session_action = []
-    if (
+    if placeholder_locator is not None and (
         input_locator.get("type") == "xpath"
         and input_locator.get("value") == '//*[@class="android.widget.EditText"]'
-        and placeholder_locator is not None
     ):
         new_session_action = [{"action": "click_locator", "locator": placeholder_locator}]
+        input_locator = placeholder_locator
     return {
         "name": session.name,
         "platform": session.platform,
@@ -782,7 +808,7 @@ async def validate_draft(session_id: str) -> dict:
     )
     next_status = "validated" if result.status == "done" else "ready"
     updated_session = _store_session(session.model_copy(update={"status": next_status}))
-    runtime_screens = _runtime_screens_for_validation(updated_session)
+    runtime_screens = _collect_validation_screens_from_logs(updated_session, result.logs_dir)
     result_summary = result.responses[0] if result.responses else result.error
     _store_runtime(
         updated_session.id,

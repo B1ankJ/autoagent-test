@@ -432,6 +432,10 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
             "locator": {"type": "xpath", "value": '//*[contains(@text, "发消息")]'},
         }
     ]
+    assert profile_data["input_locator"] == {
+        "type": "xpath",
+        "value": '//*[contains(@text, "发消息")]',
+    }
     assert profile_data["send_button_locator"] == {
         "type": "xpath",
         "value": '//*[@bounds="[909,2009][1020,2120]"]',
@@ -701,13 +705,15 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
     )
 
     async def _run_sync(sample):
+        logs_dir = artifact_dir / "validate_logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
         for name in (
-            "validate_before_input.png",
-            "validate_after_input.png",
-            "validate_after_send.png",
-            "validate_after_result.png",
+            "before_input_1.png",
+            "after_input_1.png",
+            "after_send_1.png",
+            "after_result_1.png",
         ):
-            (artifact_dir / name).write_bytes(b"png")
+            (logs_dir / name).write_bytes(b"png")
         return SampleResult(
             id=sample.id,
             status="done",
@@ -715,6 +721,7 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
             responses=["pong"],
             mode=sample.mode,
             target_profile=sample.target_profile,
+            logs_dir=str(logs_dir),
         )
 
     monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_test", _run_sync)
@@ -735,3 +742,9 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
     assert body["connectivity"]["status"] == "done"
     assert body["connectivity"]["result_summary"] == "pong"
     assert len(body["connectivity"]["screens"]) >= 1
+    assert {screen["path"] for screen in body["connectivity"]["screens"]} >= {
+        "validate_before_input.png",
+        "validate_after_input.png",
+        "validate_after_send.png",
+        "validate_after_result.png",
+    }

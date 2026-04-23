@@ -284,6 +284,52 @@ def test_build_android_candidates_prefers_runtime_probe_send_candidate():
     )
 
 
+def test_build_android_candidates_prefers_idle_placeholder_when_runtime_probe_has_no_edittext():
+    idle_xml = """
+    <hierarchy>
+      <node
+        text="发消息或按住说话..."
+        class="android.widget.TextView"
+        bounds="[177,2066][777,2123]"
+      />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node text="你好" class="android.widget.EditText" bounds="[36,1164][1032,1284]" />
+      <node class="android.widget.FrameLayout" bounds="[909,1291][1020,1402]" clickable="true" />
+    </hierarchy>
+    """
+    runtime_probe_xml = """
+    <hierarchy>
+      <node
+        text="发消息或按住说话..."
+        class="android.widget.TextView"
+        bounds="[177,2066][777,2123]"
+      />
+      <node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">
+        <node class="android.widget.LinearLayout" bounds="[0,1200][1080,1674]">
+          <node text="你好" class="android.widget.TextView" bounds="[0,1536][1080,1674]" />
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+        runtime_probe_xml=runtime_probe_xml,
+    )
+
+    assert draft.input_candidates[0]["locator"]["value"] == '//*[contains(@text, "发消息")]'
+
+
 def test_ready_check_text_prefers_input_placeholder_over_chat_content():
     idle_xml = """
     <hierarchy>

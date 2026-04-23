@@ -113,6 +113,9 @@ class AndroidExecutor(Executor):
                     await action_runner.run(profile.new_session_action)
                 for idx, prompt in enumerate(sample.prompts, start=1):
                     resolved_input = await input_ctl.preview_method(prompt)
+                    before_input_path = store.artifact_path(f"before_input_{idx}", "png")
+                    before_input = await asyncio.to_thread(capture_screenshot_bytes, device)
+                    await asyncio.to_thread(before_input_path.write_bytes, before_input)
                     sample_log.info(
                         "android sample %s prompt %s set_text start: method=%s locator=%s:%s",
                         sample.id,
@@ -145,6 +148,9 @@ class AndroidExecutor(Executor):
                     await action_runner.run(
                         [ActionStep(action="click_locator", locator=profile.send_button_locator)]
                     )
+                    after_send_path = store.artifact_path(f"after_send_{idx}", "png")
+                    after_send = await asyncio.to_thread(capture_screenshot_bytes, device)
+                    await asyncio.to_thread(after_send_path.write_bytes, after_send)
                     await input_ctl.restore_pending_ime()
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
@@ -204,6 +210,9 @@ class AndroidExecutor(Executor):
                             "unsupported response extraction method: "
                             f"{profile.response_extraction.method}"
                         )
+                    after_result_path = store.artifact_path(f"after_result_{idx}", "png")
+                    after_result = await asyncio.to_thread(capture_screenshot_bytes, device)
+                    await asyncio.to_thread(after_result_path.write_bytes, after_result)
                     sample_log.info(
                         "android sample %s prompt %s extraction done: method=%s text=%r",
                         sample.id,
@@ -215,6 +224,12 @@ class AndroidExecutor(Executor):
                         ScreenshotResult(path=store.next_path(f"done_{idx}"), label=f"done_{idx}")
                     )
         except Exception:
+            error_path = store.artifact_path("on_error", "png")
+            try:
+                on_error = await asyncio.to_thread(capture_screenshot_bytes, device)
+                await asyncio.to_thread(error_path.write_bytes, on_error)
+            except Exception:
+                pass
             sample_log.exception("android sample %s failed", sample.id)
             raise
 

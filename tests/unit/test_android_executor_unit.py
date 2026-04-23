@@ -120,8 +120,11 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     assert "locator=resource_id:demo:id/input" in log_text
     assert "captured after_input artifacts: xml=after_input_1.xml png=after_input_1.png" in log_text
     assert "prompt 1 extraction done: method=ui_tree_only text='echo: hi'" in log_text
+    assert (tmp_path / "ad_hoc" / "s1" / "before_input_1.png").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.xml").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.png").is_file()
+    assert (tmp_path / "ad_hoc" / "s1" / "after_send_1.png").is_file()
+    assert (tmp_path / "ad_hoc" / "s1" / "after_result_1.png").is_file()
 
 
 @pytest.mark.asyncio
@@ -396,6 +399,7 @@ async def test_execute_writes_exception_to_executor_log(
     log_text = (tmp_path / "ad_hoc" / "s1" / "executor.log").read_text(encoding="utf-8")
     assert "prompt 1 send click: locator=resource_id:missing:id/send" in log_text
     assert "android sample s1 failed" in log_text
+    assert (tmp_path / "ad_hoc" / "s1" / "on_error.png").is_file()
 
 
 @pytest.mark.asyncio

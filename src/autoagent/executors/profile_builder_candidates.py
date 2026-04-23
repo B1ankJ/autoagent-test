@@ -120,31 +120,59 @@ def _locator_from_node(node: ElementTree.Element | None) -> dict:
 def _build_input_candidates(
     editing_nodes: list[dict[str, str]],
     idle_nodes: list[dict[str, str]],
+    runtime_probe_nodes: list[dict[str, str]] | None = None,
 ) -> list[dict]:
     candidates: list[dict] = []
-    for node in editing_nodes:
-        if node.get("class") != "android.widget.EditText":
-            continue
-        bounds = _parse_bounds(node.get("bounds"))
-        candidates.append(
-            {
-                "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                "score": 100 + _bounds_area(bounds),
-                "reason": "editing EditText",
-                "evidence_refs": [
-                    _evidence_ref(
-                        source="editing_xml",
-                        step="editing",
-                        artifact="capture_editing.png",
-                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
-                        bounds=bounds,
-                        label="input",
-                    )
-                ],
-            }
-        )
-    if candidates:
-        return sorted(candidates, key=lambda item: item["score"], reverse=True)
+    probe_nodes = runtime_probe_nodes or []
+    if probe_nodes:
+        for node in probe_nodes:
+            if node.get("class") != "android.widget.EditText":
+                continue
+            bounds = _parse_bounds(node.get("bounds"))
+            candidates.append(
+                {
+                    "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
+                    "score": 10_000 + _bounds_area(bounds),
+                    "reason": "runtime probe EditText",
+                    "evidence_refs": [
+                        _evidence_ref(
+                            source="runtime_probe_xml",
+                            step="connectivity",
+                            artifact="runtime_probe_editing.png",
+                            locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                            bounds=bounds,
+                            label="input",
+                        )
+                    ],
+                }
+            )
+        if candidates:
+            return sorted(candidates, key=lambda item: item["score"], reverse=True)
+
+    if not probe_nodes:
+        for node in editing_nodes:
+            if node.get("class") != "android.widget.EditText":
+                continue
+            bounds = _parse_bounds(node.get("bounds"))
+            candidates.append(
+                {
+                    "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
+                    "score": 100 + _bounds_area(bounds),
+                    "reason": "editing EditText",
+                    "evidence_refs": [
+                        _evidence_ref(
+                            source="editing_xml",
+                            step="editing",
+                            artifact="capture_editing.png",
+                            locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                            bounds=bounds,
+                            label="input",
+                        )
+                    ],
+                }
+            )
+        if candidates:
+            return sorted(candidates, key=lambda item: item["score"], reverse=True)
 
     for node in idle_nodes:
         text = node.get("text", "").strip()
@@ -167,6 +195,30 @@ def _build_input_candidates(
                         locator=locator,
                         bounds=_parse_bounds(node.get("bounds")),
                         label="input-placeholder",
+                    )
+                ],
+            }
+        )
+    if probe_nodes and candidates:
+        return sorted(candidates, key=lambda item: item["score"], reverse=True)
+
+    for node in editing_nodes:
+        if node.get("class") != "android.widget.EditText":
+            continue
+        bounds = _parse_bounds(node.get("bounds"))
+        candidates.append(
+            {
+                "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
+                "score": 100 + _bounds_area(bounds),
+                "reason": "editing EditText fallback",
+                "evidence_refs": [
+                    _evidence_ref(
+                        source="editing_xml",
+                        step="editing",
+                        artifact="capture_editing.png",
+                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                        bounds=bounds,
+                        label="input",
                     )
                 ],
             }
@@ -482,7 +534,11 @@ def build_android_candidates(
     editing_nodes = _node_attrs(editing_xml)
     runtime_probe_nodes = _node_attrs(runtime_probe_xml) if runtime_probe_xml else []
 
-    input_candidates = _build_input_candidates(editing_nodes, idle_nodes)
+    input_candidates = _build_input_candidates(
+        editing_nodes,
+        idle_nodes,
+        runtime_probe_nodes=runtime_probe_nodes if runtime_probe_nodes else None,
+    )
     manual_send_candidates = _build_send_candidates(editing_nodes)
     send_candidates = (
         _build_send_candidates_from_nodes(runtime_probe_nodes, source="runtime_probe_xml")
