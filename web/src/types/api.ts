@@ -62,6 +62,13 @@ export interface BatchDetail extends BatchSummary {
   seq: number
 }
 
+export interface SampleUpdate {
+  sample_id: string
+  status: SampleStatus
+  device_serial?: string | null
+  waiting_for_device?: boolean
+}
+
 export interface BatchCreateJSON {
   name: string
   mode: ExecutionMode
@@ -78,6 +85,16 @@ export interface BatchCreatedResponse {
 export interface ProfileSummary {
   name: string
   platform: ProfilePlatform
+}
+
+export interface Device {
+  serial: string
+  label: string | null
+  model: string | null
+  android_version: string | null
+  online: boolean
+  enabled: boolean
+  last_seen_at: string | null
 }
 
 export interface ValidateResponse {
