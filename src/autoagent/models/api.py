@@ -130,3 +130,19 @@ class DefaultsConfig(BaseModel):
     retry: int = 2
     concurrency: int = 1
     verbose_logs: bool = True
+
+
+class ProfileBuilderSessionCreate(BaseModel):
+    platform: Literal["android"]
+    device_serial: str
+    name: str
+
+
+class ProfileBuilderSessionView(BaseModel):
+    id: str
+    platform: Literal["android"]
+    device_serial: str
+    name: str
+    status: Literal["draft", "ready", "validated"]
+    steps: list[str]
+    artifact_dir: str
