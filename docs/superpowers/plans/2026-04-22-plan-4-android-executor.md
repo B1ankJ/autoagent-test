@@ -2462,7 +2462,7 @@ git commit -m "chore(android): add rapidocr dependency"
 - Modify: `src/autoagent/executors/response_extractor.py`
 - Create: `tests/unit/test_response_extractor_ocr.py`
 
-- [ ] **Step 1: Write the failing OCR tests**
+- [x] **Step 1: Write the failing OCR tests**
 
 `tests/unit/test_response_extractor_ocr.py`:
 
@@ -2477,7 +2477,7 @@ def test_is_suspect_detects_short_or_truncated_text() -> None:
     assert not _is_suspect("完整回答")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2485,7 +2485,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -v
 ```
 Expected: FAIL because `_is_suspect` and OCR classes do not exist.
 
-- [ ] **Step 3: Implement the OCR engine and extractors**
+- [x] **Step 3: Implement the OCR engine and extractors**
 
 Create `src/autoagent/executors/ocr.py`:
 
@@ -2542,7 +2542,7 @@ class HybridExtractor:
         self.ocr = ocr
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
