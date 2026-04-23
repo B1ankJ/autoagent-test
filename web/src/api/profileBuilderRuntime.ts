@@ -12,8 +12,18 @@ export async function fetchProfileBuilderRuntime(
   return response.data
 }
 
-export function profileBuilderArtifactUrl(sessionId: string, name: string): string {
-  return `/api/v1/profile-builder/sessions/${sessionId}/artifacts/${encodeURIComponent(name)}`
+export async function fetchProfileBuilderArtifactBlobUrl(
+  sessionId: string,
+  name: string,
+): Promise<string> {
+  const response = await client.get<Blob>(
+    `/profile-builder/sessions/${sessionId}/artifacts/${encodeURIComponent(name)}`,
+    { responseType: 'blob' },
+  )
+  if (typeof URL.createObjectURL !== 'function') {
+    throw new Error('blob preview is not supported in this environment')
+  }
+  return URL.createObjectURL(response.data)
 }
 
 export function useProfileBuilderRuntime(sessionId?: string) {

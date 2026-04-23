@@ -18,7 +18,7 @@ import {
   Typography,
   Col,
 } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   useApplyProfileBuilderReview,
@@ -28,7 +28,7 @@ import {
   useValidateProfileBuilderDraft,
 } from '../../api/profileBuilder'
 import {
-  profileBuilderArtifactUrl,
+  fetchProfileBuilderArtifactBlobUrl,
   useProfileBuilderRuntime,
 } from '../../api/profileBuilderRuntime'
 import { useDevices } from '../../api/devices'
@@ -129,6 +129,7 @@ export default function Builder() {
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
   const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
+  const [currentScreenUrl, setCurrentScreenUrl] = useState<string | null>(null)
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
@@ -138,6 +139,50 @@ export default function Builder() {
     runtimeData?.recent_screens[runtimeData.recent_screens.length - 1] ??
     runtimeData?.connectivity.screens[runtimeData.connectivity.screens.length - 1] ??
     null
+
+  useEffect(() => {
+    const revokeObjectUrl = (value: string) => {
+      if (typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(value)
+      }
+    }
+    let revokedUrl: string | null = null
+    let cancelled = false
+
+    async function loadPreview() {
+      if (!session?.id || !currentScreen?.path) {
+        setCurrentScreenUrl(null)
+        return
+      }
+      try {
+        const url = await fetchProfileBuilderArtifactBlobUrl(session.id, currentScreen.path)
+        if (cancelled) {
+          revokeObjectUrl(url)
+          return
+        }
+        setCurrentScreenUrl((previous) => {
+          if (previous) {
+            revokeObjectUrl(previous)
+          }
+          revokedUrl = url
+          return url
+        })
+      } catch {
+        if (!cancelled) {
+          setCurrentScreenUrl(null)
+        }
+      }
+    }
+
+    void loadPreview()
+
+    return () => {
+      cancelled = true
+      if (revokedUrl) {
+        revokeObjectUrl(revokedUrl)
+      }
+    }
+  }, [currentScreen?.path, session?.id])
 
   const startSession = async () => {
     if (!selectedDevice || !profileName.trim()) {
@@ -375,10 +420,11 @@ export default function Builder() {
                   {currentScreen ? (
                     <>
                       <Typography.Text strong>{currentScreen.label}</Typography.Text>
-                      <Image
-                        src={profileBuilderArtifactUrl(session.id, currentScreen.path)}
-                        alt={currentScreen.label}
-                      />
+                      {currentScreenUrl ? (
+                        <Image src={currentScreenUrl} alt={currentScreen.label} />
+                      ) : (
+                        <Alert type="warning" showIcon message="截图加载失败" />
+                      )}
                     </>
                   ) : null}
                   <List

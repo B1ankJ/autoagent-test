@@ -17,7 +17,8 @@ vi.mock('../../api/profileBuilderRuntime', () => ({
     data: runtimeMockData,
     isLoading: false,
   }),
-  profileBuilderArtifactUrl: (_sessionId: string, name: string) => `/api/v1/mock/${name}`,
+  fetchProfileBuilderArtifactBlobUrl: async (_sessionId: string, name: string) =>
+    `blob:${name}`,
 }))
 
 vi.mock('../../api/devices', () => ({
