@@ -142,3 +142,72 @@ export interface GlobalDefaults {
   concurrency?: number
   verbose_logs?: boolean
 }
+
+export interface ProfileBuilderCaptureArtifact {
+  step: string
+  package: string
+  activity: string | null
+  xml_artifact: string
+  screenshot_artifact: string
+}
+
+export interface ProfileBuilderSessionCreate {
+  platform: 'android'
+  device_serial: string
+  name: string
+}
+
+export interface LocatorChoice {
+  type: string
+  value: string
+}
+
+export interface ResponseReviewOption {
+  response_container_locator: LocatorChoice
+  scroll_container_locator: LocatorChoice
+  latest_bubble_match: LocatorChoice
+}
+
+export interface ReviewItem {
+  field: string
+  reason: string
+  recommended_option: LocatorChoice | ResponseReviewOption
+  alternative_candidates: Array<LocatorChoice | ResponseReviewOption>
+  evidence_refs: Record<string, unknown>[]
+}
+
+export interface CandidateOption {
+  locator?: LocatorChoice
+  response_container_locator?: LocatorChoice
+  scroll_container_locator?: LocatorChoice
+  latest_bubble_match?: LocatorChoice
+  score: number
+  reason: string
+  evidence_refs: Record<string, unknown>[]
+}
+
+export interface ProfileBuilderCandidates {
+  input_candidates: CandidateOption[]
+  send_candidates: CandidateOption[]
+  response_candidates: CandidateOption[]
+  review_items: ReviewItem[]
+}
+
+export interface ProfileBuilderSessionView {
+  id: string
+  platform: 'android'
+  device_serial: string
+  name: string
+  status: 'draft' | 'ready' | 'validated'
+  steps: string[]
+  artifact_dir: string
+  artifacts: string[]
+  captures: ProfileBuilderCaptureArtifact[]
+}
+
+export interface ProfileBuilderDraftResponse {
+  session: ProfileBuilderSessionView
+  candidates: ProfileBuilderCandidates
+  review_items: ReviewItem[]
+  draft_profile_yaml: string
+}
