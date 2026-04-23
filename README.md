@@ -50,6 +50,12 @@ set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest 
 If you skip this fixture, final Android verification can be done directly on a real device + real
 target app via the Web UI.
 
+### Android OCR notes (Plan 4 Tier 2)
+
+- Tier 2 OCR uses `rapidocr_onnxruntime` on CPU.
+- Long responses may take several seconds because multiple frames are OCR'd and stitched.
+- `@pytest.mark.slow` covers OCR fixtures and is excluded from the fast suite.
+
 ## Run
 
 ```bash

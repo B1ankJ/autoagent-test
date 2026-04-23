@@ -2407,7 +2407,7 @@ git tag -a android-executor-tier1-v0.4.0 -m "Plan 4 Tier 1 complete: Android Exe
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Write the failing import check**
+- [x] **Step 1: Write the failing import check**
 
 Run:
 ```bash
@@ -2419,7 +2419,7 @@ PY
 ```
 Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 2: Add the OCR dependency**
+- [x] **Step 2: Add the OCR dependency**
 
 In `pyproject.toml`, append:
 
@@ -2427,7 +2427,7 @@ In `pyproject.toml`, append:
 "rapidocr_onnxruntime>=1.4,<2.0",
 ```
 
-- [ ] **Step 3: Document Tier 2 runtime expectations**
+- [x] **Step 3: Document Tier 2 runtime expectations**
 
 Add to `README.md` and `CLAUDE.md`:
 
@@ -2437,7 +2437,7 @@ Add to `README.md` and `CLAUDE.md`:
 - `@pytest.mark.slow` covers OCR fixtures and is excluded from the fast suite.
 ```
 
-- [ ] **Step 4: Install deps and verify fast suites stay green**
+- [x] **Step 4: Install deps and verify fast suites stay green**
 
 Run:
 ```bash
