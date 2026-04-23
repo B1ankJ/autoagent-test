@@ -14,7 +14,7 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Plan 2 — React Web UI:** ✅ complete (tag `web-ui-v0.2.0`, 2026-04-22). Single-binary deploy (FastAPI serves built SPA from `src/autoagent/static/` with SPA fallback). 2s polling via TanStack Query for batch progress (WebSocket deferred to Plan 3). 68 backend tests + 8 frontend tests green; browser smoke (login → profiles → dry_run batch → download → config → logout) passed.
   Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
 - **Plan 3 — Web GUI Executor (Playwright):** ✅ complete (tag `web-gui-executor-v0.3.0`, 2026-04-22). Playwright-backed `WebExecutor`, in-process event bus + SSE, screenshot APIs, web connectivity testing, `BatchDetail` SSE streaming, and `SampleDetail` screenshot/action-log UI are in the repo. Verification status: backend full suite `128 passed` when run outside the sandbox so Chromium can launch; backend fast suite `123 passed, 5 deselected`; frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all green; manual browser smoke passed end-to-end.
-- **Plan 4 — Android Executor (uiautomator2 + OCR):** in progress. Tier 1 and Tier 2 implementation are in the repo: backend/device discovery, `/devices` API + page, `gui_android` scheduling, Android profile connectivity, SampleDetail device/replay metadata, OCR extraction, long-response stitching, and `pixel_stable`. Current status is code-complete pending final manual verification on a real device + real app, then release tagging.
+- **Plan 4 — Android Executor (uiautomator2 + OCR):** in progress. Tier 1 and Tier 2 implementation are in the repo: backend/device discovery, `/devices` API + page with IME enable/disable buttons, `gui_android` scheduling, Android profile connectivity, SampleDetail device/replay metadata, OCR extraction, long-response stitching, and `pixel_stable`. Current status is code-complete pending final manual verification on a real device + real app, then release tagging.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
 
 ## Deferred work for Plan 5
@@ -67,7 +67,11 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Profiles:** YAML files under `<data_dir>/profiles/<name>.yaml`. Names restricted by allowlist regex in `profiles/registry.py::_path`.
 - **Playwright verification:** in this environment, real-browser pytest cases may need to run outside the sandbox because Chromium launch is blocked inside the sandbox. When verifying Plan 3 locally, use `python3.11 -m pytest -v` outside the sandbox for the full suite, or `python3.11 -m pytest -q -m "not playwright"` for the fast subset.
 - **Android verification:** real-device cases will be marked `@pytest.mark.android`; keep them out of the fast suite with `-m "not android"`.
-- **ADB Keyboard:** set `ADB_KEYBOARD_APK_PATH` to a local APK if you want `/devices` to expose one-click installation. Android execution auto-switches to `com.android.adbkeyboard/.AdbIME` for non-ASCII prompts and restores the previous IME when done.
+- **ADB Keyboard:** bundled at `src/autoagent/fixtures/ADBKeyboard.apk`. The `/devices` page shows:
+  - **Install** button (if not yet installed on device)
+  - **Enable/Disable IME** toggles (if installed)
+  - Status tags: `installed`/`not installed`, `ime enabled`/`ime disabled`
+  Android execution auto-switches to `com.android.adbkeyboard/.AdbIME` for non-ASCII prompts and restores the previous IME when done.
 - **Fake chat fixture APK:** source lives in `tests/fixtures/fake_chat_apk/`; build `fake_chat-debug.apk` with Android Studio or set `AUTOAGENT_FAKE_CHAT_APK` to an externally built artifact before running `pytest -m android`. This fixture is optional; Plan 4 can also be validated manually against a real device + real target app.
 - **Final manual smoke doc:** use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` for the final real-device verification run and result-report template.
 - **Tier 2 OCR runtime:** `rapidocr_onnxruntime` runs on CPU in this repo. OCR/stitching paths are marked `@pytest.mark.slow` and stay out of the fast suite.
@@ -94,9 +98,11 @@ cd web && pnpm test                    # frontend unit tests
 cd web && pnpm lint                    # frontend lint
 ```
 
-Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32 chars). See `.env.example`.
+Environment for running:
+- **Defaults** (dev): `ADMIN_USERNAME=admin`, `ADMIN_PASSWORD=admin123456`, `JWT_SECRET=dev-secret-key-32-chars-minimum-length`. These are built into `src/autoagent/config/settings.py` for convenience; override via `.env` or env vars in production.
+- **Optional**: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
 
-Optional env: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
+ADB Keyboard APK is bundled at `src/autoagent/fixtures/ADBKeyboard.apk` (17 KB). The `/devices` page has one-click "Install ADB Keyboard" and toggle "Enable/Disable IME" buttons.
 
 ## When starting a new task in this repo
 
