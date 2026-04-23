@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -270,3 +271,77 @@ async def test_profile_builder_corrupted_session_json_returns_clear_error(client
     )
     assert fetched.status_code == 500
     assert fetched.json()["detail"] == "profile builder session load failed"
+
+
+async def test_profile_builder_concurrent_capture_preserves_both_records(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    from pathlib import Path
+
+    from autoagent.executors.profile_builder_capture import CapturedState
+
+    started_steps: set[str] = set()
+    both_started = asyncio.Event()
+
+    async def _capture(device, session_dir: Path, step: str) -> CapturedState:
+        session_dir.mkdir(parents=True, exist_ok=True)
+        xml_path = session_dir / f"capture_{step}.xml"
+        screenshot_path = session_dir / f"capture_{step}.png"
+        xml_path.write_text(f"<hierarchy step='{step}'/>", encoding="utf-8")
+        screenshot_path.write_bytes(f"{step}-png".encode("utf-8"))
+        started_steps.add(step)
+        if len(started_steps) == 2:
+            both_started.set()
+        await both_started.wait()
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=f".{step.capitalize()}Activity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: object())
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+
+    idle_response, editing_response = await asyncio.gather(
+        client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+            headers=headers,
+        ),
+        client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/editing",
+            headers=headers,
+        ),
+    )
+
+    assert idle_response.status_code == 200
+    assert editing_response.status_code == 200
+
+    fetched = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()["captures"] == [
+        {
+            "step": "idle",
+            "package": "com.aliyun.tongyi",
+            "activity": ".IdleActivity",
+            "xml_artifact": "capture_idle.xml",
+            "screenshot_artifact": "capture_idle.png",
+        },
+        {
+            "step": "editing",
+            "package": "com.aliyun.tongyi",
+            "activity": ".EditingActivity",
+            "xml_artifact": "capture_editing.xml",
+            "screenshot_artifact": "capture_editing.png",
+        },
+    ]

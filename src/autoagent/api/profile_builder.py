@@ -22,10 +22,20 @@ router = APIRouter(
 )
 
 _SESSIONS: dict[str, ProfileBuilderSessionView] = {}
+_SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def reset_sessions_for_tests() -> None:
     _SESSIONS.clear()
+    _SESSION_LOCKS.clear()
+
+
+def _get_session_lock(session_id: str) -> asyncio.Lock:
+    lock = _SESSION_LOCKS.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _SESSION_LOCKS[session_id] = lock
+    return lock
 
 
 def _session_dir(session_id: str) -> Path:
@@ -43,7 +53,10 @@ def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
     return sorted(
         path.name
         for path in artifact_dir.iterdir()
-        if path.is_file() and path.name != "session.json"
+        if path.is_file()
+        and path.name != "session.json"
+        and not path.name.startswith("session.json.")
+        and not path.name.endswith(".tmp")
     )
 
 
@@ -154,9 +167,12 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
             detail=f"profile builder capture failed: {exc}",
         ) from exc
 
-    capture_record = _capture_artifact_from_state(captured)
-    captures = [record for record in session.captures if record.step != step]
-    captures.append(capture_record)
-    captures.sort(key=lambda record: session.steps.index(record.step))
-    updated = session.model_copy(update={"captures": captures})
-    return _store_session(updated)
+    async with _get_session_lock(session_id):
+        current_session = _get_session_or_404(session_id)
+        _validate_capture_step(current_session, step)
+        capture_record = _capture_artifact_from_state(captured)
+        captures = [record for record in current_session.captures if record.step != step]
+        captures.append(capture_record)
+        captures.sort(key=lambda record: current_session.steps.index(record.step))
+        updated = current_session.model_copy(update={"captures": captures})
+        return _store_session(updated)
