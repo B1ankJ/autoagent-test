@@ -205,6 +205,38 @@ export interface ProfileBuilderSessionView {
   captures: ProfileBuilderCaptureArtifact[]
 }
 
+export interface ProfileBuilderRuntimeScreen {
+  step: string
+  label: string
+  path: string
+  taken_at: string
+}
+
+export interface ProfileBuilderRuntimeCapture {
+  step: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  screenshot: string | null
+  updated_at: string | null
+}
+
+export interface ProfileBuilderRuntimeConnectivity {
+  status: 'idle' | 'running' | 'done' | 'failed'
+  result_status: SampleStatus | null
+  result_summary: string | null
+  screens: ProfileBuilderRuntimeScreen[]
+}
+
+export interface ProfileBuilderRuntimeView {
+  session_id: string
+  session_status: 'draft' | 'ready' | 'validating' | 'validated' | 'failed'
+  current_step: string
+  step_state: 'idle' | 'running' | 'done' | 'failed'
+  last_error: string | null
+  captures: ProfileBuilderRuntimeCapture[]
+  connectivity: ProfileBuilderRuntimeConnectivity
+  recent_screens: ProfileBuilderRuntimeScreen[]
+}
+
 export interface ProfileBuilderDraftResponse {
   session: ProfileBuilderSessionView
   candidates: ProfileBuilderCandidates
