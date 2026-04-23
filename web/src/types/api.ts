@@ -149,6 +149,8 @@ export interface ProfileBuilderCaptureArtifact {
   activity: string | null
   xml_artifact: string
   screenshot_artifact: string
+  active: boolean
+  captured_at: string | null
 }
 
 export interface ProfileBuilderSessionCreate {

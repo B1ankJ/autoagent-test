@@ -117,6 +117,8 @@ describe('Builder', () => {
             activity: '.IdleActivity',
             xml_artifact: 'capture_idle.xml',
             screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
           },
         ],
       })
@@ -136,6 +138,8 @@ describe('Builder', () => {
             activity: '.IdleActivity',
             xml_artifact: 'capture_idle.xml',
             screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
           },
           {
             step: 'editing',
@@ -143,6 +147,8 @@ describe('Builder', () => {
             activity: '.EditingActivity',
             xml_artifact: 'capture_editing.xml',
             screenshot_artifact: 'capture_editing.png',
+            active: true,
+            captured_at: '2026-04-23T12:01:00Z',
           },
         ],
       })
@@ -162,6 +168,8 @@ describe('Builder', () => {
             activity: '.IdleActivity',
             xml_artifact: 'capture_idle.xml',
             screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
           },
           {
             step: 'editing',
@@ -169,6 +177,8 @@ describe('Builder', () => {
             activity: '.EditingActivity',
             xml_artifact: 'capture_editing.xml',
             screenshot_artifact: 'capture_editing.png',
+            active: true,
+            captured_at: '2026-04-23T12:01:00Z',
           },
           {
             step: 'response',
@@ -176,6 +186,8 @@ describe('Builder', () => {
             activity: '.ResponseActivity',
             xml_artifact: 'capture_response.xml',
             screenshot_artifact: 'capture_response.png',
+            active: true,
+            captured_at: '2026-04-23T12:02:00Z',
           },
         ],
       })

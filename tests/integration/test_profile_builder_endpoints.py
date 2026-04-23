@@ -100,15 +100,12 @@ async def test_profile_builder_capture_idle(client, monkeypatch):
     assert capture.status_code == 200
     body = capture.json()
     assert "capture_idle.xml" in body["artifacts"]
-    assert body["captures"] == [
-        {
-            "step": "idle",
-            "package": "com.aliyun.tongyi",
-            "activity": ".BrowserActivity",
-            "xml_artifact": "capture_idle.xml",
-            "screenshot_artifact": "capture_idle.png",
-        }
-    ]
+    assert len(body["captures"]) == 1
+    assert body["captures"][0]["step"] == "idle"
+    assert body["captures"][0]["active"] is True
+    assert body["captures"][0]["xml_artifact"] == "capture_idle.xml"
+    assert body["captures"][0]["screenshot_artifact"] == "capture_idle.png"
+    assert body["captures"][0]["captured_at"] is not None
 
 
 async def test_profile_builder_capture_rejects_unknown_step(client):
@@ -188,15 +185,10 @@ async def test_profile_builder_session_reload_from_persisted_json(client, monkey
     assert fetched.status_code == 200
     body = fetched.json()
     assert body["artifacts"] == ["capture_idle.png", "capture_idle.xml"]
-    assert body["captures"] == [
-        {
-            "step": "idle",
-            "package": "com.aliyun.tongyi",
-            "activity": ".BrowserActivity",
-            "xml_artifact": "capture_idle.xml",
-            "screenshot_artifact": "capture_idle.png",
-        }
-    ]
+    assert len(body["captures"]) == 1
+    assert body["captures"][0]["step"] == "idle"
+    assert body["captures"][0]["active"] is True
+    assert body["captures"][0]["captured_at"] is not None
 
 
 async def test_profile_builder_capture_multi_step_accumulates_from_disk_truth(client, monkeypatch):
@@ -238,22 +230,55 @@ async def test_profile_builder_capture_multi_step_accumulates_from_disk_truth(cl
         headers=headers,
     )
     assert second.status_code == 200
-    assert second.json()["captures"] == [
-        {
-            "step": "idle",
-            "package": "com.aliyun.tongyi",
-            "activity": ".IdleActivity",
-            "xml_artifact": "capture_idle.xml",
-            "screenshot_artifact": "capture_idle.png",
-        },
-        {
-            "step": "editing",
-            "package": "com.aliyun.tongyi",
-            "activity": ".EditingActivity",
-            "xml_artifact": "capture_editing.xml",
-            "screenshot_artifact": "capture_editing.png",
-        },
+    captures = second.json()["captures"]
+    assert [capture["step"] for capture in captures] == ["idle", "editing"]
+    assert all(capture["active"] is True for capture in captures)
+
+
+async def test_profile_builder_repeated_capture_marks_prior_step_superseded(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        "<hierarchy><node text='发消息'/></hierarchy>",
+        "<hierarchy><node text='重新发消息'/></hierarchy>",
     ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle-v1", b"idle-v2"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    first = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert first.status_code == 200
+
+    second = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert second.status_code == 200
+    captures = second.json()["captures"]
+    assert len(captures) == 2
+    active = [capture for capture in captures if capture["active"]]
+    superseded = [capture for capture in captures if not capture["active"]]
+    assert len(active) == 1
+    assert len(superseded) == 1
+    assert active[0]["xml_artifact"] == "capture_idle.xml"
+    assert active[0]["screenshot_artifact"] == "capture_idle.png"
+    assert superseded[0]["xml_artifact"].startswith("capture_idle_")
+    assert superseded[0]["screenshot_artifact"].startswith("capture_idle_")
+    assert "capture_idle.xml" in second.json()["artifacts"]
+    assert any(name.startswith("capture_idle_") for name in second.json()["artifacts"])
 
 
 async def test_profile_builder_corrupted_session_json_returns_clear_error(client):
@@ -334,22 +359,9 @@ async def test_profile_builder_concurrent_capture_preserves_both_records(client,
         headers=headers,
     )
     assert fetched.status_code == 200
-    assert fetched.json()["captures"] == [
-        {
-            "step": "idle",
-            "package": "com.aliyun.tongyi",
-            "activity": ".IdleActivity",
-            "xml_artifact": "capture_idle.xml",
-            "screenshot_artifact": "capture_idle.png",
-        },
-        {
-            "step": "editing",
-            "package": "com.aliyun.tongyi",
-            "activity": ".EditingActivity",
-            "xml_artifact": "capture_editing.xml",
-            "screenshot_artifact": "capture_editing.png",
-        },
-    ]
+    fetched_captures = fetched.json()["captures"]
+    assert [capture["step"] for capture in fetched_captures] == ["idle", "editing"]
+    assert all(capture["active"] is True for capture in fetched_captures)
 
 
 async def test_profile_builder_generate_draft_persists_rule_artifacts(client, monkeypatch):

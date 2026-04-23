@@ -144,6 +144,8 @@ class ProfileBuilderCaptureArtifact(BaseModel):
     activity: str | None = None
     xml_artifact: str
     screenshot_artifact: str
+    active: bool = True
+    captured_at: datetime | None = None
 
 
 class ProfileBuilderSessionView(BaseModel):

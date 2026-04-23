@@ -136,7 +136,9 @@ export default function Builder() {
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
-  const completedSteps = new Set(session?.captures.map((capture) => capture.step) ?? [])
+  const completedSteps = new Set(
+    session?.captures.filter((capture) => capture.active).map((capture) => capture.step) ?? [],
+  )
   const runtimeData = runtime.data
   const captureScreens = runtimeData
     ? runtimeData.captures
@@ -386,6 +388,27 @@ export default function Builder() {
                     Capture
                   </Button>
                 </Space>
+                {session?.captures.filter((capture) => capture.step === step.key).length ? (
+                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    {session.captures
+                      .filter((capture) => capture.step === step.key)
+                      .map((capture) => (
+                        <Space key={`${capture.step}-${capture.xml_artifact}`} size="small" wrap>
+                          <Tag color={capture.active ? 'blue' : 'default'}>
+                            {capture.active ? 'Active' : 'Superseded'}
+                          </Tag>
+                          <Typography.Text type="secondary">
+                            {capture.screenshot_artifact}
+                          </Typography.Text>
+                          {capture.captured_at ? (
+                            <Typography.Text type="secondary">
+                              {new Date(capture.captured_at).toLocaleString()}
+                            </Typography.Text>
+                          ) : null}
+                        </Space>
+                      ))}
+                  </Space>
+                ) : null}
               </Space>
             ),
           }))}

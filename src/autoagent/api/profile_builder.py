@@ -247,11 +247,51 @@ def _capture_artifact_from_state(captured: CapturedState) -> ProfileBuilderCaptu
         activity=captured.activity,
         xml_artifact=captured.xml_path.name,
         screenshot_artifact=captured.screenshot_path.name,
+        active=True,
+        captured_at=datetime.now(timezone.utc),
     )
 
 
 def _capture_map(session: ProfileBuilderSessionView) -> dict[str, ProfileBuilderCaptureArtifact]:
+    captures = [capture for capture in session.captures if capture.active]
+    if captures:
+        return {capture.step: capture for capture in captures}
     return {capture.step: capture for capture in session.captures}
+
+
+def _capture_sort_key(
+    session: ProfileBuilderSessionView,
+    capture: ProfileBuilderCaptureArtifact,
+) -> tuple[int, int, str]:
+    captured_at = capture.captured_at.isoformat() if capture.captured_at else ""
+    return (
+        session.steps.index(capture.step),
+        0 if capture.active else 1,
+        captured_at,
+    )
+
+
+def _archive_capture_artifacts(
+    session: ProfileBuilderSessionView,
+    capture: ProfileBuilderCaptureArtifact,
+) -> ProfileBuilderCaptureArtifact:
+    session_dir = Path(session.artifact_dir)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    archived_xml = f"capture_{capture.step}_{timestamp}.xml"
+    archived_png = f"capture_{capture.step}_{timestamp}.png"
+    xml_path = session_dir / capture.xml_artifact
+    png_path = session_dir / capture.screenshot_artifact
+    if xml_path.exists():
+        xml_path.replace(session_dir / archived_xml)
+    if png_path.exists():
+        png_path.replace(session_dir / archived_png)
+    return capture.model_copy(
+        update={
+            "active": False,
+            "xml_artifact": archived_xml,
+            "screenshot_artifact": archived_png,
+        }
+    )
 
 
 def _require_complete_captures(
@@ -493,35 +533,51 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
             detail=f"profile builder capture connect failed: {exc}",
         ) from exc
 
-    try:
-        captured = await capture_android_state(
-            device=device,
-            session_dir=Path(session.artifact_dir),
-            step=step,
-        )
-    except Exception as exc:
-        _store_runtime(
-            session.id,
-            _upsert_capture_runtime(
-                _get_runtime(session),
-                session=session,
-                step=step,
-                status="failed",
-            ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"profile builder capture failed: {exc}",
-        ) from exc
-
     async with _get_session_lock(session_id):
         current_session = _get_session_or_404(session_id)
         _validate_capture_step(current_session, step)
+        archived_captures: list[ProfileBuilderCaptureArtifact] = []
+        remaining_captures: list[ProfileBuilderCaptureArtifact] = []
+        for record in current_session.captures:
+            if record.step == step and record.active:
+                archived_captures.append(_archive_capture_artifacts(current_session, record))
+            else:
+                remaining_captures.append(record)
+        archived_session = current_session.model_copy(
+            update={"captures": remaining_captures + archived_captures}
+        )
+        stored_archived = _store_session(archived_session)
+
+        try:
+            captured = await capture_android_state(
+                device=device,
+                session_dir=Path(stored_archived.artifact_dir),
+                step=step,
+            )
+        except Exception as exc:
+            _store_runtime(
+                stored_archived.id,
+                _upsert_capture_runtime(
+                    _get_runtime(stored_archived),
+                    session=stored_archived,
+                    step=step,
+                    status="failed",
+                ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"profile builder capture failed: {exc}",
+            ) from exc
+
         capture_record = _capture_artifact_from_state(captured)
-        captures = [record for record in current_session.captures if record.step != step]
+        captures = [
+            record
+            for record in stored_archived.captures
+            if not (record.step == step and record.active)
+        ]
         captures.append(capture_record)
-        captures.sort(key=lambda record: current_session.steps.index(record.step))
-        updated = current_session.model_copy(update={"captures": captures})
+        captures.sort(key=lambda record: _capture_sort_key(stored_archived, record))
+        updated = stored_archived.model_copy(update={"captures": captures})
         stored = _store_session(updated)
         _store_runtime(
             stored.id,
