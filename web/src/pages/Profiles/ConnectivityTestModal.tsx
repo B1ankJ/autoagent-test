@@ -13,14 +13,19 @@ interface Props {
 export function ConnectivityTestModal({ open, profileName, mode, onClose }: Props) {
   const [prompt, setPrompt] = useState('hello')
   const run = useRunSync()
+  const timeoutSec = mode === 'api' ? 60 : 180
+  const requestTimeoutMs = mode === 'api' ? 65_000 : 215_000
 
   const onSend = async () => {
     await run.mutateAsync({
-      id: `conn-${Date.now()}`,
-      prompts: [prompt],
-      mode,
-      target_profile: profileName,
-      timeout_sec: mode === 'api' ? 60 : 180,
+      sample: {
+        id: `conn-${Date.now()}`,
+        prompts: [prompt],
+        mode,
+        target_profile: profileName,
+        timeout_sec: timeoutSec,
+      },
+      timeoutMs: requestTimeoutMs,
     })
   }
 

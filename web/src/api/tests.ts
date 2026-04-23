@@ -7,10 +7,23 @@ import {
 } from '../types/api'
 import { client } from './client'
 
+export async function runSyncRequest(sample: Sample, timeoutMs?: number) {
+  return (
+    await client.post<SingleTestSyncResponse>('/tests/sync', sample, {
+      timeout: timeoutMs,
+    })
+  ).data
+}
+
 export function useRunSync() {
   return useMutation({
-    mutationFn: async (sample: Sample) =>
-      (await client.post<SingleTestSyncResponse>('/tests/sync', sample)).data,
+    mutationFn: async ({
+      sample,
+      timeoutMs,
+    }: {
+      sample: Sample
+      timeoutMs?: number
+    }) => runSyncRequest(sample, timeoutMs),
   })
 }
 
