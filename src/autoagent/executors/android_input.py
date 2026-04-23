@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from autoagent.executors.android_locator import selector_kwargs
+from autoagent.executors.android_locator import resolve_target
 from autoagent.profiles.schemas import Locator
 
 
@@ -29,7 +29,7 @@ class AndroidInput:
 
     async def set_text(self, locator: Locator, text: str) -> None:
         method = resolve_input_method(self.configured_method, text)
-        target = self.device(**selector_kwargs(locator))
+        target = resolve_target(self.device, locator)
         if method in {"u2_send_keys", "adb_keyboard"}:
             await asyncio.to_thread(target.set_text, text)
             return

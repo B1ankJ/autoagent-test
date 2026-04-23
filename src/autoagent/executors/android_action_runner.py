@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from autoagent.executors.android_locator import selector_kwargs
+from autoagent.executors.android_locator import resolve_target
 from autoagent.profiles.schemas import ActionStep
 
 
@@ -42,12 +42,12 @@ class AndroidActionRunner:
 
     async def _dispatch(self, step: ActionStep) -> None:
         if step.action == "click_locator":
-            self.device(**selector_kwargs(step.locator)).click()
+            resolve_target(self.device, step.locator).click()
         elif step.action == "input":
             await self.input_controller.set_text(step.locator, step.text)
         elif step.action == "wait_for":
             await asyncio.to_thread(
-                self.device(**selector_kwargs(step.locator)).wait,
+                resolve_target(self.device, step.locator).wait,
                 timeout=getattr(step, "timeout_sec", 5),
             )
         elif step.action == "launch_app":
