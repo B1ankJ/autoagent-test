@@ -11,7 +11,11 @@ import uiautomator2 as u2
 from autoagent.executors.android_action_runner import AndroidActionRunner
 from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
-from autoagent.executors.complete_detector import wait_for_pixel_stable, wait_for_ui_tree_stable
+from autoagent.executors.complete_detector import (
+    capture_screenshot_bytes,
+    wait_for_pixel_stable,
+    wait_for_ui_tree_stable,
+)
 from autoagent.executors.response_extractor import OcrExtractor, UiTreeExtractor
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
@@ -112,7 +116,7 @@ class AndroidExecutor(Executor):
                     )
                     responses.append(result.text)
                 elif profile.response_extraction.method == "ocr_only":
-                    raw = await asyncio.to_thread(device.screenshot, format="raw")
+                    raw = await asyncio.to_thread(capture_screenshot_bytes, device)
                     result = await ocr_extractor.extract([raw])
                     responses.append(result.text)
                 elif profile.response_extraction.method == "ui_tree_then_ocr":
@@ -129,7 +133,7 @@ class AndroidExecutor(Executor):
                     if result.text.strip():
                         responses.append(result.text)
                     else:
-                        raw = await asyncio.to_thread(device.screenshot, format="raw")
+                        raw = await asyncio.to_thread(capture_screenshot_bytes, device)
                         ocr_result = await ocr_extractor.extract([raw])
                         responses.append(ocr_result.text)
                 else:

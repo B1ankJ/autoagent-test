@@ -1,6 +1,10 @@
 import pytest
 
-from autoagent.executors.complete_detector import wait_for_pixel_stable, wait_for_ui_tree_stable
+from autoagent.executors.complete_detector import (
+    capture_screenshot_bytes,
+    wait_for_pixel_stable,
+    wait_for_ui_tree_stable,
+)
 
 
 @pytest.mark.asyncio
@@ -23,3 +27,18 @@ async def test_wait_for_pixel_stable_hashes_same_frames():
             return next(seq)
 
     await wait_for_pixel_stable(Device(), stable_sec=0.0, max_wait_sec=0.2)
+
+
+def test_capture_screenshot_bytes_falls_back_when_raw_unsupported():
+    class Shot:
+        def save(self, buf, format="PNG"):
+            buf.write(b"png-bytes")
+
+    class Device:
+        def screenshot(self, format="raw"):
+            if format == "raw":
+                raise ValueError("Unsupported format")
+            assert format == "pillow"
+            return Shot()
+
+    assert capture_screenshot_bytes(Device()) == b"png-bytes"

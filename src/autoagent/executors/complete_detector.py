@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import time
 from typing import Any
 
@@ -131,7 +132,7 @@ async def wait_for_pixel_stable(
     stable_since: float | None = None
 
     while time.monotonic() < deadline:
-        raw = await asyncio.to_thread(device.screenshot, format="raw")
+        raw = await asyncio.to_thread(capture_screenshot_bytes, device)
         digest = hashlib.md5(raw).hexdigest()
         now = time.monotonic()
         if digest == last_hash:
@@ -147,3 +148,20 @@ async def wait_for_pixel_stable(
         await asyncio.sleep(poll_interval_sec)
 
     raise TimeoutError(f"pixel_stable not reached within {max_wait_sec}s")
+
+
+def capture_screenshot_bytes(device: Any) -> bytes:
+    try:
+        raw = device.screenshot(format="raw")
+        if isinstance(raw, bytes):
+            return raw
+    except Exception:
+        pass
+
+    image = device.screenshot(format="pillow")
+    if isinstance(image, bytes):
+        return image
+
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
