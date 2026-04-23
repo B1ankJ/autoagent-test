@@ -428,8 +428,9 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     profile_data = yaml.safe_load(body["draft_profile_yaml"])
     assert profile_data["new_session_action"] == [
         {
-            "action": "click_locator",
-            "locator": {"type": "xpath", "value": '//*[contains(@text, "发消息")]'},
+            "action": "tap_xy",
+            "x": 477,
+            "y": 2094,
         }
     ]
     assert profile_data["input_locator"] == {

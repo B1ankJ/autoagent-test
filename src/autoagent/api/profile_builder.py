@@ -478,6 +478,46 @@ def _input_placeholder_locator(idle_xml: str) -> dict | None:
     return None
 
 
+def _parse_bounds(raw: str | None) -> tuple[int, int, int, int] | None:
+    if not raw or not raw.startswith("["):
+        return None
+    normalized = raw.replace("][", ",").replace("[", "").replace("]", "")
+    parts = normalized.split(",")
+    if len(parts) != 4:
+        return None
+    try:
+        return tuple(int(part) for part in parts)  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _input_placeholder_tap_action(idle_xml: str) -> dict | None:
+    try:
+        root = ElementTree.fromstring(idle_xml)
+    except ElementTree.ParseError:
+        return None
+    for node in root.iter():
+        text = (node.attrib.get("text") or "").strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if not (
+            "发消息" in text
+            or any(keyword in lowered for keyword in ("说话", "输入", "send", "message", "chat"))
+        ):
+            continue
+        bounds = _parse_bounds(node.attrib.get("bounds"))
+        if bounds is None:
+            continue
+        x1, y1, x2, y2 = bounds
+        return {
+            "action": "tap_xy",
+            "x": (x1 + x2) // 2,
+            "y": (y1 + y2) // 2,
+        }
+    return None
+
+
 def _draft_profile_from_candidates(
     *,
     session: ProfileBuilderSessionView,
@@ -495,12 +535,17 @@ def _draft_profile_from_candidates(
     first_response = response_candidates[0]
     input_locator = input_candidates[0]["locator"]
     placeholder_locator = _input_placeholder_locator(idle_xml)
+    placeholder_tap_action = _input_placeholder_tap_action(idle_xml)
     new_session_action = []
     if placeholder_locator is not None and (
         input_locator.get("type") == "xpath"
         and input_locator.get("value") == '//*[@class="android.widget.EditText"]'
     ):
-        new_session_action = [{"action": "click_locator", "locator": placeholder_locator}]
+        new_session_action = (
+            [placeholder_tap_action]
+            if placeholder_tap_action is not None
+            else [{"action": "click_locator", "locator": placeholder_locator}]
+        )
         input_locator = placeholder_locator
     return {
         "name": session.name,
