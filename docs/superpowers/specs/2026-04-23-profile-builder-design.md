@@ -45,6 +45,14 @@ The design assumes:
 
 This is a human-in-the-loop builder, not a black-box generator.
 
+Current MVP status in the repo:
+
+- guided Android capture is implemented
+- rule-based draft generation is implemented
+- optional LLM enrichment is implemented but remains off by default
+- review application and connectivity validation are implemented in the builder flow
+- successful sessions persist artifacts under `data/profile_builder/<session_id>/`
+
 ## Scope
 
 ### MVP In Scope

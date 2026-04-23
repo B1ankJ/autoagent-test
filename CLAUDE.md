@@ -76,6 +76,9 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Final manual smoke doc:** use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` for the final real-device verification run and result-report template.
 - **Tier 2 OCR runtime:** `rapidocr_onnxruntime` runs on CPU in this repo. OCR/stitching paths are marked `@pytest.mark.slow` and stay out of the fast suite.
 - **Tier 2 Android smoke:** 1. run a long-response app/profile with `method: ocr_only` or `ui_tree_then_ocr`; 2. verify stitched text spans more than one screen; 3. verify `pixel_stable` or `ui_tree_stable` completes without false positives.
+- **Profile Builder artifacts:** stored under `<data_root>/profile_builder/<session_id>/`.
+- **Profile Builder rule mode:** draft generation must keep working with no LLM config at all.
+- **Profile Builder connectivity:** reuse the existing `/api/v1/tests/sync` execution path (via shared backend helper), not a duplicate executor path.
 - **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.
 - **SSE progress:** `GET /api/v1/batches/{id}/events` is the live progress stream. Frontend `useBatchStream` reconciles updates via `seq`; WebSocket is not used.
 

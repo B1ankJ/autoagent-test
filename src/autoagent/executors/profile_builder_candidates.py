@@ -58,7 +58,10 @@ def _locator_from_node(node: ElementTree.Element | None) -> dict:
     return _class_locator("android.widget.TextView")
 
 
-def _build_input_candidates(editing_nodes: list[dict[str, str]], idle_nodes: list[dict[str, str]]) -> list[dict]:
+def _build_input_candidates(
+    editing_nodes: list[dict[str, str]],
+    idle_nodes: list[dict[str, str]],
+) -> list[dict]:
     candidates: list[dict] = []
     for node in editing_nodes:
         if node.get("class") != "android.widget.EditText":
@@ -69,7 +72,12 @@ def _build_input_candidates(editing_nodes: list[dict[str, str]], idle_nodes: lis
                 "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
                 "score": 100 + _bounds_area(bounds),
                 "reason": "editing EditText",
-                "evidence_refs": [{"source": "editing_xml", "locator": _xpath_locator('//*[@class="android.widget.EditText"]')}],
+                "evidence_refs": [
+                    {
+                        "source": "editing_xml",
+                        "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
+                    }
+                ],
             }
         )
     if candidates:
@@ -117,7 +125,10 @@ def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
     return [candidate for _, candidate in ranked]
 
 
-def _element_depth(node: ElementTree.Element, parents: dict[ElementTree.Element, ElementTree.Element]) -> int:
+def _element_depth(
+    node: ElementTree.Element,
+    parents: dict[ElementTree.Element, ElementTree.Element],
+) -> int:
     depth = 0
     current = node
     while current in parents:
@@ -308,7 +319,10 @@ def _build_review_items(
         review_items.append(
             _review_item(
                 field="latest_bubble_match",
-                reason="Response candidate confidence is low because the XML has weak repetition or container hints.",
+                reason=(
+                    "Response candidate confidence is low because the XML has weak repetition "
+                    "or container hints."
+                ),
                 recommended_option=_response_review_option(response_candidates[0]),
                 alternative_candidates=[],
                 evidence_refs=response_candidates[0].get("evidence_refs", []),

@@ -55,6 +55,34 @@ target app via the Web UI.
 The final real-device checklist is tracked in
 `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
 
+### Profile Builder (Android MVP)
+
+Use `Profiles -> Build Profile` in the web UI to generate a draft Android profile from guided
+captures. The builder walks through idle, editing, and response states, proposes candidate
+locators, surfaces `review_items` when confidence is low, and can run a connectivity check against
+the generated draft before you save anything as a normal profile.
+
+Capture expectations:
+
+- `idle`: stop on the target conversation page before the input is focused
+- `editing`: focus the input so the real editing controls are visible
+- `response`: send a short prompt and wait until the answer is visible
+
+Builder artifacts are stored under `data/profile_builder/<session_id>/` and include
+`capture_<step>.*`, `candidates.json`, `review_items.json`, `draft_profile.yaml`, and
+`connectivity_result.json` after validation.
+
+Optional LLM settings:
+
+```bash
+export PROFILE_BUILDER_LLM_BASE_URL=...
+export PROFILE_BUILDER_LLM_MODEL=...
+export PROFILE_BUILDER_LLM_API_KEY=...
+export PROFILE_BUILDER_LLM_TIMEOUT_SEC=30
+```
+
+If those env vars are absent, the builder stays in deterministic rule-only mode.
+
 ### Android OCR notes (Plan 4 Tier 2)
 
 - Tier 2 OCR uses `rapidocr_onnxruntime` on CPU.
