@@ -13,6 +13,10 @@ from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 from autoagent.executors.profile_builder_capture import CapturedState, capture_android_state
+from autoagent.executors.profile_builder_generator import (
+    maybe_generate_llm_draft,
+    merge_llm_draft,
+)
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderSessionCreate,
@@ -78,7 +82,9 @@ def _load_session_from_disk(session_id: str) -> ProfileBuilderSessionView | None
     if not session_json.exists():
         return None
     try:
-        return ProfileBuilderSessionView.model_validate_json(session_json.read_text(encoding="utf-8"))
+        return ProfileBuilderSessionView.model_validate_json(
+            session_json.read_text(encoding="utf-8")
+        )
     except (OSError, ValidationError) as exc:
         raise HTTPException(status_code=500, detail="profile builder session load failed") from exc
 
@@ -129,7 +135,9 @@ def _capture_map(session: ProfileBuilderSessionView) -> dict[str, ProfileBuilder
     return {capture.step: capture for capture in session.captures}
 
 
-def _require_complete_captures(session: ProfileBuilderSessionView) -> dict[str, ProfileBuilderCaptureArtifact]:
+def _require_complete_captures(
+    session: ProfileBuilderSessionView,
+) -> dict[str, ProfileBuilderCaptureArtifact]:
     captures = _capture_map(session)
     missing = [step for step in session.steps if step not in captures]
     if missing:
@@ -205,7 +213,11 @@ def _draft_profile_from_candidates(
     }
 
 
-@router.post("/sessions", response_model=ProfileBuilderSessionView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sessions",
+    response_model=ProfileBuilderSessionView,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_session(payload: ProfileBuilderSessionCreate) -> ProfileBuilderSessionView:
     session_id = f"pb_{uuid4().hex[:12]}"
     session = ProfileBuilderSessionView(
@@ -265,6 +277,7 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
 @router.post("/sessions/{session_id}/draft")
 async def generate_draft(session_id: str) -> dict:
     session = _get_session_or_404(session_id)
+    settings = get_settings()
     captures = _require_complete_captures(session)
     idle_xml = _read_capture_xml(session, captures["idle"].xml_artifact)
     editing_xml = _read_capture_xml(session, captures["editing"].xml_artifact)
@@ -276,12 +289,19 @@ async def generate_draft(session_id: str) -> dict:
         response_xml=response_xml,
     )
     candidates = candidate_draft.asdict()
-    draft_profile = _draft_profile_from_candidates(
+    rule_draft = _draft_profile_from_candidates(
         session=session,
         captures=captures,
         candidates=candidates,
         idle_xml=idle_xml,
     )
+    llm_output = await maybe_generate_llm_draft(
+        settings=settings,
+        rule_draft=rule_draft,
+        candidates=candidates,
+        captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
+    )
+    draft_profile = merge_llm_draft(rule_draft, llm_output)
 
     artifact_dir = Path(session.artifact_dir)
     (artifact_dir / "candidates.json").write_text(
