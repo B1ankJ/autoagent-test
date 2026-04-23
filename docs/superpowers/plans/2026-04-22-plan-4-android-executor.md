@@ -2855,6 +2855,8 @@ Verify end to end:
 6. disabling one device mid-run only fails the in-flight sample on that device
 ```
 
+Use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` as the operator checklist and result template for this final verification round.
+
 - [ ] **Step 4: Commit the completion docs**
 
 ```bash

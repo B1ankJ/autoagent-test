@@ -69,6 +69,7 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Android verification:** real-device cases will be marked `@pytest.mark.android`; keep them out of the fast suite with `-m "not android"`.
 - **ADB Keyboard:** `input_method: adb_keyboard` expects `com.android.adbkeyboard` to be preinstalled on the device. Plan 4 does not auto-install that APK.
 - **Fake chat fixture APK:** source lives in `tests/fixtures/fake_chat_apk/`; build `fake_chat-debug.apk` with Android Studio or set `AUTOAGENT_FAKE_CHAT_APK` to an externally built artifact before running `pytest -m android`. This fixture is optional; Plan 4 can also be validated manually against a real device + real target app.
+- **Final manual smoke doc:** use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` for the final real-device verification run and result-report template.
 - **Tier 2 OCR runtime:** `rapidocr_onnxruntime` runs on CPU in this repo. OCR/stitching paths are marked `@pytest.mark.slow` and stay out of the fast suite.
 - **Tier 2 Android smoke:** 1. run a long-response app/profile with `method: ocr_only` or `ui_tree_then_ocr`; 2. verify stitched text spans more than one screen; 3. verify `pixel_stable` or `ui_tree_stable` completes without false positives.
 - **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.

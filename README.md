@@ -50,6 +50,9 @@ set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest 
 If you skip this fixture, final Android verification can be done directly on a real device + real
 target app via the Web UI.
 
+The final real-device checklist is tracked in
+`docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
+
 ### Android OCR notes (Plan 4 Tier 2)
 
 - Tier 2 OCR uses `rapidocr_onnxruntime` on CPU.
