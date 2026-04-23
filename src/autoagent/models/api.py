@@ -146,3 +146,4 @@ class ProfileBuilderSessionView(BaseModel):
     status: Literal["draft", "ready", "validated"]
     steps: list[str]
     artifact_dir: str
+    artifacts: list[str] = Field(default_factory=list)

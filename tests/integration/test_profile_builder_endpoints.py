@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -15,6 +17,15 @@ async def client():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def _reset_profile_builder_sessions():
+    from autoagent.api.profile_builder import reset_sessions_for_tests
+
+    reset_sessions_for_tests()
+    yield
+    reset_sessions_for_tests()
 
 
 async def _h(client):
@@ -59,3 +70,29 @@ async def test_profile_builder_session_lifecycle(client):
     )
     assert fetched.status_code == 200
     assert fetched.json() == session
+
+
+async def test_profile_builder_capture_idle(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.return_value = "<hierarchy><node text='发消息'/></hierarchy>"
+    device.app_current.return_value = {
+        "package": "com.aliyun.tongyi",
+        "activity": ".BrowserActivity",
+    }
+    device.screenshot.return_value = b"png-bytes"
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    capture = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert capture.status_code == 200
+    assert "capture_idle.xml" in capture.json()["artifacts"]
