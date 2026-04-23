@@ -156,3 +156,37 @@ class ProfileBuilderSessionView(BaseModel):
     artifact_dir: str
     artifacts: list[str] = Field(default_factory=list)
     captures: list[ProfileBuilderCaptureArtifact] = Field(default_factory=list)
+
+
+class ProfileBuilderRuntimeScreen(BaseModel):
+    step: str
+    label: str
+    path: str
+    taken_at: datetime
+
+
+class ProfileBuilderRuntimeCapture(BaseModel):
+    step: str
+    status: Literal["pending", "running", "done", "failed"]
+    screenshot: str | None = None
+    updated_at: datetime | None = None
+
+
+class ProfileBuilderRuntimeConnectivity(BaseModel):
+    status: Literal["idle", "running", "done", "failed"] = "idle"
+    result_status: SampleStatus | None = None
+    result_summary: str | None = None
+    screens: list[ProfileBuilderRuntimeScreen] = Field(default_factory=list)
+
+
+class ProfileBuilderRuntimeView(BaseModel):
+    session_id: str
+    session_status: Literal["draft", "ready", "validating", "validated", "failed"]
+    current_step: str
+    step_state: Literal["idle", "running", "done", "failed"]
+    last_error: str | None = None
+    captures: list[ProfileBuilderRuntimeCapture] = Field(default_factory=list)
+    connectivity: ProfileBuilderRuntimeConnectivity = Field(
+        default_factory=ProfileBuilderRuntimeConnectivity
+    )
+    recent_screens: list[ProfileBuilderRuntimeScreen] = Field(default_factory=list)

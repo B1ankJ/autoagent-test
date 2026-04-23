@@ -20,6 +20,8 @@ from autoagent.executors.profile_builder_generator import (
 )
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
+    ProfileBuilderRuntimeCapture,
+    ProfileBuilderRuntimeView,
     ProfileBuilderSessionCreate,
     ProfileBuilderSessionView,
     Sample,
@@ -57,6 +59,10 @@ def _session_json_path(session_id: str) -> Path:
     return _session_dir(session_id) / "session.json"
 
 
+def _runtime_json_path(session_id: str) -> Path:
+    return _session_dir(session_id) / "runtime.json"
+
+
 def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
     artifact_dir = Path(session.artifact_dir)
     if not artifact_dir.exists():
@@ -90,6 +96,37 @@ def _load_session_from_disk(session_id: str) -> ProfileBuilderSessionView | None
         )
     except (OSError, ValidationError) as exc:
         raise HTTPException(status_code=500, detail="profile builder session load failed") from exc
+
+
+def _default_runtime(session: ProfileBuilderSessionView) -> ProfileBuilderRuntimeView:
+    return ProfileBuilderRuntimeView(
+        session_id=session.id,
+        session_status=session.status,
+        current_step="idle",
+        step_state="idle",
+        captures=[
+            ProfileBuilderRuntimeCapture(step=step, status="pending") for step in session.steps
+        ],
+    )
+
+
+def _load_runtime_from_disk(session_id: str) -> dict | None:
+    path = _runtime_json_path(session_id)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail="profile builder runtime load failed") from exc
+
+
+def _store_runtime(session_id: str, runtime: dict) -> dict:
+    path = _runtime_json_path(session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(runtime, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+    return runtime
 
 
 def _sync_artifacts(session: ProfileBuilderSessionView) -> ProfileBuilderSessionView:
