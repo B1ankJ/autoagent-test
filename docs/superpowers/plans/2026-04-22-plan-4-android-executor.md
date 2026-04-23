@@ -2638,7 +2638,7 @@ git commit -m "feat(android): add scroll stitcher for long responses"
 - Modify: `tests/unit/test_complete_detector_android.py`
 - Modify: `tests/unit/test_android_executor_unit.py`
 
-- [ ] **Step 1: Write the failing `pixel_stable` tests**
+- [x] **Step 1: Write the failing `pixel_stable` tests**
 
 Extend `tests/unit/test_complete_detector_android.py`:
 
@@ -2659,7 +2659,7 @@ async def test_wait_for_pixel_stable_hashes_same_frames(monkeypatch):
     await wait_for_pixel_stable(Device(), stable_sec=0.0, max_wait_sec=0.2)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2667,7 +2667,7 @@ python3.11 -m pytest tests/unit/test_complete_detector_android.py tests/unit/tes
 ```
 Expected: FAIL because `wait_for_pixel_stable` does not exist and the executor does not select Tier 2 strategies.
 
-- [ ] **Step 3: Implement `pixel_stable` and strategy dispatch**
+- [x] **Step 3: Implement `pixel_stable` and strategy dispatch**
 
 In `src/autoagent/executors/complete_detector.py`, add:
 
@@ -2703,7 +2703,7 @@ async def wait_for_pixel_stable(
 
 In `src/autoagent/executors/android_executor.py`, dispatch by `profile.response_extraction.method` and `profile.complete_detection.type`, raising `NotImplementedError` for OCR modes before Tier 2 and using the new OCR/pixel helpers afterwards.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash

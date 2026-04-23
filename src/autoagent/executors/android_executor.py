@@ -9,8 +9,8 @@ import uiautomator2 as u2
 from autoagent.executors.android_action_runner import AndroidActionRunner
 from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
-from autoagent.executors.complete_detector import wait_for_ui_tree_stable
-from autoagent.executors.response_extractor import UiTreeExtractor
+from autoagent.executors.complete_detector import wait_for_pixel_stable, wait_for_ui_tree_stable
+from autoagent.executors.response_extractor import OcrExtractor, UiTreeExtractor
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import ActionStep, AndroidProfile
@@ -33,7 +33,8 @@ class AndroidExecutor(Executor):
         store = ScreenshotStore(root=self._root, batch_id=batch_id, sample_id=sample.id)
         ctx.logs_dir = store.logs_dir
 
-        extractor = UiTreeExtractor()
+        ui_tree_extractor = UiTreeExtractor()
+        ocr_extractor = OcrExtractor()
         responses: list[str] = []
 
         await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
@@ -51,16 +52,58 @@ class AndroidExecutor(Executor):
                 await action_runner.run(
                     [ActionStep(action="click_locator", locator=profile.send_button_locator)]
                 )
-                xml = await wait_for_ui_tree_stable(
-                    device,
-                    stable_sec=profile.complete_detection.stable_sec,
-                    max_wait_sec=profile.complete_detection.max_wait_sec,
-                )
-                result = extractor.extract_from_xml(
-                    xml,
-                    bubble_class=profile.response_extraction.latest_bubble_match.value,
-                )
-                responses.append(result.text)
+                xml: str | None = None
+                if profile.complete_detection.type == "pixel_stable":
+                    await wait_for_pixel_stable(
+                        device,
+                        stable_sec=profile.complete_detection.stable_sec,
+                        max_wait_sec=profile.complete_detection.max_wait_sec,
+                    )
+                else:
+                    xml = await wait_for_ui_tree_stable(
+                        device,
+                        stable_sec=profile.complete_detection.stable_sec,
+                        max_wait_sec=profile.complete_detection.max_wait_sec,
+                    )
+
+                if profile.response_extraction.method == "ui_tree_only":
+                    if xml is None:
+                        xml = await wait_for_ui_tree_stable(
+                            device,
+                            stable_sec=0.0,
+                            max_wait_sec=profile.complete_detection.max_wait_sec,
+                        )
+                    result = ui_tree_extractor.extract_from_xml(
+                        xml,
+                        bubble_class=profile.response_extraction.latest_bubble_match.value,
+                    )
+                    responses.append(result.text)
+                elif profile.response_extraction.method == "ocr_only":
+                    raw = await asyncio.to_thread(device.screenshot, format="raw")
+                    result = await ocr_extractor.extract([raw])
+                    responses.append(result.text)
+                elif profile.response_extraction.method == "ui_tree_then_ocr":
+                    if xml is None:
+                        xml = await wait_for_ui_tree_stable(
+                            device,
+                            stable_sec=0.0,
+                            max_wait_sec=profile.complete_detection.max_wait_sec,
+                        )
+                    result = ui_tree_extractor.extract_from_xml(
+                        xml,
+                        bubble_class=profile.response_extraction.latest_bubble_match.value,
+                    )
+                    if result.text.strip():
+                        responses.append(result.text)
+                    else:
+                        raw = await asyncio.to_thread(device.screenshot, format="raw")
+                        ocr_result = await ocr_extractor.extract([raw])
+                        responses.append(ocr_result.text)
+                else:
+                    raise NotImplementedError(
+                        "unsupported response extraction method: "
+                        f"{profile.response_extraction.method}"
+                    )
                 ctx.screenshot_index.append(
                     ScreenshotResult(path=store.next_path(f"done_{idx}"), label=f"done_{idx}")
                 )
