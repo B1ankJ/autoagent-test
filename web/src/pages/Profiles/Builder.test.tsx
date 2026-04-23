@@ -409,6 +409,157 @@ describe('Builder', () => {
     })
   })
 
+  it('applies recommended new_session_action review options', async () => {
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'ready',
+      steps: ['idle', 'editing', 'response'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: ['draft_profile.yaml', 'capture_idle.png'],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+        {
+          step: 'response',
+          package: 'com.aliyun.tongyi',
+          activity: '.ResponseActivity',
+          xml_artifact: 'capture_response.xml',
+          screenshot_artifact: 'capture_response.png',
+          active: true,
+          captured_at: '2026-04-23T12:02:00Z',
+        },
+      ],
+    })
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing', 'response'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml', 'capture_idle.png'],
+        captures: [
+          {
+            step: 'idle',
+            package: 'com.aliyun.tongyi',
+            activity: '.IdleActivity',
+            xml_artifact: 'capture_idle.xml',
+            screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
+          },
+          {
+            step: 'editing',
+            package: 'com.aliyun.tongyi',
+            activity: '.EditingActivity',
+            xml_artifact: 'capture_editing.xml',
+            screenshot_artifact: 'capture_editing.png',
+            active: true,
+            captured_at: '2026-04-23T12:01:00Z',
+          },
+          {
+            step: 'response',
+            package: 'com.aliyun.tongyi',
+            activity: '.ResponseActivity',
+            xml_artifact: 'capture_response.xml',
+            screenshot_artifact: 'capture_response.png',
+            active: true,
+            captured_at: '2026-04-23T12:02:00Z',
+          },
+        ],
+      },
+      candidates: {
+        input_candidates: [],
+        send_candidates: [],
+        response_candidates: [],
+        review_items: [],
+      },
+      review_items: [
+        {
+          field: 'new_session_action',
+          reason: 'Multiple entry actions are available for focusing the input area.',
+          recommended_option: [{ action: 'tap_xy', x: 477, y: 2094 }],
+          alternative_candidates: [
+            [{ action: 'click_locator', locator: { type: 'xpath', value: '//*[contains(@text, "发消息")]' } }],
+          ],
+          evidence_refs: [
+            {
+              source: 'idle_xml',
+              step: 'idle',
+              artifact: 'capture_idle.png',
+              bounds: [177, 2066, 777, 2123],
+              label: 'entry-action',
+            },
+          ],
+          alternative_evidence_refs: [
+            [
+              {
+                source: 'idle_xml',
+                step: 'idle',
+                artifact: 'capture_idle.png',
+                bounds: [177, 2066, 777, 2123],
+                label: 'entry-action',
+              },
+            ],
+          ],
+        },
+      ],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+    })
+    applyReviewMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing', 'response'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml', 'capture_idle.png'],
+        captures: [],
+      },
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\nnew_session_action:\n',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Apply Recommended' }))
+
+    await waitFor(() => {
+      expect(applyReviewMock).toHaveBeenCalledWith({
+        sessionId: 'pb_1',
+        payload: {
+          new_session_action: [{ action: 'tap_xy', x: 477, y: 2094 }],
+        },
+      })
+    })
+  })
+
   it('renders runtime status and key screens when runtime data is available', async () => {
     createSessionMock.mockResolvedValue({
       id: 'pb_1',

@@ -170,6 +170,15 @@ export interface ResponseReviewOption {
   latest_bubble_match: LocatorChoice
 }
 
+export interface ActionStepChoice {
+  action: string
+  x?: number
+  y?: number
+  locator?: LocatorChoice
+}
+
+export type NewSessionActionReviewOption = ActionStepChoice[]
+
 export interface ReviewEvidenceRef {
   source: string
   step: string
@@ -185,8 +194,8 @@ export interface ReviewEvidenceRef {
 export interface ReviewItem {
   field: string
   reason: string
-  recommended_option: LocatorChoice | ResponseReviewOption
-  alternative_candidates: Array<LocatorChoice | ResponseReviewOption>
+  recommended_option: LocatorChoice | ResponseReviewOption | NewSessionActionReviewOption
+  alternative_candidates: Array<LocatorChoice | ResponseReviewOption | NewSessionActionReviewOption>
   evidence_refs: ReviewEvidenceRef[]
   alternative_evidence_refs: ReviewEvidenceRef[][]
 }

@@ -478,20 +478,7 @@ def _input_placeholder_locator(idle_xml: str) -> dict | None:
     return None
 
 
-def _parse_bounds(raw: str | None) -> tuple[int, int, int, int] | None:
-    if not raw or not raw.startswith("["):
-        return None
-    normalized = raw.replace("][", ",").replace("[", "").replace("]", "")
-    parts = normalized.split(",")
-    if len(parts) != 4:
-        return None
-    try:
-        return tuple(int(part) for part in parts)  # type: ignore[return-value]
-    except ValueError:
-        return None
-
-
-def _input_placeholder_tap_action(idle_xml: str) -> dict | None:
+def _input_placeholder_ref(idle_xml: str) -> dict | None:
     try:
         root = ElementTree.fromstring(idle_xml)
     except ElementTree.ParseError:
@@ -506,15 +493,67 @@ def _input_placeholder_tap_action(idle_xml: str) -> dict | None:
             or any(keyword in lowered for keyword in ("说话", "输入", "send", "message", "chat"))
         ):
             continue
-        bounds = _parse_bounds(node.attrib.get("bounds"))
-        if bounds is None:
-            continue
-        x1, y1, x2, y2 = bounds
+        target = "发消息" if "发消息" in text else text
         return {
-            "action": "tap_xy",
-            "x": (x1 + x2) // 2,
-            "y": (y1 + y2) // 2,
+            "text": target,
+            "bounds": _parse_bounds(node.attrib.get("bounds")),
         }
+    return None
+
+
+def _parse_bounds(raw: str | None) -> tuple[int, int, int, int] | None:
+    if not raw or not raw.startswith("["):
+        return None
+    normalized = raw.replace("][", ",").replace("[", "").replace("]", "")
+    parts = normalized.split(",")
+    if len(parts) != 4:
+        return None
+    try:
+        return tuple(int(part) for part in parts)  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _input_placeholder_tap_action(idle_xml: str) -> dict | None:
+    placeholder_ref = _input_placeholder_ref(idle_xml)
+    if placeholder_ref is None or placeholder_ref["bounds"] is None:
+        return None
+    x1, y1, x2, y2 = placeholder_ref["bounds"]
+    return {
+        "action": "tap_xy",
+        "x": (x1 + x2) // 2,
+        "y": (y1 + y2) // 2,
+    }
+
+
+def _new_session_action_review_item(idle_xml: str) -> dict | None:
+    placeholder_locator = _input_placeholder_locator(idle_xml)
+    placeholder_tap_action = _input_placeholder_tap_action(idle_xml)
+    placeholder_ref = _input_placeholder_ref(idle_xml)
+    if placeholder_locator is None or placeholder_tap_action is None or placeholder_ref is None:
+        return None
+    evidence_ref = {
+        "source": "idle_xml",
+        "step": "idle",
+        "artifact": "capture_idle.png",
+        "locator": placeholder_locator,
+        "bounds": (
+            list(placeholder_ref["bounds"])
+            if placeholder_ref["bounds"] is not None
+            else None
+        ),
+        "label": "entry-action",
+    }
+    return {
+        "field": "new_session_action",
+        "reason": "Multiple entry actions are available for focusing the input area.",
+        "recommended_option": [placeholder_tap_action],
+        "alternative_candidates": [
+            [{"action": "click_locator", "locator": placeholder_locator}],
+        ],
+        "evidence_refs": [evidence_ref],
+        "alternative_evidence_refs": [[evidence_ref]],
+    }
     return None
 
 
@@ -760,6 +799,16 @@ async def generate_draft(session_id: str) -> dict:
         candidates=candidates,
         idle_xml=idle_xml,
     )
+    new_session_action_review_item = _new_session_action_review_item(idle_xml)
+    if (
+        new_session_action_review_item is not None
+        and rule_draft.get("new_session_action")
+        and not any(
+            item.get("field") == "new_session_action"
+            for item in candidates["review_items"]
+        )
+    ):
+        candidates["review_items"].insert(0, new_session_action_review_item)
     llm_output = await maybe_generate_llm_draft(
         settings=settings,
         rule_draft=rule_draft,

@@ -433,6 +433,18 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
             "y": 2094,
         }
     ]
+    assert body["review_items"][0]["field"] == "new_session_action"
+    assert body["review_items"][0]["recommended_option"] == [
+        {"action": "tap_xy", "x": 477, "y": 2094}
+    ]
+    assert body["review_items"][0]["alternative_candidates"] == [
+        [
+            {
+                "action": "click_locator",
+                "locator": {"type": "xpath", "value": '//*[contains(@text, "发消息")]'},
+            }
+        ]
+    ]
     assert profile_data["input_locator"] == {
         "type": "xpath",
         "value": '//*[contains(@text, "发消息")]',

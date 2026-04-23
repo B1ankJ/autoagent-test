@@ -109,6 +109,19 @@ function runtimeStepStatus(
 }
 
 function reviewOptionText(value: ReviewItem['recommended_option']) {
+  if (Array.isArray(value)) {
+    return value
+      .map((step) => {
+        if (step.action === 'tap_xy') {
+          return `tap_xy: (${step.x}, ${step.y})`
+        }
+        if (step.action === 'click_locator' && step.locator) {
+          return `click_locator: ${step.locator.type}: ${step.locator.value}`
+        }
+        return step.action
+      })
+      .join('\n')
+  }
   if ('type' in value) {
     return `${value.type}: ${value.value}`
   }
@@ -123,6 +136,9 @@ function toReviewPayload(
   field: string,
   value: ReviewItem['recommended_option'],
 ): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    return { [field]: value }
+  }
   if ('type' in value) {
     return { [field]: value }
   }
