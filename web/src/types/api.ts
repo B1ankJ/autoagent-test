@@ -170,12 +170,25 @@ export interface ResponseReviewOption {
   latest_bubble_match: LocatorChoice
 }
 
+export interface ReviewEvidenceRef {
+  source: string
+  step: string
+  artifact: string
+  locator?: LocatorChoice
+  bounds?: [number, number, number, number] | number[]
+  label?: string
+  scroll_locator?: LocatorChoice
+  text_count?: number
+  total_text_length?: number
+}
+
 export interface ReviewItem {
   field: string
   reason: string
   recommended_option: LocatorChoice | ResponseReviewOption
   alternative_candidates: Array<LocatorChoice | ResponseReviewOption>
-  evidence_refs: Record<string, unknown>[]
+  evidence_refs: ReviewEvidenceRef[]
+  alternative_evidence_refs: ReviewEvidenceRef[][]
 }
 
 export interface CandidateOption {
@@ -185,7 +198,7 @@ export interface CandidateOption {
   latest_bubble_match?: LocatorChoice
   score: number
   reason: string
-  evidence_refs: Record<string, unknown>[]
+  evidence_refs: ReviewEvidenceRef[]
 }
 
 export interface ProfileBuilderCandidates {

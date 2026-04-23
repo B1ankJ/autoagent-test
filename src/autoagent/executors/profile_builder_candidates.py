@@ -53,6 +53,44 @@ def _class_locator(value: str) -> dict:
     return {"type": "class", "value": value}
 
 
+def _bounds_payload(bounds: tuple[int, int, int, int] | None) -> list[int] | None:
+    if bounds is None:
+        return None
+    return [bounds[0], bounds[1], bounds[2], bounds[3]]
+
+
+def _evidence_ref(
+    *,
+    source: str,
+    step: str,
+    artifact: str,
+    locator: dict | None = None,
+    bounds: tuple[int, int, int, int] | None = None,
+    label: str | None = None,
+    scroll_locator: dict | None = None,
+    text_count: int | None = None,
+    total_text_length: int | None = None,
+) -> dict:
+    ref: dict[str, object] = {
+        "source": source,
+        "step": step,
+        "artifact": artifact,
+    }
+    if locator is not None:
+        ref["locator"] = locator
+    if bounds is not None:
+        ref["bounds"] = _bounds_payload(bounds)
+    if label is not None:
+        ref["label"] = label
+    if scroll_locator is not None:
+        ref["scroll_locator"] = scroll_locator
+    if text_count is not None:
+        ref["text_count"] = text_count
+    if total_text_length is not None:
+        ref["total_text_length"] = total_text_length
+    return ref
+
+
 def _app_package(nodes: list[dict[str, str]]) -> str | None:
     package_counts: dict[str, int] = {}
     for node in nodes:
@@ -94,10 +132,14 @@ def _build_input_candidates(
                 "score": 100 + _bounds_area(bounds),
                 "reason": "editing EditText",
                 "evidence_refs": [
-                    {
-                        "source": "editing_xml",
-                        "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                    }
+                    _evidence_ref(
+                        source="editing_xml",
+                        step="editing",
+                        artifact="capture_editing.png",
+                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                        bounds=bounds,
+                        label="input",
+                    )
                 ],
             }
         )
@@ -117,7 +159,16 @@ def _build_input_candidates(
                 "locator": locator,
                 "score": 1000 - len(text),
                 "reason": "idle input placeholder",
-                "evidence_refs": [{"source": "idle_xml", "locator": locator}],
+                "evidence_refs": [
+                    _evidence_ref(
+                        source="idle_xml",
+                        step="idle",
+                        artifact="capture_idle.png",
+                        locator=locator,
+                        bounds=_parse_bounds(node.get("bounds")),
+                        label="input-placeholder",
+                    )
+                ],
             }
         )
     return sorted(candidates, key=lambda item: item["score"], reverse=True)
@@ -158,7 +209,20 @@ def _build_send_candidates_from_nodes(
                     "locator": locator,
                     "score": x2 + y2,
                     "reason": "rightmost clickable near bottom",
-                    "evidence_refs": [{"source": source, "locator": locator}],
+                    "evidence_refs": [
+                        _evidence_ref(
+                            source=source,
+                            step="connectivity" if source == "runtime_probe_xml" else "editing",
+                            artifact=(
+                                "runtime_probe_editing.png"
+                                if source == "runtime_probe_xml"
+                                else "capture_editing.png"
+                            ),
+                            locator=locator,
+                            bounds=bounds,
+                            label="send-button",
+                        )
+                    ],
                 },
             )
         )
@@ -253,13 +317,17 @@ def _response_candidate(
         "score": score + container_bonus + scroll_bonus,
         "reason": "container with repeated visible response text",
         "evidence_refs": [
-            {
-                "source": "response_xml",
-                "container_locator": locator,
-                "scroll_locator": scroll_locator,
-                "text_count": repeated_count,
-                "total_text_length": total_text_len,
-            }
+            _evidence_ref(
+                source="response_xml",
+                step="response",
+                artifact="capture_response.png",
+                locator=locator,
+                bounds=container_bounds,
+                label="response-container",
+                scroll_locator=scroll_locator,
+                text_count=repeated_count,
+                total_text_length=total_text_len,
+            )
         ],
     }
 
@@ -308,6 +376,7 @@ def _review_item(
     recommended_option: dict,
     alternative_candidates: list[dict],
     evidence_refs: list[dict],
+    alternative_evidence_refs: list[list[dict]] | None = None,
 ) -> dict:
     return {
         "field": field,
@@ -315,6 +384,7 @@ def _review_item(
         "recommended_option": recommended_option,
         "alternative_candidates": alternative_candidates,
         "evidence_refs": evidence_refs,
+        "alternative_evidence_refs": alternative_evidence_refs or [],
     }
 
 
@@ -334,6 +404,9 @@ def _build_review_items(
                 recommended_option=input_candidates[0]["locator"],
                 alternative_candidates=[candidate["locator"] for candidate in input_candidates[1:]],
                 evidence_refs=input_candidates[0].get("evidence_refs", []),
+                alternative_evidence_refs=[
+                    candidate.get("evidence_refs", []) for candidate in input_candidates[1:]
+                ],
             )
         )
     if len(send_candidates) > 1:
@@ -344,6 +417,9 @@ def _build_review_items(
                 recommended_option=send_candidates[0]["locator"],
                 alternative_candidates=[candidate["locator"] for candidate in send_candidates[1:]],
                 evidence_refs=send_candidates[0].get("evidence_refs", []),
+                alternative_evidence_refs=[
+                    candidate.get("evidence_refs", []) for candidate in send_candidates[1:]
+                ],
             )
         )
     elif (
@@ -360,6 +436,7 @@ def _build_review_items(
                 alternative_candidates=[manual_send_candidates[0]["locator"]],
                 evidence_refs=send_candidates[0].get("evidence_refs", [])
                 + manual_send_candidates[0].get("evidence_refs", []),
+                alternative_evidence_refs=[manual_send_candidates[0].get("evidence_refs", [])],
             )
         )
     if len(response_candidates) > 1:
@@ -372,6 +449,9 @@ def _build_review_items(
                     _response_review_option(candidate) for candidate in response_candidates[1:]
                 ],
                 evidence_refs=response_candidates[0].get("evidence_refs", []),
+                alternative_evidence_refs=[
+                    candidate.get("evidence_refs", []) for candidate in response_candidates[1:]
+                ],
             )
         )
     elif response_candidates and response_candidates[0]["score"] < 260:
@@ -385,6 +465,7 @@ def _build_review_items(
                 recommended_option=_response_review_option(response_candidates[0]),
                 alternative_candidates=[],
                 evidence_refs=response_candidates[0].get("evidence_refs", []),
+                alternative_evidence_refs=[],
             )
         )
     return review_items

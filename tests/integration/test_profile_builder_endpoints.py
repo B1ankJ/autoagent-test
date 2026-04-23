@@ -436,6 +436,9 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
         "type": "xpath",
         "value": '//*[@bounds="[909,2009][1020,2120]"]',
     }
+    send_evidence = body["candidates"]["send_candidates"][0]["evidence_refs"][0]
+    assert send_evidence["artifact"] == "capture_editing.png"
+    assert send_evidence["bounds"] == [909, 2009, 1020, 2120]
     assert profile_data["response_extraction"]["latest_bubble_match"] == {
         "type": "class",
         "value": "android.widget.TextView",

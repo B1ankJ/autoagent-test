@@ -7,7 +7,6 @@ import {
   Descriptions,
   Empty,
   Form,
-  Image,
   Input,
   List,
   Row,
@@ -35,6 +34,7 @@ import { useDevices } from '../../api/devices'
 import {
   Device,
   ProfileBuilderDraftResponse,
+  ReviewEvidenceRef,
   ProfileBuilderRuntimeView,
   ProfileBuilderSessionView,
   ReviewItem,
@@ -115,6 +115,13 @@ function toReviewPayload(
   }
 }
 
+function normalizeBounds(bounds: ReviewEvidenceRef['bounds']): [number, number, number, number] | null {
+  if (!bounds || bounds.length !== 4) {
+    return null
+  }
+  return [Number(bounds[0]), Number(bounds[1]), Number(bounds[2]), Number(bounds[3])]
+}
+
 export default function Builder() {
   const devices = useDevices()
   const createSession = useCreateProfileBuilderSession()
@@ -133,6 +140,9 @@ export default function Builder() {
   const [selectedScreenPath, setSelectedScreenPath] = useState<string | null>(null)
   const [selectedStageKey, setSelectedStageKey] = useState<string | null>(null)
   const [followLatestScreen, setFollowLatestScreen] = useState(true)
+  const [selectedEvidenceRefs, setSelectedEvidenceRefs] = useState<ReviewEvidenceRef[]>([])
+  const [selectedEvidenceLabel, setSelectedEvidenceLabel] = useState<string | null>(null)
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
@@ -140,6 +150,18 @@ export default function Builder() {
     session?.captures.filter((capture) => capture.active).map((capture) => capture.step) ?? [],
   )
   const runtimeData = runtime.data
+  const sessionCaptureScreens =
+    session?.captures
+      .filter(
+        (capture): capture is typeof capture & { screenshot_artifact: string } =>
+          capture.screenshot_artifact != null,
+      )
+      .map((capture) => ({
+        step: capture.step,
+        label: capture.active ? `capture_${capture.step}` : `capture_${capture.step}_superseded`,
+        path: capture.screenshot_artifact,
+        taken_at: capture.captured_at ?? new Date(0).toISOString(),
+      })) ?? []
   const captureScreens = runtimeData
     ? runtimeData.captures
         .filter(
@@ -152,11 +174,12 @@ export default function Builder() {
           taken_at: capture.updated_at ?? new Date(0).toISOString(),
         }))
     : []
-  const availableScreens = runtimeData
-    ? [...captureScreens, ...runtimeData.recent_screens, ...runtimeData.connectivity.screens].filter(
-        (screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index,
-      )
-    : []
+  const availableScreens = [
+    ...sessionCaptureScreens,
+    ...captureScreens,
+    ...(runtimeData?.recent_screens ?? []),
+    ...(runtimeData?.connectivity.screens ?? []),
+  ].filter((screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index)
   const latestScreen = availableScreens[availableScreens.length - 1] ?? null
   const latestScreenForStage = (step: string | null) =>
     step != null ? availableScreens.filter((screen) => screen.step === step).slice(-1)[0] ?? null : null
@@ -166,6 +189,9 @@ export default function Builder() {
       ? latestScreen
       : availableScreens.find((screen) => screen.path === selectedScreenPath) ?? selectedStageScreen) ??
     null
+  const visibleEvidenceRefs = selectedEvidenceRefs.filter(
+    (ref) => currentScreen != null && ref.artifact === currentScreen.path && normalizeBounds(ref.bounds),
+  )
 
   useEffect(() => {
     if (!latestScreen) {
@@ -178,6 +204,10 @@ export default function Builder() {
       setSelectedStageKey(latestScreen.step)
     }
   }, [followLatestScreen, latestScreen?.path, latestScreen?.step, selectedScreenPath, selectedStageKey])
+
+  useEffect(() => {
+    setImageNaturalSize(null)
+  }, [currentScreen?.path])
 
   useEffect(() => {
     const revokeObjectUrl = (value: string) => {
@@ -241,6 +271,8 @@ export default function Builder() {
       setSelectedScreenPath(null)
       setSelectedStageKey(null)
       setFollowLatestScreen(true)
+      setSelectedEvidenceRefs([])
+      setSelectedEvidenceLabel(null)
       message.success('Builder session 已创建')
     } catch (error) {
       message.error((error as Error).message)
@@ -256,6 +288,8 @@ export default function Builder() {
       setSession(nextSession)
       setDraft(null)
       setConnectivitySummary(null)
+      setSelectedEvidenceRefs([])
+      setSelectedEvidenceLabel(null)
       message.success(`${step} capture 已保存`)
     } catch (error) {
       message.error((error as Error).message)
@@ -271,6 +305,8 @@ export default function Builder() {
       setSession(nextDraft.session)
       setDraft(nextDraft)
       setConnectivitySummary(null)
+      setSelectedEvidenceRefs([])
+      setSelectedEvidenceLabel(null)
       message.success('Draft profile 已生成')
     } catch (error) {
       message.error((error as Error).message)
@@ -319,10 +355,24 @@ export default function Builder() {
           ? validated.connectivity_result.responses[0] ?? 'done'
           : validated.connectivity_result.error ?? validated.connectivity_result.status,
       )
+      setSelectedEvidenceRefs([])
+      setSelectedEvidenceLabel(null)
       message.success('Connectivity test 已完成')
     } catch (error) {
       message.error((error as Error).message)
     }
+  }
+
+  const focusEvidence = (refs: ReviewEvidenceRef[], label: string) => {
+    const target = refs.find((ref) => ref.artifact)
+    if (!target) {
+      return
+    }
+    setFollowLatestScreen(false)
+    setSelectedStageKey(target.step)
+    setSelectedScreenPath(target.artifact)
+    setSelectedEvidenceRefs(refs)
+    setSelectedEvidenceLabel(label)
   }
 
   return (
@@ -467,6 +517,8 @@ export default function Builder() {
                               setFollowLatestScreen(false)
                               setSelectedStageKey(step.key)
                               setSelectedScreenPath(latestScreenForStage(step.key)?.path ?? null)
+                              setSelectedEvidenceRefs([])
+                              setSelectedEvidenceLabel(null)
                             }}
                           >
                             {step.title}
@@ -486,6 +538,8 @@ export default function Builder() {
                               setFollowLatestScreen(false)
                               setSelectedStageKey('draft')
                               setSelectedScreenPath(null)
+                              setSelectedEvidenceRefs([])
+                              setSelectedEvidenceLabel(null)
                             }}
                           >
                             Generate Draft
@@ -505,6 +559,8 @@ export default function Builder() {
                               setFollowLatestScreen(false)
                               setSelectedStageKey('connectivity')
                               setSelectedScreenPath(latestScreenForStage('connectivity')?.path ?? null)
+                              setSelectedEvidenceRefs([])
+                              setSelectedEvidenceLabel(null)
                             }}
                           >
                             Run Connectivity Test
@@ -529,8 +585,49 @@ export default function Builder() {
                   {currentScreen ? (
                     <>
                       <Typography.Text strong>{currentScreen.label}</Typography.Text>
+                      {selectedEvidenceLabel ? (
+                        <Typography.Text type="secondary">{selectedEvidenceLabel}</Typography.Text>
+                      ) : null}
                       {currentScreenUrl ? (
-                        <Image src={currentScreenUrl} alt={currentScreen.label} />
+                        <div style={{ position: 'relative', width: '100%' }}>
+                          <img
+                            src={currentScreenUrl}
+                            alt={currentScreen.label}
+                            style={{ width: '100%', display: 'block', borderRadius: 8 }}
+                            onLoad={(event) => {
+                              const img = event.currentTarget
+                              setImageNaturalSize({
+                                width: img.naturalWidth,
+                                height: img.naturalHeight,
+                              })
+                            }}
+                          />
+                          {imageNaturalSize
+                            ? visibleEvidenceRefs.map((ref, index) => {
+                                const bounds = normalizeBounds(ref.bounds)
+                                if (!bounds) {
+                                  return null
+                                }
+                                const [x1, y1, x2, y2] = bounds
+                                return (
+                                  <div
+                                    key={`${ref.artifact}-${index}`}
+                                    style={{
+                                      position: 'absolute',
+                                      left: `${(x1 / imageNaturalSize.width) * 100}%`,
+                                      top: `${(y1 / imageNaturalSize.height) * 100}%`,
+                                      width: `${((x2 - x1) / imageNaturalSize.width) * 100}%`,
+                                      height: `${((y2 - y1) / imageNaturalSize.height) * 100}%`,
+                                      border: `2px solid ${index === 0 ? '#1677ff' : '#fa8c16'}`,
+                                      background: index === 0 ? 'rgba(22, 119, 255, 0.12)' : 'rgba(250, 140, 22, 0.12)',
+                                      borderRadius: 6,
+                                      pointerEvents: 'none',
+                                    }}
+                                  />
+                                )
+                              })
+                            : null}
+                        </div>
                       ) : (
                         <Alert type="warning" showIcon message="截图加载失败" />
                       )}
@@ -557,6 +654,8 @@ export default function Builder() {
                           setSelectedScreenPath(latestScreen.path)
                           setSelectedStageKey(latestScreen.step)
                         }
+                        setSelectedEvidenceRefs([])
+                        setSelectedEvidenceLabel(null)
                       }}
                       disabled={!latestScreen || followLatestScreen}
                     >
@@ -579,6 +678,8 @@ export default function Builder() {
                           setFollowLatestScreen(false)
                           setSelectedStageKey(item.step)
                           setSelectedScreenPath(item.path)
+                          setSelectedEvidenceRefs([])
+                          setSelectedEvidenceLabel(null)
                         }}
                       >
                         <Space direction="vertical" size={0} style={{ width: '100%' }}>
@@ -625,15 +726,35 @@ export default function Builder() {
                       >
                         Apply Recommended
                       </Button>
+                      <Button
+                        size="small"
+                        onClick={() => focusEvidence(item.evidence_refs, `${item.field} · 推荐定位`)}
+                        disabled={!item.evidence_refs.length}
+                      >
+                        查看推荐定位
+                      </Button>
                       {item.alternative_candidates.map((candidate, candidateIndex) => (
-                        <Button
-                          key={candidateIndex}
-                          size="small"
-                          onClick={() => chooseReviewOption(item, candidate)}
-                          loading={applyReview.isPending}
-                        >
-                          Apply Alternative {candidateIndex + 1}
-                        </Button>
+                        <Space key={candidateIndex} size="small">
+                          <Button
+                            size="small"
+                            onClick={() => chooseReviewOption(item, candidate)}
+                            loading={applyReview.isPending}
+                          >
+                            Apply Alternative {candidateIndex + 1}
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              focusEvidence(
+                                item.alternative_evidence_refs[candidateIndex] ?? [],
+                                `${item.field} · 备选 ${candidateIndex + 1}`,
+                              )
+                            }
+                            disabled={!(item.alternative_evidence_refs[candidateIndex] ?? []).length}
+                          >
+                            查看备选 {candidateIndex + 1}
+                          </Button>
+                        </Space>
                       ))}
                     </Space>
                   </Space>

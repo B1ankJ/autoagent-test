@@ -215,7 +215,16 @@ describe('Builder', () => {
           reason: 'Multiple clickable controls looked like send buttons.',
           recommended_option: { type: 'xpath', value: '//*[@bounds="[909,2009][1020,2120]"]' },
           alternative_candidates: [],
-          evidence_refs: [],
+          evidence_refs: [
+            {
+              source: 'editing_xml',
+              step: 'editing',
+              artifact: 'capture_editing.png',
+              bounds: [909, 2009, 1020, 2120],
+              label: 'send-button',
+            },
+          ],
+          alternative_evidence_refs: [],
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
@@ -265,6 +274,7 @@ describe('Builder', () => {
     await userEvent.click(captureButtons[1])
     await userEvent.click(captureButtons[2])
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+    await userEvent.click(screen.getByRole('button', { name: '查看推荐定位' }))
     await userEvent.click(screen.getByRole('button', { name: 'Apply Recommended' }))
     await userEvent.click(screen.getByRole('button', { name: /Run Connectivity Test/ }))
 
@@ -272,6 +282,7 @@ describe('Builder', () => {
       expect(generateDraftMock).toHaveBeenCalledWith('pb_1')
     })
     expect(applyReviewMock).toHaveBeenCalled()
+    expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'capture_editing.png')
     expect(validateDraftMock).toHaveBeenCalledWith('pb_1')
     expect(screen.getByDisplayValue(/name: qwen_android/)).toBeInTheDocument()
     expect(screen.getByText('Connectivity Test Result')).toBeInTheDocument()
