@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from autoagent.executors.ocr import get_engine
+from autoagent.executors.ocr import OcrLine, get_engine
 from autoagent.executors.scroll_stitcher import stitch_lines
 
 
@@ -37,13 +38,40 @@ class UiTreeExtractor:
 
 class OcrExtractor:
     async def extract(self, frames: list[bytes]) -> ExtractionResult:
-        await get_engine()
+        engine = await get_engine()
+        frame_lines: list[list[str]] = []
+        all_lines: list[str] = []
+        for frame in frames:
+            result, _elapsed = engine(frame)
+            normalized: list[str] = []
+            for item in result or []:
+                if len(item) < 3:
+                    continue
+                _line = OcrLine(
+                    text=str(item[1]),
+                    bbox=(
+                        int(item[0][0][0]),
+                        int(item[0][0][1]),
+                        int(item[0][2][0]),
+                        int(item[0][2][1]),
+                    ),
+                    confidence=float(item[2]),
+                )
+                if _line.text.strip():
+                    normalized.append(_line.text.strip())
+                    all_lines.append(_line.text.strip())
+            frame_lines.append(normalized)
         return ExtractionResult(
-            text=stitch_lines([[] for _ in frames]),
+            text=stitch_lines(frame_lines),
             method_used="ocr",
+            ocr_lines=all_lines,
             frames=len(frames),
             stitched=len(frames) > 1,
         )
+
+    async def extract_from_paths(self, paths: list[Path]) -> ExtractionResult:
+        frames = [path.read_bytes() for path in paths]
+        return await self.extract(frames)
 
 
 class HybridExtractor:

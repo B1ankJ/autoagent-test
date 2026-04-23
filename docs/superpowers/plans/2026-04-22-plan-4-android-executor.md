@@ -2722,6 +2722,8 @@ git commit -m "feat(android): add pixel stable and tier2 executor wiring"
 
 ### Task 23: Add Tier 2 screenshot fixtures and slow OCR coverage
 
+> Execution note (2026-04-23): the slow OCR fixture coverage is implemented and verified in-session. The optional Android real-device Tier 2 e2e remains deferred to final manual validation on a real device + real app.
+
 **Files:**
 - Create: `tests/fixtures/android_screenshots/README.md`
 - Create: `tests/fixtures/android_screenshots/*.png`
@@ -2729,7 +2731,7 @@ git commit -m "feat(android): add pixel stable and tier2 executor wiring"
 - Modify: `tests/unit/test_response_extractor_ocr.py`
 - Modify: `tests/integration/test_android_executor_e2e.py`
 
-- [ ] **Step 1: Write the failing OCR fixture test**
+- [x] **Step 1: Write the failing OCR fixture test**
 
 Extend `tests/unit/test_response_extractor_ocr.py`:
 
@@ -2752,7 +2754,7 @@ async def test_ocr_fixture_matches_expected() -> None:
     assert result.text.strip() == expected
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2760,7 +2762,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -m slow -v
 ```
 Expected: FAIL because fixture files and `extract_from_paths()` do not exist yet.
 
-- [ ] **Step 3: Add OCR fixtures and slow-path tests**
+- [x] **Step 3: Add OCR fixtures and slow-path tests**
 
 Create the screenshot fixture directory with a README that records:
 
@@ -2788,7 +2790,7 @@ Run:
 python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -m slow -v
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: PASS on a prepared machine.
+Expected: slow OCR tests pass in-session; Android real-device verification remains optional and deferred until final manual validation.
 
 - [ ] **Step 5: Commit**
 
