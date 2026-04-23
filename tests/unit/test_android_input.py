@@ -2,7 +2,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autoagent.executors.android_input import AndroidInput, resolve_input_method
+from autoagent.executors.android_input import (
+    ADB_KEYBOARD_IME,
+    AndroidInput,
+    resolve_input_method,
+)
 from autoagent.profiles.schemas import Locator
 
 
@@ -80,3 +84,34 @@ async def test_set_text_adb_keyboard_switches_and_restores_ime(
         ]
     )
     assert restored == [(device.serial, "com.example/.Ime")]
+
+
+def test_ensure_adb_keyboard_ready_waits_until_ime_is_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from autoagent.executors import android_input as mod
+
+    states = iter(["com.example/.Ime", "com.example/.Ime", ADB_KEYBOARD_IME])
+    monkeypatch.setattr(
+        mod,
+        "is_package_installed",
+        lambda _serial, _package: True,
+    )
+    monkeypatch.setattr(
+        mod,
+        "get_current_ime",
+        lambda _serial: next(states),
+    )
+    enabled: list[str] = []
+    switched: list[str] = []
+    monkeypatch.setattr(mod, "enable_ime", lambda _serial, ime: enabled.append(ime))
+    monkeypatch.setattr(mod, "set_ime", lambda _serial, ime: switched.append(ime))
+    sleeps: list[float] = []
+    monkeypatch.setattr(mod.time, "sleep", lambda sec: sleeps.append(sec))
+
+    previous = mod.ensure_adb_keyboard_ready(type("D", (), {"serial": "abc"})())
+
+    assert previous == "com.example/.Ime"
+    assert enabled == [ADB_KEYBOARD_IME]
+    assert switched == [ADB_KEYBOARD_IME]
+    assert sleeps == [0.1]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import time
 
 from autoagent.devices.adb import enable_ime, get_current_ime, is_package_installed, set_ime
 from autoagent.executors.android_locator import resolve_target
@@ -55,6 +56,7 @@ class AndroidInput:
                         payload,
                     ],
                 )
+                await asyncio.sleep(0.3)
             finally:
                 if previous_ime:
                     await asyncio.to_thread(set_ime, self.device.serial, previous_ime)
@@ -84,4 +86,8 @@ def ensure_adb_keyboard_ready(device) -> str | None:
     previous_ime = get_current_ime(serial)
     enable_ime(serial, ADB_KEYBOARD_IME)
     set_ime(serial, ADB_KEYBOARD_IME)
-    return previous_ime
+    for _ in range(20):
+        if get_current_ime(serial) == ADB_KEYBOARD_IME:
+            return previous_ime
+        time.sleep(0.1)
+    raise RuntimeError("ADB Keyboard IME did not become active")

@@ -53,6 +53,14 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
     )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: None,
+    )
 
     profile = AndroidProfile(
         name="fake_android",
@@ -100,6 +108,11 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     device.shell.assert_any_call(["input", "text", "bb"])
     assert send_target.click.call_count == 2
     reset_target.click.assert_called_once()
+    log_text = (tmp_path / "ad_hoc" / "s1" / "executor.log").read_text(encoding="utf-8")
+    assert "start: device=emulator-5554 package=demo.app activity=None" in log_text
+    assert "prompt 1 set_text start: method=u2_send_keys" in log_text
+    assert "locator=resource_id:demo:id/input" in log_text
+    assert "prompt 1 extraction done: method=ui_tree_only text='echo: hi'" in log_text
 
 
 @pytest.mark.asyncio
@@ -286,3 +299,74 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
     recovery_target.click.assert_called_once()
     input_target.click.assert_called_once()
     device.shell.assert_called_once_with(["input", "text", "hi"])
+
+
+@pytest.mark.asyncio
+async def test_execute_writes_exception_to_executor_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: None,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="resource_id", value="missing:id/send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["你好"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+
+    with pytest.raises(AssertionError):
+        await AndroidExecutor(screenshots_root=tmp_path).execute(
+            sample,
+            profile,
+            ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
+        )
+
+    log_text = (tmp_path / "ad_hoc" / "s1" / "executor.log").read_text(encoding="utf-8")
+    assert "prompt 1 send click: locator=resource_id:missing:id/send" in log_text
+    assert "android sample s1 failed" in log_text
