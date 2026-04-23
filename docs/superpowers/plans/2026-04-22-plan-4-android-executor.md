@@ -2003,7 +2003,7 @@ git commit -m "feat(web): add device api types and hooks"
 - Modify: `web/src/App.tsx`
 - Modify: `web/src/components/AppLayout.tsx`
 
-- [ ] **Step 1: Write the failing page test**
+- [x] **Step 1: Write the failing page test**
 
 `web/src/pages/Devices/Index.test.tsx`:
 
@@ -2034,7 +2034,7 @@ it('renders device rows', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2042,7 +2042,7 @@ pnpm --dir web test -- src/pages/Devices/Index.test.tsx
 ```
 Expected: FAIL with `Cannot find module './Index'`.
 
-- [ ] **Step 3: Implement the page and route**
+- [x] **Step 3: Implement the page and route**
 
 Create `web/src/pages/Devices/Index.tsx`:
 

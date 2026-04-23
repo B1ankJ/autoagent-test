@@ -8,6 +8,7 @@ import { BatchNew } from './pages/Batches/New'
 import { SampleDetail } from './pages/Batches/SampleDetail'
 import { ConfigPage } from './pages/Config'
 import { Dashboard } from './pages/Dashboard'
+import { DevicesPage } from './pages/Devices/Index'
 import { Login } from './pages/Login'
 import { ProfileEdit } from './pages/Profiles/Edit'
 import { ProfileList } from './pages/Profiles/List'
@@ -26,6 +27,7 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="devices" element={<DevicesPage />} />
           <Route path="profiles" element={<ProfileList />} />
           <Route path="profiles/new" element={<ProfileEdit />} />
           <Route path="profiles/:name" element={<ProfileEdit />} />

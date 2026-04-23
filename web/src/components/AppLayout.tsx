@@ -1,5 +1,6 @@
 import {
   DashboardOutlined,
+  MobileOutlined,
   ExperimentOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -15,6 +16,7 @@ const { Header, Sider, Content } = Layout
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
+  { key: '/devices', icon: <MobileOutlined />, label: 'Devices' },
   { key: '/profiles', icon: <FileTextOutlined />, label: 'Profiles' },
   { key: '/tests/quick', icon: <ThunderboltOutlined />, label: '单次测试' },
   { key: '/batches', icon: <ExperimentOutlined />, label: 'Batches' },
