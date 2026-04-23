@@ -2566,7 +2566,7 @@ git commit -m "feat(android): add ocr engine and hybrid extractor scaffolding"
 - Create: `tests/unit/test_scroll_stitcher.py`
 - Modify: `src/autoagent/executors/response_extractor.py`
 
-- [ ] **Step 1: Write the failing stitcher tests**
+- [x] **Step 1: Write the failing stitcher tests**
 
 `tests/unit/test_scroll_stitcher.py`:
 
@@ -2582,7 +2582,7 @@ def test_stitch_lines_dedupes_overlap() -> None:
     assert stitch_lines(frames) == "第一行\n第二行\n第三行\n第四行\n第五行"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2590,7 +2590,7 @@ python3.11 -m pytest tests/unit/test_scroll_stitcher.py -v
 ```
 Expected: FAIL because the stitcher module does not exist.
 
-- [ ] **Step 3: Implement the stitcher**
+- [x] **Step 3: Implement the stitcher**
 
 Create `src/autoagent/executors/scroll_stitcher.py`:
 
@@ -2613,7 +2613,7 @@ def stitch_lines(frames: list[list[str]]) -> str:
 
 Update `OcrExtractor.extract()` in `response_extractor.py` to use `stitch_lines()` on OCR frame outputs.
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash

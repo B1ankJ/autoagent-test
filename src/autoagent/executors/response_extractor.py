@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 from autoagent.executors.ocr import get_engine
+from autoagent.executors.scroll_stitcher import stitch_lines
 
 
 @dataclass
@@ -37,7 +38,12 @@ class UiTreeExtractor:
 class OcrExtractor:
     async def extract(self, frames: list[bytes]) -> ExtractionResult:
         await get_engine()
-        return ExtractionResult(text="", method_used="ocr", frames=len(frames))
+        return ExtractionResult(
+            text=stitch_lines([[] for _ in frames]),
+            method_used="ocr",
+            frames=len(frames),
+            stitched=len(frames) > 1,
+        )
 
 
 class HybridExtractor:
