@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+
 import { ProfileBuilderRuntimeView } from '../types/api'
 import { client } from './client'
 
@@ -8,4 +10,26 @@ export async function fetchProfileBuilderRuntime(
     `/profile-builder/sessions/${sessionId}/runtime`,
   )
   return response.data
+}
+
+export function profileBuilderArtifactUrl(sessionId: string, name: string): string {
+  return `/api/v1/profile-builder/sessions/${sessionId}/artifacts/${encodeURIComponent(name)}`
+}
+
+export function useProfileBuilderRuntime(sessionId?: string) {
+  return useQuery({
+    queryKey: ['profile-builder-runtime', sessionId],
+    queryFn: () => fetchProfileBuilderRuntime(sessionId!),
+    enabled: Boolean(sessionId),
+    refetchInterval: (query) => {
+      const runtime = query.state.data
+      if (!runtime) {
+        return 1500
+      }
+      if (runtime.step_state === 'running' || runtime.session_status === 'validating') {
+        return 1500
+      }
+      return 4000
+    },
+  })
 }

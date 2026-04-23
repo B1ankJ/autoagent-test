@@ -7,12 +7,16 @@ import {
   Descriptions,
   Empty,
   Form,
+  Image,
   Input,
+  List,
+  Row,
   Select,
   Space,
   Steps,
   Tag,
   Typography,
+  Col,
 } from 'antd'
 import { useState } from 'react'
 
@@ -23,10 +27,15 @@ import {
   useGenerateProfileBuilderDraft,
   useValidateProfileBuilderDraft,
 } from '../../api/profileBuilder'
+import {
+  profileBuilderArtifactUrl,
+  useProfileBuilderRuntime,
+} from '../../api/profileBuilderRuntime'
 import { useDevices } from '../../api/devices'
 import {
   Device,
   ProfileBuilderDraftResponse,
+  ProfileBuilderRuntimeView,
   ProfileBuilderSessionView,
   ReviewItem,
 } from '../../types/api'
@@ -39,6 +48,44 @@ const CAPTURE_STEPS = [
 
 function deviceLabel(device: Device) {
   return device.label || device.model || device.serial
+}
+
+function runtimeStepStatus(
+  runtime: ProfileBuilderRuntimeView | undefined,
+  key: string,
+): 'wait' | 'process' | 'finish' | 'error' {
+  if (!runtime) {
+    return 'wait'
+  }
+  if (key === 'draft') {
+    if (runtime.session_status === 'ready' || runtime.session_status === 'validated') {
+      return 'finish'
+    }
+    return runtime.current_step === 'generate_draft' ? 'process' : 'wait'
+  }
+  if (key === 'connectivity') {
+    if (runtime.connectivity.status === 'done') {
+      return 'finish'
+    }
+    if (runtime.connectivity.status === 'failed') {
+      return 'error'
+    }
+    if (runtime.connectivity.status === 'running') {
+      return 'process'
+    }
+    return 'wait'
+  }
+  const capture = runtime.captures.find((item) => item.step === key)
+  switch (capture?.status) {
+    case 'done':
+      return 'finish'
+    case 'running':
+      return 'process'
+    case 'failed':
+      return 'error'
+    default:
+      return 'wait'
+  }
 }
 
 function reviewOptionText(value: ReviewItem['recommended_option']) {
@@ -82,9 +129,15 @@ export default function Builder() {
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
   const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
+  const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(session?.captures.map((capture) => capture.step) ?? [])
+  const runtimeData = runtime.data
+  const currentScreen =
+    runtimeData?.recent_screens[runtimeData.recent_screens.length - 1] ??
+    runtimeData?.connectivity.screens[runtimeData.connectivity.screens.length - 1] ??
+    null
 
   const startSession = async () => {
     if (!selectedDevice || !profileName.trim()) {
@@ -271,6 +324,82 @@ export default function Builder() {
             <Descriptions.Item label="Artifacts">{session.artifacts.join(', ') || '-'}</Descriptions.Item>
           </Descriptions>
         </Card>
+      ) : null}
+
+      {session ? (
+        <Row gutter={16} align="top">
+          <Col xs={24} lg={14}>
+            <Card title="Runtime Status" loading={runtime.isLoading && !runtimeData}>
+              {runtimeData ? (
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  <Alert
+                    type={runtimeData.last_error ? 'error' : 'info'}
+                    message={`Current Step: ${runtimeData.current_step}`}
+                    description={
+                      runtimeData.last_error
+                        ? runtimeData.last_error
+                        : `session=${runtimeData.session_status} step=${runtimeData.step_state}`
+                    }
+                    showIcon
+                  />
+                  <Steps
+                    direction="vertical"
+                    size="small"
+                    items={[
+                      ...CAPTURE_STEPS.map((step) => ({
+                        title: step.title,
+                        status: runtimeStepStatus(runtimeData, step.key),
+                      })),
+                      {
+                        title: 'Generate Draft',
+                        status: runtimeStepStatus(runtimeData, 'draft'),
+                      },
+                      {
+                        title: 'Run Connectivity Test',
+                        status: runtimeStepStatus(runtimeData, 'connectivity'),
+                      },
+                    ]}
+                  />
+                </Space>
+              ) : (
+                <Empty description="启动 session 后自动显示运行状态" />
+              )}
+            </Card>
+          </Col>
+          <Col xs={24} lg={10}>
+            <Card title="Key Screens" loading={runtime.isLoading && !runtimeData}>
+              {!runtimeData || (!currentScreen && runtimeData.recent_screens.length === 0) ? (
+                <Empty description="暂无关键截图" />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {currentScreen ? (
+                    <>
+                      <Typography.Text strong>{currentScreen.label}</Typography.Text>
+                      <Image
+                        src={profileBuilderArtifactUrl(session.id, currentScreen.path)}
+                        alt={currentScreen.label}
+                      />
+                    </>
+                  ) : null}
+                  <List
+                    size="small"
+                    dataSource={runtimeData.recent_screens.slice().reverse()}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Space direction="vertical" size={0}>
+                          <Typography.Text>{item.label}</Typography.Text>
+                          <Typography.Text type="secondary">
+                            {new Date(item.taken_at).toLocaleString()}
+                          </Typography.Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                </Space>
+              )}
+            </Card>
+          </Col>
+        </Row>
       ) : null}
 
       <Card title="Review Items">

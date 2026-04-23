@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 import uiautomator2 as u2
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from autoagent.api.tests import execute_sync_test
@@ -75,6 +76,7 @@ def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
         for path in artifact_dir.iterdir()
         if path.is_file()
         and path.name != "session.json"
+        and path.name != "runtime.json"
         and not path.name.startswith("session.json.")
         and not path.name.endswith(".tmp")
     )
@@ -163,13 +165,14 @@ def _upsert_capture_runtime(
     screenshot: str | None = None,
 ) -> ProfileBuilderRuntimeView:
     existing = next((item for item in runtime.captures if item.step == step), None)
+    now = datetime.now(timezone.utc)
     capture = ProfileBuilderRuntimeCapture(
         step=step,
         status=status,
         screenshot=(
             screenshot if screenshot is not None else (existing.screenshot if existing else None)
         ),
-        updated_at=datetime.now(timezone.utc),
+        updated_at=now,
     )
     captures = []
     for step_name in session.steps:
@@ -178,6 +181,20 @@ def _upsert_capture_runtime(
             continue
         prior = next((item for item in runtime.captures if item.step == step_name), None)
         captures.append(prior or ProfileBuilderRuntimeCapture(step=step_name, status="pending"))
+    prior_screens = [
+        screen
+        for screen in runtime.recent_screens
+        if not (screen.step == step and screen.label == f"capture_{step}")
+    ]
+    if screenshot:
+        prior_screens.append(
+            ProfileBuilderRuntimeScreen(
+                step=step,
+                label=f"capture_{step}",
+                path=screenshot,
+                taken_at=now,
+            )
+        )
     return runtime.model_copy(
         update={
             "session_status": session.status,
@@ -186,6 +203,7 @@ def _upsert_capture_runtime(
                 "running" if status == "running" else ("done" if status == "done" else "failed")
             ),
             "captures": captures,
+            "recent_screens": prior_screens[-3:],
         }
     )
 
@@ -391,6 +409,21 @@ async def get_session(session_id: str) -> ProfileBuilderSessionView:
 async def get_session_runtime(session_id: str) -> ProfileBuilderRuntimeView:
     session = _get_session_or_404(session_id)
     return _get_runtime(session)
+
+
+@router.get("/sessions/{session_id}/artifacts/{name}")
+async def download_session_artifact(session_id: str, name: str) -> FileResponse:
+    session = _get_session_or_404(session_id)
+    target = (Path(session.artifact_dir) / name).resolve()
+    root = Path(session.artifact_dir).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="path traversal blocked") from exc
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="artifact not found")
+    media_type = "image/png" if target.suffix == ".png" else "application/octet-stream"
+    return FileResponse(target, media_type=media_type)
 
 
 @router.post("/sessions/{session_id}/capture/{step}", response_model=ProfileBuilderSessionView)
