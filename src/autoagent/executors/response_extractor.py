@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -25,11 +26,39 @@ def _is_suspect(text: str) -> bool:
     )
 
 
+_TIME_ONLY = re.compile(r"^\d{1,2}:\d{2}$")
+_UI_CHROME_PATTERNS = (
+    "内容由AI生成",
+    "深度思考",
+    "AI生图",
+    "拍题答疑",
+    "发消息",
+    "按住说话",
+)
+
+
+def _looks_like_ui_chrome(text: str) -> bool:
+    stripped = text.strip()
+    return bool(
+        not stripped
+        or _TIME_ONLY.match(stripped)
+        or any(pattern in stripped for pattern in _UI_CHROME_PATTERNS)
+    )
+
+
 class UiTreeExtractor:
     def extract_from_xml(self, xml: str, *, bubble_class: str) -> ExtractionResult:
         root = ET.fromstring(xml)
         matches = [node for node in root.iter("node") if node.attrib.get("class") == bubble_class]
-        text = matches[-1].attrib.get("text", "") if matches else ""
+        candidates = [
+            (index, node.attrib.get("text", "").strip())
+            for index, node in enumerate(matches)
+            if not _looks_like_ui_chrome(node.attrib.get("text", ""))
+        ]
+        if candidates:
+            text = max(candidates, key=lambda item: (len(item[1]), item[0]))[1]
+        else:
+            text = ""
         return ExtractionResult(text=text, method_used="ui_tree", ui_tree_node_count=len(matches))
 
 
