@@ -131,31 +131,51 @@ export default function Builder() {
   const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
   const [currentScreenUrl, setCurrentScreenUrl] = useState<string | null>(null)
   const [selectedScreenPath, setSelectedScreenPath] = useState<string | null>(null)
+  const [selectedStageKey, setSelectedStageKey] = useState<string | null>(null)
   const [followLatestScreen, setFollowLatestScreen] = useState(true)
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(session?.captures.map((capture) => capture.step) ?? [])
   const runtimeData = runtime.data
+  const captureScreens = runtimeData
+    ? runtimeData.captures
+        .filter(
+          (capture): capture is typeof capture & { screenshot: string } => capture.screenshot != null,
+        )
+        .map((capture) => ({
+          step: capture.step,
+          label: `capture_${capture.step}`,
+          path: capture.screenshot,
+          taken_at: capture.updated_at ?? new Date(0).toISOString(),
+        }))
+    : []
   const availableScreens = runtimeData
-    ? [...runtimeData.recent_screens, ...runtimeData.connectivity.screens].filter(
+    ? [...captureScreens, ...runtimeData.recent_screens, ...runtimeData.connectivity.screens].filter(
         (screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index,
       )
     : []
   const latestScreen = availableScreens[availableScreens.length - 1] ?? null
+  const latestScreenForStage = (step: string | null) =>
+    step != null ? availableScreens.filter((screen) => screen.step === step).slice(-1)[0] ?? null : null
+  const selectedStageScreen = latestScreenForStage(selectedStageKey)
   const currentScreen =
-    availableScreens.find((screen) => screen.path === selectedScreenPath) ??
-    (followLatestScreen ? latestScreen : latestScreen)
+    (followLatestScreen
+      ? latestScreen
+      : availableScreens.find((screen) => screen.path === selectedScreenPath) ?? selectedStageScreen) ??
+    null
 
   useEffect(() => {
     if (!latestScreen) {
       setSelectedScreenPath(null)
+      setSelectedStageKey(null)
       return
     }
-    if (followLatestScreen || !selectedScreenPath) {
+    if (followLatestScreen || (!selectedScreenPath && !selectedStageKey)) {
       setSelectedScreenPath(latestScreen.path)
+      setSelectedStageKey(latestScreen.step)
     }
-  }, [followLatestScreen, latestScreen?.path, selectedScreenPath])
+  }, [followLatestScreen, latestScreen?.path, latestScreen?.step, selectedScreenPath, selectedStageKey])
 
   useEffect(() => {
     const revokeObjectUrl = (value: string) => {
@@ -217,6 +237,7 @@ export default function Builder() {
       setConnectivitySummary(null)
       setCurrentScreenUrl(null)
       setSelectedScreenPath(null)
+      setSelectedStageKey(null)
       setFollowLatestScreen(true)
       message.success('Builder session 已创建')
     } catch (error) {
@@ -412,15 +433,60 @@ export default function Builder() {
                     size="small"
                     items={[
                       ...CAPTURE_STEPS.map((step) => ({
-                        title: step.title,
+                        title: (
+                          <Button
+                            type="text"
+                            style={{
+                              paddingInline: 0,
+                              fontWeight: selectedStageKey === step.key ? 600 : undefined,
+                            }}
+                            onClick={() => {
+                              setFollowLatestScreen(false)
+                              setSelectedStageKey(step.key)
+                              setSelectedScreenPath(latestScreenForStage(step.key)?.path ?? null)
+                            }}
+                          >
+                            {step.title}
+                          </Button>
+                        ),
                         status: runtimeStepStatus(runtimeData, step.key),
                       })),
                       {
-                        title: 'Generate Draft',
+                        title: (
+                          <Button
+                            type="text"
+                            style={{
+                              paddingInline: 0,
+                              fontWeight: selectedStageKey === 'draft' ? 600 : undefined,
+                            }}
+                            onClick={() => {
+                              setFollowLatestScreen(false)
+                              setSelectedStageKey('draft')
+                              setSelectedScreenPath(null)
+                            }}
+                          >
+                            Generate Draft
+                          </Button>
+                        ),
                         status: runtimeStepStatus(runtimeData, 'draft'),
                       },
                       {
-                        title: 'Run Connectivity Test',
+                        title: (
+                          <Button
+                            type="text"
+                            style={{
+                              paddingInline: 0,
+                              fontWeight: selectedStageKey === 'connectivity' ? 600 : undefined,
+                            }}
+                            onClick={() => {
+                              setFollowLatestScreen(false)
+                              setSelectedStageKey('connectivity')
+                              setSelectedScreenPath(latestScreenForStage('connectivity')?.path ?? null)
+                            }}
+                          >
+                            Run Connectivity Test
+                          </Button>
+                        ),
                         status: runtimeStepStatus(runtimeData, 'connectivity'),
                       },
                     ]}
@@ -433,7 +499,7 @@ export default function Builder() {
           </Col>
           <Col xs={24} lg={10}>
             <Card title="Key Screens" loading={runtime.isLoading && !runtimeData}>
-              {!runtimeData || (!currentScreen && runtimeData.recent_screens.length === 0) ? (
+              {!runtimeData ? (
                 <Empty description="暂无关键截图" />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -447,6 +513,15 @@ export default function Builder() {
                       )}
                     </>
                   ) : null}
+                  {!currentScreen ? (
+                    <Empty
+                      description={
+                        selectedStageKey
+                          ? `当前阶段 ${selectedStageKey} 暂无截图`
+                          : '暂无关键截图'
+                      }
+                    />
+                  ) : null}
                   <Space>
                     <Tag color={followLatestScreen ? 'blue' : 'default'}>
                       {followLatestScreen ? 'Following Latest' : 'Manual Selection'}
@@ -457,6 +532,7 @@ export default function Builder() {
                         setFollowLatestScreen(true)
                         if (latestScreen) {
                           setSelectedScreenPath(latestScreen.path)
+                          setSelectedStageKey(latestScreen.step)
                         }
                       }}
                       disabled={!latestScreen || followLatestScreen}
@@ -478,6 +554,7 @@ export default function Builder() {
                         }}
                         onClick={() => {
                           setFollowLatestScreen(false)
+                          setSelectedStageKey(item.step)
                           setSelectedScreenPath(item.path)
                         }}
                       >

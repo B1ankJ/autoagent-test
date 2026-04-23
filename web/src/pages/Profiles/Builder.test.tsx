@@ -5,11 +5,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/test-utils'
 import Builder from './Builder'
 
-const createSessionMock = vi.fn()
-const captureStepMock = vi.fn()
-const generateDraftMock = vi.fn()
-const applyReviewMock = vi.fn()
-const validateDraftMock = vi.fn()
+const {
+  createSessionMock,
+  captureStepMock,
+  generateDraftMock,
+  applyReviewMock,
+  validateDraftMock,
+  fetchArtifactBlobUrlMock,
+} = vi.hoisted(() => ({
+  createSessionMock: vi.fn(),
+  captureStepMock: vi.fn(),
+  generateDraftMock: vi.fn(),
+  applyReviewMock: vi.fn(),
+  validateDraftMock: vi.fn(),
+  fetchArtifactBlobUrlMock: vi.fn(async (_sessionId: string, name: string) => `blob:${name}`),
+}))
 let runtimeMockData: unknown = null
 
 vi.mock('../../api/profileBuilderRuntime', () => ({
@@ -17,8 +27,7 @@ vi.mock('../../api/profileBuilderRuntime', () => ({
     data: runtimeMockData,
     isLoading: false,
   }),
-  fetchProfileBuilderArtifactBlobUrl: async (_sessionId: string, name: string) =>
-    `blob:${name}`,
+  fetchProfileBuilderArtifactBlobUrl: fetchArtifactBlobUrlMock,
 }))
 
 vi.mock('../../api/devices', () => ({
@@ -66,6 +75,7 @@ vi.mock('../../api/profileBuilder', () => ({
 describe('Builder', () => {
   afterEach(() => {
     vi.clearAllMocks()
+    fetchArtifactBlobUrlMock.mockImplementation(async (_sessionId: string, name: string) => `blob:${name}`)
     runtimeMockData = null
   })
 
@@ -300,10 +310,21 @@ describe('Builder', () => {
     expect(screen.getByText('Current Step: connectivity')).toBeInTheDocument()
     expect(screen.getAllByText('validate_after_send').length).toBeGreaterThan(0)
     expect(screen.getByText('Following Latest')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'validate_after_send.png')
+    })
 
-    await userEvent.click(screen.getByText('capture_editing'))
+    await userEvent.click(screen.getByRole('button', { name: 'Capture Editing State' }))
 
     expect(screen.getByText('Manual Selection')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Follow Latest' })).toBeEnabled()
+    await waitFor(() => {
+      expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'capture_editing.png')
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Capture Idle State' }))
+    await waitFor(() => {
+      expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'capture_idle.png')
+    })
   })
 })
