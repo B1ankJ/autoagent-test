@@ -289,6 +289,126 @@ describe('Builder', () => {
     expect(screen.getByText('pong')).toBeInTheDocument()
   })
 
+  it('loads runtime probe evidence screenshots from review items', async () => {
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'ready',
+      steps: ['idle', 'editing', 'response'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: ['draft_profile.yaml', 'runtime_probe_editing.png'],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+        {
+          step: 'response',
+          package: 'com.aliyun.tongyi',
+          activity: '.ResponseActivity',
+          xml_artifact: 'capture_response.xml',
+          screenshot_artifact: 'capture_response.png',
+          active: true,
+          captured_at: '2026-04-23T12:02:00Z',
+        },
+      ],
+    })
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing', 'response'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml', 'runtime_probe_editing.png'],
+        captures: [
+          {
+            step: 'idle',
+            package: 'com.aliyun.tongyi',
+            activity: '.IdleActivity',
+            xml_artifact: 'capture_idle.xml',
+            screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
+          },
+          {
+            step: 'editing',
+            package: 'com.aliyun.tongyi',
+            activity: '.EditingActivity',
+            xml_artifact: 'capture_editing.xml',
+            screenshot_artifact: 'capture_editing.png',
+            active: true,
+            captured_at: '2026-04-23T12:01:00Z',
+          },
+          {
+            step: 'response',
+            package: 'com.aliyun.tongyi',
+            activity: '.ResponseActivity',
+            xml_artifact: 'capture_response.xml',
+            screenshot_artifact: 'capture_response.png',
+            active: true,
+            captured_at: '2026-04-23T12:02:00Z',
+          },
+        ],
+      },
+      candidates: {
+        input_candidates: [],
+        send_candidates: [],
+        response_candidates: [],
+        review_items: [],
+      },
+      review_items: [
+        {
+          field: 'send_button_locator',
+          reason: 'Runtime probe send button differs from manual editing capture.',
+          recommended_option: { type: 'xpath', value: '//*[@bounds="[909,2009][1020,2120]"]' },
+          alternative_candidates: [{ type: 'xpath', value: '//*[@bounds="[909,1291][1020,1402]"]' }],
+          evidence_refs: [
+            {
+              source: 'runtime_probe_xml',
+              step: 'connectivity',
+              artifact: 'runtime_probe_editing.png',
+              bounds: [909, 2009, 1020, 2120],
+              label: 'send-button',
+            },
+          ],
+          alternative_evidence_refs: [[]],
+        },
+      ],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+    await userEvent.click(screen.getByRole('button', { name: '查看推荐定位' }))
+
+    await waitFor(() => {
+      expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'runtime_probe_editing.png')
+    })
+  })
+
   it('renders runtime status and key screens when runtime data is available', async () => {
     createSessionMock.mockResolvedValue({
       id: 'pb_1',

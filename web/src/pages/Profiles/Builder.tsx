@@ -46,6 +46,26 @@ const CAPTURE_STEPS = [
   { key: 'response', title: 'Capture Response State', description: '发送一条测试消息并等待回复后采集。' },
 ] as const
 
+function inferScreenStep(path: string): string {
+  if (path.startsWith('capture_idle')) {
+    return 'idle'
+  }
+  if (path.startsWith('capture_editing')) {
+    return 'editing'
+  }
+  if (path.startsWith('capture_response')) {
+    return 'response'
+  }
+  if (path.startsWith('runtime_probe_') || path.startsWith('validate_')) {
+    return 'connectivity'
+  }
+  return 'artifact'
+}
+
+function screenLabelFromPath(path: string): string {
+  return path.replace(/\.[^.]+$/, '')
+}
+
 function deviceLabel(device: Device) {
   return device.label || device.model || device.serial
 }
@@ -162,6 +182,15 @@ export default function Builder() {
         path: capture.screenshot_artifact,
         taken_at: capture.captured_at ?? new Date(0).toISOString(),
       })) ?? []
+  const sessionArtifactScreens =
+    session?.artifacts
+      .filter((artifact) => artifact.endsWith('.png'))
+      .map((artifact) => ({
+        step: inferScreenStep(artifact),
+        label: screenLabelFromPath(artifact),
+        path: artifact,
+        taken_at: new Date(0).toISOString(),
+      })) ?? []
   const captureScreens = runtimeData
     ? runtimeData.captures
         .filter(
@@ -176,6 +205,7 @@ export default function Builder() {
     : []
   const availableScreens = [
     ...sessionCaptureScreens,
+    ...sessionArtifactScreens,
     ...captureScreens,
     ...(runtimeData?.recent_screens ?? []),
     ...(runtimeData?.connectivity.screens ?? []),
@@ -184,10 +214,26 @@ export default function Builder() {
   const latestScreenForStage = (step: string | null) =>
     step != null ? availableScreens.filter((screen) => screen.step === step).slice(-1)[0] ?? null : null
   const selectedStageScreen = latestScreenForStage(selectedStageKey)
+  const selectedEvidenceScreen =
+    !followLatestScreen && selectedEvidenceRefs.length
+      ? (() => {
+          const target = selectedEvidenceRefs.find((ref) => ref.artifact === selectedScreenPath) ?? selectedEvidenceRefs[0]
+          return target
+            ? {
+                step: target.step,
+                label: target.label ?? screenLabelFromPath(target.artifact),
+                path: target.artifact,
+                taken_at: new Date(0).toISOString(),
+              }
+            : null
+        })()
+      : null
   const currentScreen =
     (followLatestScreen
       ? latestScreen
-      : availableScreens.find((screen) => screen.path === selectedScreenPath) ?? selectedStageScreen) ??
+      : availableScreens.find((screen) => screen.path === selectedScreenPath) ??
+        selectedEvidenceScreen ??
+        selectedStageScreen) ??
     null
   const visibleEvidenceRefs = selectedEvidenceRefs.filter(
     (ref) => currentScreen != null && ref.artifact === currentScreen.path && normalizeBounds(ref.bounds),
