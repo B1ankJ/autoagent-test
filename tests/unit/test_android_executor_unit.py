@@ -95,8 +95,9 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
 
     assert out == ["echo: hi", "echo: bb"]
     device.app_start.assert_called_once_with("demo.app", None, True)
-    input_target.set_text.assert_any_call("hi")
-    input_target.set_text.assert_any_call("bb")
+    assert input_target.click.call_count == 2
+    device.shell.assert_any_call(["input", "text", "hi"])
+    device.shell.assert_any_call(["input", "text", "bb"])
     assert send_target.click.call_count == 2
     reset_target.click.assert_called_once()
 
@@ -283,4 +284,5 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
 
     assert out == ["echo: hi"]
     recovery_target.click.assert_called_once()
-    input_target.set_text.assert_called_once_with("hi")
+    input_target.click.assert_called_once()
+    device.shell.assert_called_once_with(["input", "text", "hi"])

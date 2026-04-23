@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 
 from autoagent.executors.android_locator import resolve_target
 from autoagent.profiles.schemas import Locator
@@ -30,7 +31,39 @@ class AndroidInput:
     async def set_text(self, locator: Locator, text: str) -> None:
         method = resolve_input_method(self.configured_method, text)
         target = resolve_target(self.device, locator)
-        if method in {"u2_send_keys", "adb_keyboard"}:
-            await asyncio.to_thread(target.set_text, text)
+        if method == "u2_send_keys":
+            await asyncio.to_thread(target.click)
+            await asyncio.to_thread(self.device.shell, ["input", "text", _escape_input_text(text)])
+            return
+        if method == "adb_keyboard":
+            payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            await asyncio.to_thread(target.click)
+            await asyncio.to_thread(
+                self.device.shell,
+                [
+                    "am",
+                    "broadcast",
+                    "-a",
+                    "ADB_INPUT_B64",
+                    "--es",
+                    "msg",
+                    payload,
+                ],
+            )
             return
         raise ValueError(f"unsupported input method: {method}")
+
+
+def _escape_input_text(text: str) -> str:
+    return (
+        text.replace("%", "\\%")
+        .replace(" ", "%s")
+        .replace("&", "\\&")
+        .replace("<", "\\<")
+        .replace(">", "\\>")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace('"', '\\"')
+        .replace("'", "\\'")
+        .replace(";", "\\;")
+    )
