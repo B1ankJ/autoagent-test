@@ -72,6 +72,8 @@ def get_device_monitor() -> DeviceMonitor:
             serial: str,
             model: str | None,
             android_version: str | None,
+            adb_keyboard_installed: bool | None,
+            adb_keyboard_enabled: bool | None,
             online: bool,
             seen_at,
         ) -> None:
@@ -79,6 +81,8 @@ def get_device_monitor() -> DeviceMonitor:
                 serial=serial,
                 model=model,
                 android_version=android_version,
+                adb_keyboard_installed=adb_keyboard_installed,
+                adb_keyboard_enabled=adb_keyboard_enabled,
                 online=online,
                 seen_at=seen_at,
             )
