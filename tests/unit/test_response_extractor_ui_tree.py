@@ -32,3 +32,19 @@ def test_ui_tree_extractor_ignores_time_and_ui_chrome() -> None:
     result = UiTreeExtractor().extract_from_xml(xml, bubble_class="android.widget.TextView")
 
     assert result.text == "这是千问真正的回答内容"
+
+
+def test_ui_tree_extractor_prefers_latest_meaningful_bubble_over_older_longer_text() -> None:
+    old_text = "这是上一轮的一段更长的历史回答内容，会误导全局最长策略"
+    xml = f"""
+    <hierarchy>
+      <node class="android.widget.TextView" text="{old_text}" />
+      <node class="android.widget.TextView" text="14:16" />
+      <node class="android.widget.TextView" text="内容由AI生成" />
+      <node class="android.widget.TextView" text="最新回复" />
+    </hierarchy>
+    """
+
+    result = UiTreeExtractor().extract_from_xml(xml, bubble_class="android.widget.TextView")
+
+    assert result.text == "最新回复"

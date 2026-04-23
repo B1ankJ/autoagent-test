@@ -56,7 +56,9 @@ class UiTreeExtractor:
             if not _looks_like_ui_chrome(node.attrib.get("text", ""))
         ]
         if candidates:
-            text = max(candidates, key=lambda item: (len(item[1]), item[0]))[1]
+            meaningful = [item for item in candidates if not _is_suspect(item[1])]
+            pool = meaningful or candidates
+            text = pool[-1][1]
         else:
             text = ""
         return ExtractionResult(text=text, method_used="ui_tree", ui_tree_node_count=len(matches))
