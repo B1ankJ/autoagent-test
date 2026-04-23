@@ -14,6 +14,9 @@ from pydantic import ValidationError
 from autoagent.api.tests import execute_sync_test
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
+from autoagent.executors.android_action_runner import AndroidActionRunner
+from autoagent.executors.android_input import AndroidInput
+from autoagent.executors.complete_detector import capture_screenshot_bytes
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 from autoagent.executors.profile_builder_capture import CapturedState, capture_android_state
 from autoagent.executors.profile_builder_generator import (
@@ -31,6 +34,7 @@ from autoagent.models.api import (
     Sample,
 )
 from autoagent.profiles.registry import delete_profile, save_profile_yaml
+from autoagent.profiles.schemas import AndroidProfile, parse_profile
 
 router = APIRouter(
     prefix="/profile-builder",
@@ -333,6 +337,54 @@ def _write_draft_profile_yaml(session: ProfileBuilderSessionView, draft_profile:
     return draft_profile_yaml
 
 
+async def _wait_for_ready_text(device, text: str, *, timeout_sec: float) -> bool:
+    deadline = asyncio.get_running_loop().time() + timeout_sec
+    while asyncio.get_running_loop().time() < deadline:
+        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        if text in xml:
+            return True
+        await asyncio.sleep(0.2)
+    return False
+
+
+async def _capture_runtime_probe(
+    *,
+    session: ProfileBuilderSessionView,
+    draft_profile: dict,
+    prompt: str = "hello",
+) -> tuple[str, str] | None:
+    profile = parse_profile(draft_profile)
+    if not isinstance(profile, AndroidProfile):
+        return None
+    device = await asyncio.to_thread(u2.connect, session.device_serial)
+    await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
+    ready = await _wait_for_ready_text(
+        device,
+        profile.ready_check.text,
+        timeout_sec=profile.ready_check.timeout_sec,
+    )
+    if not ready:
+        return None
+    session_dir = Path(session.artifact_dir)
+    async with AndroidInput(device, profile.input_method) as input_ctl:
+        action_runner = AndroidActionRunner(
+            device=device,
+            input_controller=input_ctl,
+            action_log=[],
+        )
+        if profile.new_session_action:
+            await action_runner.run(profile.new_session_action)
+        await input_ctl.set_text(profile.input_locator, prompt)
+        xml_path = session_dir / "runtime_probe_editing.xml"
+        screenshot_path = session_dir / "runtime_probe_editing.png"
+        current_xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
+        after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
+        await asyncio.to_thread(screenshot_path.write_bytes, after_input)
+        await input_ctl.restore_pending_ime()
+    return (xml_path.name, screenshot_path.name)
+
+
 def _runtime_screens_for_validation(
     session: ProfileBuilderSessionView,
 ) -> list[ProfileBuilderRuntimeScreen]:
@@ -601,10 +653,34 @@ async def generate_draft(session_id: str) -> dict:
     editing_xml = _read_capture_xml(session, captures["editing"].xml_artifact)
     response_xml = _read_capture_xml(session, captures["response"].xml_artifact)
 
+    initial_candidate_draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+    initial_candidates = initial_candidate_draft.asdict()
+    initial_rule_draft = _draft_profile_from_candidates(
+        session=session,
+        captures=captures,
+        candidates=initial_candidates,
+        idle_xml=idle_xml,
+    )
+    runtime_probe_xml: str | None = None
+    try:
+        runtime_probe_artifact = await _capture_runtime_probe(
+            session=session,
+            draft_profile=initial_rule_draft,
+        )
+    except Exception:
+        runtime_probe_artifact = None
+    if runtime_probe_artifact is not None:
+        runtime_probe_xml = _read_capture_xml(session, runtime_probe_artifact[0])
+
     candidate_draft = build_android_candidates(
         idle_xml=idle_xml,
         editing_xml=editing_xml,
         response_xml=response_xml,
+        runtime_probe_xml=runtime_probe_xml,
     )
     candidates = candidate_draft.asdict()
     rule_draft = _draft_profile_from_candidates(

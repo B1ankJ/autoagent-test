@@ -399,6 +399,10 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     ]
     device.screenshot.side_effect = [b"idle", b"editing", b"response"]
     monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+    monkeypatch.setattr(
+        "autoagent.api.profile_builder._capture_runtime_probe",
+        lambda **_kwargs: asyncio.sleep(0, result=None),
+    )
 
     for step in ("idle", "editing", "response"):
         capture = await client.post(
@@ -436,6 +440,82 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
         "type": "class",
         "value": "android.widget.TextView",
     }
+
+
+async def test_profile_builder_generate_draft_prefers_runtime_probe_send_locator(
+    client, monkeypatch
+):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        (
+            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
+            'bounds="[177,2066][777,2123]" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" '
+            'package="com.aliyun.tongyi" bounds="[36,1164][1032,1284]" />'
+            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
+            'bounds="[909,1291][1020,1402]" clickable="true" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" />'
+            '<node text="当然可以" class="android.widget.TextView" /></hierarchy>'
+        ),
+    ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".ResponseActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle", b"editing", b"response"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    async def _probe(**_kwargs):
+        artifact_dir = get_settings().data_root / "profile_builder" / session["id"]
+        (artifact_dir / "runtime_probe_editing.xml").write_text(
+            (
+                '<hierarchy><node text="发消息..." class="android.widget.EditText" '
+                'bounds="[36,1882][1032,2002]" />'
+                '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
+                'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
+            ),
+            encoding="utf-8",
+        )
+        (artifact_dir / "runtime_probe_editing.png").write_bytes(b"runtime")
+        return ("runtime_probe_editing.xml", "runtime_probe_editing.png")
+
+    monkeypatch.setattr("autoagent.api.profile_builder._capture_runtime_probe", _probe)
+
+    for step in ("idle", "editing", "response"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
+            headers=headers,
+        )
+        assert capture.status_code == 200
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        headers=headers,
+    )
+
+    assert draft.status_code == 200
+    profile_data = yaml.safe_load(draft.json()["draft_profile_yaml"])
+    assert profile_data["send_button_locator"] == {
+        "type": "xpath",
+        "value": '//*[@bounds="[909,2009][1020,2120]"]',
+    }
+    assert any(
+        item["field"] == "send_button_locator" and "Runtime probe" in item["reason"]
+        for item in draft.json()["review_items"]
+    )
 
 
 async def test_profile_builder_review_and_validate_flow(client, monkeypatch):

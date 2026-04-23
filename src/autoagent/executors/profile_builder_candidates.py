@@ -124,6 +124,14 @@ def _build_input_candidates(
 
 
 def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
+    return _build_send_candidates_from_nodes(editing_nodes, source="editing_xml")
+
+
+def _build_send_candidates_from_nodes(
+    editing_nodes: list[dict[str, str]],
+    *,
+    source: str,
+) -> list[dict]:
     app_package = _app_package(editing_nodes)
     ranked: list[tuple[tuple[int, int, int], dict]] = []
     for node in editing_nodes:
@@ -150,7 +158,7 @@ def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
                     "locator": locator,
                     "score": x2 + y2,
                     "reason": "rightmost clickable near bottom",
-                    "evidence_refs": [{"source": "editing_xml", "locator": locator}],
+                    "evidence_refs": [{"source": source, "locator": locator}],
                 },
             )
         )
@@ -314,6 +322,8 @@ def _build_review_items(
     input_candidates: list[dict],
     send_candidates: list[dict],
     response_candidates: list[dict],
+    *,
+    manual_send_candidates: list[dict] | None = None,
 ) -> list[dict]:
     review_items: list[dict] = []
     if len(input_candidates) > 1:
@@ -334,6 +344,22 @@ def _build_review_items(
                 recommended_option=send_candidates[0]["locator"],
                 alternative_candidates=[candidate["locator"] for candidate in send_candidates[1:]],
                 evidence_refs=send_candidates[0].get("evidence_refs", []),
+            )
+        )
+    elif (
+        manual_send_candidates
+        and send_candidates
+        and manual_send_candidates
+        and manual_send_candidates[0]["locator"] != send_candidates[0]["locator"]
+    ):
+        review_items.append(
+            _review_item(
+                field="send_button_locator",
+                reason="Runtime probe send button differs from manual editing capture.",
+                recommended_option=send_candidates[0]["locator"],
+                alternative_candidates=[manual_send_candidates[0]["locator"]],
+                evidence_refs=send_candidates[0].get("evidence_refs", [])
+                + manual_send_candidates[0].get("evidence_refs", []),
             )
         )
     if len(response_candidates) > 1:
@@ -369,14 +395,26 @@ def build_android_candidates(
     idle_xml: str,
     editing_xml: str,
     response_xml: str,
+    runtime_probe_xml: str | None = None,
 ) -> AndroidCandidateDraft:
     idle_nodes = _node_attrs(idle_xml)
     editing_nodes = _node_attrs(editing_xml)
+    runtime_probe_nodes = _node_attrs(runtime_probe_xml) if runtime_probe_xml else []
 
     input_candidates = _build_input_candidates(editing_nodes, idle_nodes)
-    send_candidates = _build_send_candidates(editing_nodes)
+    manual_send_candidates = _build_send_candidates(editing_nodes)
+    send_candidates = (
+        _build_send_candidates_from_nodes(runtime_probe_nodes, source="runtime_probe_xml")
+        if runtime_probe_nodes
+        else manual_send_candidates
+    )
     response_candidates = _build_response_candidates(response_xml)
-    review_items = _build_review_items(input_candidates, send_candidates, response_candidates)
+    review_items = _build_review_items(
+        input_candidates,
+        send_candidates,
+        response_candidates,
+        manual_send_candidates=manual_send_candidates if runtime_probe_nodes else None,
+    )
 
     return AndroidCandidateDraft(
         input_candidates=input_candidates,
