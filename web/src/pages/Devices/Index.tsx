@@ -1,12 +1,14 @@
 import { Button, Card, Empty, Space, Table, Tag, Typography } from 'antd'
 
-import { useDevices, useInstallAdbKeyboard, useRefreshDevices } from '../../api/devices'
+import { useDevices, useDisableIme, useEnableIme, useInstallAdbKeyboard, useRefreshDevices } from '../../api/devices'
 import { Device } from '../../types/api'
 
 export function DevicesPage() {
   const devices = useDevices()
   const refresh = useRefreshDevices()
   const installAdbKeyboard = useInstallAdbKeyboard()
+  const enableIme = useEnableIme()
+  const disableIme = useDisableIme()
 
   return (
     <Card
@@ -80,14 +82,39 @@ export function DevicesPage() {
             {
               title: 'Actions',
               render: (_, row) => (
-                <Button
-                  size="small"
-                  disabled={!row.online || row.adb_keyboard_installed === true}
-                  loading={installAdbKeyboard.isPending}
-                  onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
-                >
-                  Install ADB Keyboard
-                </Button>
+                <Space wrap>
+                  <Button
+                    size="small"
+                    disabled={!row.online || row.adb_keyboard_installed === true}
+                    loading={installAdbKeyboard.isPending}
+                    onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
+                  >
+                    Install ADB Keyboard
+                  </Button>
+                  {row.adb_keyboard_installed && (
+                    <>
+                      {row.adb_keyboard_enabled ? (
+                        <Button
+                          size="small"
+                          type="default"
+                          loading={disableIme.isPending}
+                          onClick={() => disableIme.mutateAsync(row.serial)}
+                        >
+                          Disable IME
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="primary"
+                          loading={enableIme.isPending}
+                          onClick={() => enableIme.mutateAsync(row.serial)}
+                        >
+                          Enable IME
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </Space>
               ),
             },
           ]}

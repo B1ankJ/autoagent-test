@@ -33,3 +33,31 @@ export function useInstallAdbKeyboard() {
     },
   })
 }
+
+export function useEnableIme() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) =>
+      (await client.post<Device>(`/devices/${serial}/enable-ime`)).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}
+
+export function useDisableIme() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) =>
+      (await client.post<Device>(`/devices/${serial}/disable-ime`)).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}
