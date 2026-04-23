@@ -46,6 +46,18 @@ def _class_locator(value: str) -> dict:
     return {"type": "class", "value": value}
 
 
+def _locator_from_node(node: ElementTree.Element | None) -> dict:
+    if node is None:
+        return _class_locator("android.widget.TextView")
+    bounds = node.attrib.get("bounds")
+    if bounds:
+        return _xpath_locator(f'//*[@bounds="{bounds}"]')
+    node_class = node.attrib.get("class")
+    if node_class:
+        return _xpath_locator(f'//*[@class="{node_class}"]')
+    return _class_locator("android.widget.TextView")
+
+
 def _build_input_candidates(editing_nodes: list[dict[str, str]], idle_nodes: list[dict[str, str]]) -> list[dict]:
     candidates: list[dict] = []
     for node in editing_nodes:
@@ -57,6 +69,7 @@ def _build_input_candidates(editing_nodes: list[dict[str, str]], idle_nodes: lis
                 "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
                 "score": 100 + _bounds_area(bounds),
                 "reason": "editing EditText",
+                "evidence_refs": [{"source": "editing_xml", "locator": _xpath_locator('//*[@class="android.widget.EditText"]')}],
             }
         )
     if candidates:
@@ -66,11 +79,13 @@ def _build_input_candidates(editing_nodes: list[dict[str, str]], idle_nodes: lis
         text = node.get("text", "").strip()
         if not text:
             continue
+        locator = _xpath_locator(f'//*[contains(@text, "{text}")]')
         candidates.append(
             {
-                "locator": _xpath_locator(f'//*[contains(@text, "{text}")]'),
+                "locator": locator,
                 "score": len(text),
                 "reason": "idle text placeholder",
+                "evidence_refs": [{"source": "idle_xml", "locator": locator}],
             }
         )
     return sorted(candidates, key=lambda item: item["score"], reverse=True)
@@ -85,14 +100,16 @@ def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
         bounds = _parse_bounds(bounds_raw)
         if bounds is None or bounds_raw is None:
             continue
-        x1, y1, x2, y2 = bounds
+        _, _, x2, y2 = bounds
+        locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
         ranked.append(
             (
                 (x2, y2, _bounds_area(bounds)),
                 {
-                    "locator": _xpath_locator(f'//*[@bounds="{bounds_raw}"]'),
+                    "locator": locator,
                     "score": x2 + y2,
                     "reason": "rightmost clickable near bottom",
+                    "evidence_refs": [{"source": "editing_xml", "locator": locator}],
                 },
             )
         )
@@ -100,31 +117,142 @@ def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
     return [candidate for _, candidate in ranked]
 
 
-def _build_response_candidates(response_nodes: list[dict[str, str]]) -> list[dict]:
-    by_class: dict[str, list[dict[str, str]]] = {}
-    for node in response_nodes:
-        node_class = node.get("class")
-        if node_class != "android.widget.TextView":
-            continue
-        text = node.get("text", "").strip()
-        if not text:
-            continue
-        by_class.setdefault(node_class, []).append(node)
+def _element_depth(node: ElementTree.Element, parents: dict[ElementTree.Element, ElementTree.Element]) -> int:
+    depth = 0
+    current = node
+    while current in parents:
+        current = parents[current]
+        depth += 1
+    return depth
 
-    candidates: list[dict] = []
-    for node_class, nodes in by_class.items():
-        size_score = sum(max(len(node.get("text", "").strip()), 1) for node in nodes)
-        candidates.append(
+
+def _nearest_message_container(
+    text_node: ElementTree.Element,
+    parents: dict[ElementTree.Element, ElementTree.Element],
+) -> ElementTree.Element:
+    current = text_node
+    while current in parents:
+        parent = parents[current]
+        text_descendants = [
+            descendant
+            for descendant in parent.iter()
+            if descendant is not parent
+            and descendant.attrib.get("class") == "android.widget.TextView"
+            and (descendant.attrib.get("text") or "").strip()
+        ]
+        if len(text_descendants) >= 2:
+            return parent
+        current = parent
+    return text_node
+
+
+def _nearest_scroll_container(
+    node: ElementTree.Element,
+    parents: dict[ElementTree.Element, ElementTree.Element],
+) -> ElementTree.Element | None:
+    current: ElementTree.Element | None = node
+    while current is not None:
+        node_class = current.attrib.get("class", "")
+        if current.attrib.get("scrollable") == "true" or any(
+            marker in node_class for marker in ("RecyclerView", "ListView", "ScrollView")
+        ):
+            return current
+        current = parents.get(current)
+    return None
+
+
+def _latest_bubble_locator(text_nodes: list[ElementTree.Element]) -> dict:
+    classes = {node.attrib.get("class") for node in text_nodes if node.attrib.get("class")}
+    if len(classes) == 1:
+        return _xpath_locator(f'//*[@class="{next(iter(classes))}"]')
+    return _locator_from_node(text_nodes[-1] if text_nodes else None)
+
+
+def _response_candidate(
+    *,
+    container: ElementTree.Element,
+    scroll_container: ElementTree.Element | None,
+    text_nodes: list[ElementTree.Element],
+) -> dict:
+    container_bounds = _parse_bounds(container.attrib.get("bounds"))
+    total_text_len = sum(len((node.attrib.get("text") or "").strip()) for node in text_nodes)
+    repeated_count = len(text_nodes)
+    container_bonus = 60 if repeated_count >= 2 else 0
+    scroll_bonus = 40 if scroll_container is not None else 0
+    score = repeated_count * 100 + total_text_len * 5 + _bounds_area(container_bounds) // 1000
+    locator = _locator_from_node(container)
+    scroll_locator = _locator_from_node(scroll_container or container)
+    latest_locator = _latest_bubble_locator(text_nodes)
+    return {
+        "response_container_locator": locator,
+        "scroll_container_locator": scroll_locator,
+        "latest_bubble_match": latest_locator,
+        "score": score + container_bonus + scroll_bonus,
+        "reason": "container with repeated visible response text",
+        "evidence_refs": [
             {
-                "response_container_locator": _class_locator(node_class),
-                "scroll_container_locator": _class_locator(node_class),
-                "latest_bubble_match": _class_locator(node_class),
-                "score": len(nodes) * 100 + size_score,
-                "reason": "repeated response TextView nodes",
+                "source": "response_xml",
+                "container_locator": locator,
+                "scroll_locator": scroll_locator,
+                "text_count": repeated_count,
+                "total_text_length": total_text_len,
             }
+        ],
+    }
+
+
+def _build_response_candidates(response_xml: str) -> list[dict]:
+    root = ElementTree.fromstring(response_xml)
+    parents = {child: parent for parent in root.iter() for child in parent}
+    text_nodes = [
+        node
+        for node in root.iter()
+        if node.attrib.get("class") == "android.widget.TextView"
+        and (node.attrib.get("text") or "").strip()
+    ]
+    grouped: dict[ElementTree.Element, list[ElementTree.Element]] = {}
+    for text_node in text_nodes:
+        grouped.setdefault(_nearest_message_container(text_node, parents), []).append(text_node)
+
+    ranked: list[tuple[tuple[int, int, int], dict]] = []
+    for container, grouped_text_nodes in grouped.items():
+        if not grouped_text_nodes:
+            continue
+        scroll_container = _nearest_scroll_container(container, parents)
+        candidate = _response_candidate(
+            container=container,
+            scroll_container=scroll_container,
+            text_nodes=grouped_text_nodes,
         )
-    candidates.sort(key=lambda item: item["score"], reverse=True)
-    return candidates
+        ranked.append(
+            (
+                (
+                    candidate["score"],
+                    len(grouped_text_nodes),
+                    _element_depth(container, parents),
+                ),
+                candidate,
+            )
+        )
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [candidate for _, candidate in ranked]
+
+
+def _review_item(
+    *,
+    field: str,
+    reason: str,
+    recommended_option: dict,
+    alternative_candidates: list[dict],
+    evidence_refs: list[dict],
+) -> dict:
+    return {
+        "field": field,
+        "reason": reason,
+        "recommended_option": recommended_option,
+        "alternative_candidates": alternative_candidates,
+        "evidence_refs": evidence_refs,
+    }
 
 
 def _build_review_items(
@@ -135,27 +263,45 @@ def _build_review_items(
     review_items: list[dict] = []
     if len(input_candidates) > 1:
         review_items.append(
-            {
-                "field": "input_locator",
-                "reason": "Multiple input candidates matched the editing capture.",
-                "candidate_count": len(input_candidates),
-            }
+            _review_item(
+                field="input_locator",
+                reason="Multiple input candidates matched the editing capture.",
+                recommended_option=input_candidates[0]["locator"],
+                alternative_candidates=[candidate["locator"] for candidate in input_candidates[1:]],
+                evidence_refs=input_candidates[0].get("evidence_refs", []),
+            )
         )
     if len(send_candidates) > 1:
         review_items.append(
-            {
-                "field": "send_button_locator",
-                "reason": "Multiple clickable controls looked like send buttons.",
-                "candidate_count": len(send_candidates),
-            }
+            _review_item(
+                field="send_button_locator",
+                reason="Multiple clickable controls looked like send buttons.",
+                recommended_option=send_candidates[0]["locator"],
+                alternative_candidates=[candidate["locator"] for candidate in send_candidates[1:]],
+                evidence_refs=send_candidates[0].get("evidence_refs", []),
+            )
         )
-    if response_candidates:
+    if len(response_candidates) > 1:
         review_items.append(
-            {
-                "field": "latest_bubble_match",
-                "reason": "Response extraction is heuristic and should be confirmed.",
-                "candidate_count": len(response_candidates),
-            }
+            _review_item(
+                field="latest_bubble_match",
+                reason="Multiple response containers look plausible from repeated response text.",
+                recommended_option=response_candidates[0]["latest_bubble_match"],
+                alternative_candidates=[
+                    candidate["latest_bubble_match"] for candidate in response_candidates[1:]
+                ],
+                evidence_refs=response_candidates[0].get("evidence_refs", []),
+            )
+        )
+    elif response_candidates and response_candidates[0]["score"] < 260:
+        review_items.append(
+            _review_item(
+                field="latest_bubble_match",
+                reason="Response candidate confidence is low because the XML has weak repetition or container hints.",
+                recommended_option=response_candidates[0]["latest_bubble_match"],
+                alternative_candidates=[],
+                evidence_refs=response_candidates[0].get("evidence_refs", []),
+            )
         )
     return review_items
 
@@ -168,11 +314,10 @@ def build_android_candidates(
 ) -> AndroidCandidateDraft:
     idle_nodes = _node_attrs(idle_xml)
     editing_nodes = _node_attrs(editing_xml)
-    response_nodes = _node_attrs(response_xml)
 
     input_candidates = _build_input_candidates(editing_nodes, idle_nodes)
     send_candidates = _build_send_candidates(editing_nodes)
-    response_candidates = _build_response_candidates(response_nodes)
+    response_candidates = _build_response_candidates(response_xml)
     review_items = _build_review_items(input_candidates, send_candidates, response_candidates)
 
     return AndroidCandidateDraft(
