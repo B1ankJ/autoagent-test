@@ -1,6 +1,8 @@
 from dataclasses import asdict, dataclass
 from xml.etree import ElementTree
 
+_INPUT_HINT_KEYWORDS = ("发消息", "说话", "输入", "send", "message", "chat")
+
 
 @dataclass
 class AndroidCandidateDraft:
@@ -87,12 +89,15 @@ def _build_input_candidates(
         text = node.get("text", "").strip()
         if not text:
             continue
-        locator = _xpath_locator(f'//*[contains(@text, "{text}")]')
+        if not any(keyword in text.lower() for keyword in _INPUT_HINT_KEYWORDS):
+            continue
+        target = "发消息" if "发消息" in text else text
+        locator = _xpath_locator(f'//*[contains(@text, "{target}")]')
         candidates.append(
             {
                 "locator": locator,
-                "score": len(text),
-                "reason": "idle text placeholder",
+                "score": 1000 - len(text),
+                "reason": "idle input placeholder",
                 "evidence_refs": [{"source": "idle_xml", "locator": locator}],
             }
         )
@@ -108,11 +113,16 @@ def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
         bounds = _parse_bounds(bounds_raw)
         if bounds is None or bounds_raw is None:
             continue
-        _, _, x2, y2 = bounds
+        x1, y1, x2, y2 = bounds
+        area = _bounds_area(bounds)
+        if area > 100_000:
+            continue
+        if y1 < 1200:
+            continue
         locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
         ranked.append(
             (
-                (x2, y2, _bounds_area(bounds)),
+                (x2, y2, area),
                 {
                     "locator": locator,
                     "score": x2 + y2,

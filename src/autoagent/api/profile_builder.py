@@ -325,6 +325,17 @@ def _ready_check_text(idle_xml: str) -> str:
         root = ElementTree.fromstring(idle_xml)
     except ElementTree.ParseError:
         return "发消息"
+    preferred = []
+    for node in root.iter():
+        text = (node.attrib.get("text") or "").strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if any(keyword in lowered for keyword in ("发消息", "说话", "输入", "send", "message")):
+            preferred.append(text)
+    if preferred:
+        best = min(preferred, key=len)
+        return "发消息" if "发消息" in best else best
     for node in root.iter():
         text = (node.attrib.get("text") or "").strip()
         if text:
