@@ -2,6 +2,11 @@ from dataclasses import asdict, dataclass
 from xml.etree import ElementTree
 
 _INPUT_HINT_KEYWORDS = ("发消息", "说话", "输入", "send", "message", "chat")
+_SYSTEM_PACKAGE_PREFIXES = (
+    "com.android.systemui",
+    "com.baidu.input",
+    "com.google.android.inputmethod",
+)
 
 
 @dataclass
@@ -46,6 +51,20 @@ def _xpath_locator(value: str) -> dict:
 
 def _class_locator(value: str) -> dict:
     return {"type": "class", "value": value}
+
+
+def _app_package(nodes: list[dict[str, str]]) -> str | None:
+    package_counts: dict[str, int] = {}
+    for node in nodes:
+        package = node.get("package", "").strip()
+        if not package:
+            continue
+        if any(package.startswith(prefix) for prefix in _SYSTEM_PACKAGE_PREFIXES):
+            continue
+        package_counts[package] = package_counts.get(package, 0) + 1
+    if not package_counts:
+        return None
+    return max(package_counts.items(), key=lambda item: item[1])[0]
 
 
 def _locator_from_node(node: ElementTree.Element | None) -> dict:
@@ -105,9 +124,13 @@ def _build_input_candidates(
 
 
 def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
+    app_package = _app_package(editing_nodes)
     ranked: list[tuple[tuple[int, int, int], dict]] = []
     for node in editing_nodes:
         if node.get("clickable") != "true":
+            continue
+        package = node.get("package", "").strip()
+        if app_package and package and package != app_package:
             continue
         bounds_raw = node.get("bounds")
         bounds = _parse_bounds(bounds_raw)

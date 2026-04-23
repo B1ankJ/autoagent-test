@@ -343,6 +343,23 @@ def _ready_check_text(idle_xml: str) -> str:
     return "发消息"
 
 
+def _input_placeholder_locator(idle_xml: str) -> dict | None:
+    try:
+        root = ElementTree.fromstring(idle_xml)
+    except ElementTree.ParseError:
+        return None
+    for node in root.iter():
+        text = (node.attrib.get("text") or "").strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if "发消息" in text:
+            return {"type": "xpath", "value": '//*[contains(@text, "发消息")]'}
+        if any(keyword in lowered for keyword in ("说话", "输入", "send", "message", "chat")):
+            return {"type": "xpath", "value": f'//*[contains(@text, "{text}")]'}
+    return None
+
+
 def _draft_profile_from_candidates(
     *,
     session: ProfileBuilderSessionView,
@@ -358,6 +375,15 @@ def _draft_profile_from_candidates(
 
     response_capture = captures["response"]
     first_response = response_candidates[0]
+    input_locator = input_candidates[0]["locator"]
+    placeholder_locator = _input_placeholder_locator(idle_xml)
+    new_session_action = []
+    if (
+        input_locator.get("type") == "xpath"
+        and input_locator.get("value") == '//*[@class="android.widget.EditText"]'
+        and placeholder_locator is not None
+    ):
+        new_session_action = [{"action": "click_locator", "locator": placeholder_locator}]
     return {
         "name": session.name,
         "platform": session.platform,
@@ -371,7 +397,7 @@ def _draft_profile_from_candidates(
             "timeout_sec": 5,
         },
         "recovery_path": [],
-        "input_locator": input_candidates[0]["locator"],
+        "input_locator": input_locator,
         "send_button_locator": send_candidates[0]["locator"],
         "response_extraction": {
             "method": "ui_tree_only",
@@ -379,7 +405,7 @@ def _draft_profile_from_candidates(
             "scroll_container_locator": first_response["scroll_container_locator"],
             "latest_bubble_match": first_response["latest_bubble_match"],
         },
-        "new_session_action": [],
+        "new_session_action": new_session_action,
         "complete_detection": {
             "type": "ui_tree_stable",
             "stable_sec": 2,

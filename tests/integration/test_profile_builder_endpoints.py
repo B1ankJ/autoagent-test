@@ -369,8 +369,11 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" '
-            'bounds="[36,1882][1032,2002]" /><node class="android.widget.FrameLayout" '
-            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
+            'package="com.aliyun.tongyi" bounds="[36,1882][1032,2002]" />'
+            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
+            'bounds="[909,2009][1020,2120]" clickable="true" />'
+            '<node class="android.widget.FrameLayout" package="com.android.systemui" '
+            'bounds="[962,2244][1080,2376]" clickable="true" /></hierarchy>'
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" />'
@@ -407,6 +410,16 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert "draft_profile.yaml" in body["session"]["artifacts"]
     assert body["draft_profile_yaml"].startswith("name: qwen")
     profile_data = yaml.safe_load(body["draft_profile_yaml"])
+    assert profile_data["new_session_action"] == [
+        {
+            "action": "click_locator",
+            "locator": {"type": "xpath", "value": '//*[contains(@text, "发消息")]'},
+        }
+    ]
+    assert profile_data["send_button_locator"] == {
+        "type": "xpath",
+        "value": '//*[@bounds="[909,2009][1020,2120]"]',
+    }
     assert profile_data["response_extraction"]["latest_bubble_match"] == {
         "type": "class",
         "value": "android.widget.TextView",
