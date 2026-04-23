@@ -8,6 +8,8 @@ import Builder from './Builder'
 const createSessionMock = vi.fn()
 const captureStepMock = vi.fn()
 const generateDraftMock = vi.fn()
+const applyReviewMock = vi.fn()
+const validateDraftMock = vi.fn()
 
 vi.mock('../../api/devices', () => ({
   useDevices: () => ({
@@ -40,6 +42,14 @@ vi.mock('../../api/profileBuilder', () => ({
   useGenerateProfileBuilderDraft: () => ({
     isPending: false,
     mutateAsync: generateDraftMock,
+  }),
+  useApplyProfileBuilderReview: () => ({
+    isPending: false,
+    mutateAsync: applyReviewMock,
+  }),
+  useValidateProfileBuilderDraft: () => ({
+    isPending: false,
+    mutateAsync: validateDraftMock,
   }),
 }))
 
@@ -177,6 +187,39 @@ describe('Builder', () => {
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
     })
+    applyReviewMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing', 'response'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml'],
+        captures: [],
+      },
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\nsend_button_locator:\n',
+    })
+    validateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'validated',
+        steps: ['idle', 'editing', 'response'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml', 'connectivity_result.json'],
+        captures: [],
+      },
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\nsend_button_locator:\n',
+      connectivity_result: {
+        id: 'conn-1',
+        status: 'done',
+        responses: ['pong'],
+      },
+    })
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
@@ -189,11 +232,16 @@ describe('Builder', () => {
     await userEvent.click(captureButtons[1])
     await userEvent.click(captureButtons[2])
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Apply Recommended' }))
+    await userEvent.click(screen.getByRole('button', { name: /Run Connectivity Test/ }))
 
     await waitFor(() => {
       expect(generateDraftMock).toHaveBeenCalledWith('pb_1')
     })
+    expect(applyReviewMock).toHaveBeenCalled()
+    expect(validateDraftMock).toHaveBeenCalledWith('pb_1')
     expect(screen.getByDisplayValue(/name: qwen_android/)).toBeInTheDocument()
-    expect(screen.getByText(/send_button_locator/)).toBeInTheDocument()
+    expect(screen.getByText('Connectivity Test Result')).toBeInTheDocument()
+    expect(screen.getByText('pong')).toBeInTheDocument()
   })
 })

@@ -14,8 +14,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/tests", tags=["tests"], dependencies=[Depends(require_user)])
 
 
-@router.post("/sync", response_model=SampleResult)
-async def run_sync(sample: Sample) -> SampleResult:
+async def execute_sync_test(sample: Sample) -> SampleResult:
     sch = get_scheduler()
     batch_id = await sch.submit(
         name=f"sync-{sample.id}",
@@ -31,6 +30,11 @@ async def run_sync(sample: Sample) -> SampleResult:
     if not results:
         raise HTTPException(status_code=500, detail="no result recorded")
     return results[0]
+
+
+@router.post("/sync", response_model=SampleResult)
+async def run_sync(sample: Sample) -> SampleResult:
+    return await execute_sync_test(sample)
 
 
 @router.post("", response_model=AsyncTestResponse, status_code=202)

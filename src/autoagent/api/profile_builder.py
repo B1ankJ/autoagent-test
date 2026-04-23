@@ -9,6 +9,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
+from autoagent.api.tests import execute_sync_test
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.executors.profile_builder_candidates import build_android_candidates
@@ -21,7 +22,9 @@ from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderSessionCreate,
     ProfileBuilderSessionView,
+    Sample,
 )
+from autoagent.profiles.registry import delete_profile, save_profile_yaml
 
 router = APIRouter(
     prefix="/profile-builder",
@@ -154,6 +157,24 @@ def _read_capture_xml(session: ProfileBuilderSessionView, artifact_name: str) ->
         return path.read_text(encoding="utf-8")
     except OSError as exc:
         raise HTTPException(status_code=500, detail="profile builder draft load failed") from exc
+
+
+def _draft_profile_path(session: ProfileBuilderSessionView) -> Path:
+    return Path(session.artifact_dir) / "draft_profile.yaml"
+
+
+def _read_draft_profile_yaml(session: ProfileBuilderSessionView) -> str:
+    path = _draft_profile_path(session)
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(status_code=404, detail="draft profile not found") from exc
+
+
+def _write_draft_profile_yaml(session: ProfileBuilderSessionView, draft_profile: dict) -> str:
+    draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
+    _draft_profile_path(session).write_text(draft_profile_yaml, encoding="utf-8")
+    return draft_profile_yaml
 
 
 def _ready_check_text(idle_xml: str) -> str:
@@ -329,4 +350,54 @@ async def generate_draft(session_id: str) -> dict:
         "candidates": candidates,
         "review_items": candidates["review_items"],
         "draft_profile_yaml": draft_profile_yaml,
+    }
+
+
+@router.post("/sessions/{session_id}/review")
+async def apply_review(session_id: str, payload: dict) -> dict:
+    session = _get_session_or_404(session_id)
+    draft_profile_yaml = _read_draft_profile_yaml(session)
+    draft_profile = yaml.safe_load(draft_profile_yaml)
+    if not isinstance(draft_profile, dict):
+        raise HTTPException(status_code=500, detail="draft profile is invalid")
+
+    merged_profile = merge_llm_draft(draft_profile, payload)
+    updated_yaml = _write_draft_profile_yaml(session, merged_profile)
+    updated_session = _store_session(session)
+    return {
+        "session": updated_session.model_dump(mode="json"),
+        "draft_profile_yaml": updated_yaml,
+    }
+
+
+@router.post("/sessions/{session_id}/validate")
+async def validate_draft(session_id: str) -> dict:
+    session = _get_session_or_404(session_id)
+    draft_profile_yaml = _read_draft_profile_yaml(session)
+    temp_profile_name = f"pb_{session.id}"
+    save_profile_yaml(temp_profile_name, draft_profile_yaml)
+    try:
+        result = await execute_sync_test(
+            Sample(
+                id=f"pb-validate-{session.id}",
+                prompts=["hello"],
+                mode="gui_android",
+                target_profile=temp_profile_name,
+                timeout_sec=get_settings().default_gui_timeout_sec,
+            )
+        )
+    finally:
+        delete_profile(temp_profile_name)
+
+    artifact_dir = Path(session.artifact_dir)
+    (artifact_dir / "connectivity_result.json").write_text(
+        json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    next_status = "validated" if result.status == "done" else "ready"
+    updated_session = _store_session(session.model_copy(update={"status": next_status}))
+    return {
+        "session": updated_session.model_dump(mode="json"),
+        "draft_profile_yaml": draft_profile_yaml,
+        "connectivity_result": result.model_dump(mode="json"),
     }

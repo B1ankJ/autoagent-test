@@ -211,3 +211,14 @@ export interface ProfileBuilderDraftResponse {
   review_items: ReviewItem[]
   draft_profile_yaml: string
 }
+
+export interface ProfileBuilderReviewResponse {
+  session: ProfileBuilderSessionView
+  draft_profile_yaml: string
+}
+
+export interface ProfileBuilderValidateResponse {
+  session: ProfileBuilderSessionView
+  draft_profile_yaml: string
+  connectivity_result: SingleTestSyncResponse
+}

@@ -17,12 +17,19 @@ import {
 import { useState } from 'react'
 
 import {
+  useApplyProfileBuilderReview,
   useCaptureProfileBuilderStep,
   useCreateProfileBuilderSession,
   useGenerateProfileBuilderDraft,
+  useValidateProfileBuilderDraft,
 } from '../../api/profileBuilder'
 import { useDevices } from '../../api/devices'
-import { Device, ProfileBuilderDraftResponse, ProfileBuilderSessionView, ReviewItem } from '../../types/api'
+import {
+  Device,
+  ProfileBuilderDraftResponse,
+  ProfileBuilderSessionView,
+  ReviewItem,
+} from '../../types/api'
 
 const CAPTURE_STEPS = [
   { key: 'idle', title: 'Capture Idle State', description: '停在对话页空闲态后采集。' },
@@ -45,17 +52,36 @@ function reviewOptionText(value: ReviewItem['recommended_option']) {
   ].join('\n')
 }
 
+function toReviewPayload(
+  field: string,
+  value: ReviewItem['recommended_option'],
+): Record<string, unknown> {
+  if ('type' in value) {
+    return { [field]: value }
+  }
+  return {
+    response_extraction: {
+      response_container_locator: value.response_container_locator,
+      scroll_container_locator: value.scroll_container_locator,
+      latest_bubble_match: value.latest_bubble_match,
+    },
+  }
+}
+
 export default function Builder() {
   const devices = useDevices()
   const createSession = useCreateProfileBuilderSession()
   const captureStep = useCaptureProfileBuilderStep()
   const generateDraft = useGenerateProfileBuilderDraft()
+  const applyReview = useApplyProfileBuilderReview()
+  const validateDraft = useValidateProfileBuilderDraft()
   const { message } = App.useApp()
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
   const [profileName, setProfileName] = useState('qwen_android')
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
+  const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(session?.captures.map((capture) => capture.step) ?? [])
@@ -73,6 +99,7 @@ export default function Builder() {
       })
       setSession(nextSession)
       setDraft(null)
+      setConnectivitySummary(null)
       message.success('Builder session 已创建')
     } catch (error) {
       message.error((error as Error).message)
@@ -87,6 +114,7 @@ export default function Builder() {
       const nextSession = await captureStep.mutateAsync({ sessionId: session.id, step })
       setSession(nextSession)
       setDraft(null)
+      setConnectivitySummary(null)
       message.success(`${step} capture 已保存`)
     } catch (error) {
       message.error((error as Error).message)
@@ -101,7 +129,56 @@ export default function Builder() {
       const nextDraft = await generateDraft.mutateAsync(session.id)
       setSession(nextDraft.session)
       setDraft(nextDraft)
+      setConnectivitySummary(null)
       message.success('Draft profile 已生成')
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const chooseReviewOption = async (
+    item: ReviewItem,
+    option: ReviewItem['recommended_option'],
+  ) => {
+    if (!session || !draft) {
+      return
+    }
+    try {
+      const updated = await applyReview.mutateAsync({
+        sessionId: session.id,
+        payload: toReviewPayload(item.field, option),
+      })
+      setSession(updated.session)
+      setDraft({
+        ...draft,
+        session: updated.session,
+        draft_profile_yaml: updated.draft_profile_yaml,
+        review_items: draft.review_items.filter((reviewItem) => reviewItem !== item),
+      })
+      message.success(`${item.field} 已更新`)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const runConnectivityValidation = async () => {
+    if (!session || !draft) {
+      return
+    }
+    try {
+      const validated = await validateDraft.mutateAsync(session.id)
+      setSession(validated.session)
+      setDraft({
+        ...draft,
+        session: validated.session,
+        draft_profile_yaml: validated.draft_profile_yaml,
+      })
+      setConnectivitySummary(
+        validated.connectivity_result.status === 'done'
+          ? validated.connectivity_result.responses[0] ?? 'done'
+          : validated.connectivity_result.error ?? validated.connectivity_result.status,
+      )
+      message.success('Connectivity test 已完成')
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -140,9 +217,10 @@ export default function Builder() {
               Start Builder Session
             </Button>
             <Button
-              disabled
+              disabled={!draft}
               icon={<CheckCircleOutlined />}
-              title="Connectivity validation comes in the next task."
+              loading={validateDraft.isPending}
+              onClick={runConnectivityValidation}
             >
               Run Connectivity Test
             </Button>
@@ -207,13 +285,43 @@ export default function Builder() {
                 showIcon
                 message={`${item.field}: ${item.reason}`}
                 description={
-                  <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                    {reviewOptionText(item.recommended_option)}
-                  </Typography.Paragraph>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                      {reviewOptionText(item.recommended_option)}
+                    </Typography.Paragraph>
+                    <Space wrap>
+                      <Button
+                        size="small"
+                        type="primary"
+                        onClick={() => chooseReviewOption(item, item.recommended_option)}
+                        loading={applyReview.isPending}
+                      >
+                        Apply Recommended
+                      </Button>
+                      {item.alternative_candidates.map((candidate, candidateIndex) => (
+                        <Button
+                          key={candidateIndex}
+                          size="small"
+                          onClick={() => chooseReviewOption(item, candidate)}
+                          loading={applyReview.isPending}
+                        >
+                          Apply Alternative {candidateIndex + 1}
+                        </Button>
+                      ))}
+                    </Space>
+                  </Space>
                 }
               />
             ))}
           </Space>
+        )}
+      </Card>
+
+      <Card title="Connectivity Result">
+        {connectivitySummary ? (
+          <Alert type="success" message="Connectivity Test Result" description={connectivitySummary} />
+        ) : (
+          <Empty description="尚未运行连通性测试" />
         )}
       </Card>
 

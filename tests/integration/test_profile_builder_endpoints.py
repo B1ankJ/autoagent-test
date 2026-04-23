@@ -146,7 +146,10 @@ async def test_profile_builder_capture_wraps_device_failures(client, monkeypatch
         headers=headers,
     )
     assert capture.status_code == 502
-    assert capture.json()["detail"] == "profile builder capture connect failed: cannot connect to serial-1"
+    assert (
+        capture.json()["detail"]
+        == "profile builder capture connect failed: cannot connect to serial-1"
+    )
 
 
 async def test_profile_builder_session_reload_from_persisted_json(client, monkeypatch):
@@ -225,8 +228,8 @@ async def test_profile_builder_capture_multi_step_accumulates_from_disk_truth(cl
     import autoagent.api.profile_builder as profile_builder_mod
     from autoagent.models.api import ProfileBuilderSessionView
 
-    profile_builder_mod._SESSIONS[original_session["id"]] = ProfileBuilderSessionView.model_validate(
-        original_session
+    profile_builder_mod._SESSIONS[original_session["id"]] = (
+        ProfileBuilderSessionView.model_validate(original_session)
     )
 
     second = await client.post(
@@ -295,7 +298,7 @@ async def test_profile_builder_concurrent_capture_preserves_both_records(client,
         xml_path = session_dir / f"capture_{step}.xml"
         screenshot_path = session_dir / f"capture_{step}.png"
         xml_path.write_text(f"<hierarchy step='{step}'/>", encoding="utf-8")
-        screenshot_path.write_bytes(f"{step}-png".encode("utf-8"))
+        screenshot_path.write_bytes(f"{step}-png".encode())
         started_steps.add(step)
         if len(started_steps) == 2:
             both_started.set()
@@ -359,9 +362,19 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
 
     device = MagicMock()
     device.dump_hierarchy.side_effect = [
-        """<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" bounds="[177,2066][777,2123]" /></hierarchy>""",
-        """<hierarchy><node text="你好" class="android.widget.EditText" bounds="[36,1882][1032,2002]" /><node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>""",
-        """<hierarchy><node text="你好" class="android.widget.EditText" /><node text="当然可以" class="android.widget.TextView" /></hierarchy>""",
+        (
+            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
+            'bounds="[177,2066][777,2123]" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" '
+            'bounds="[36,1882][1032,2002]" /><node class="android.widget.FrameLayout" '
+            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" />'
+            '<node text="当然可以" class="android.widget.TextView" /></hierarchy>'
+        ),
     ]
     device.app_current.side_effect = [
         {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
@@ -386,7 +399,10 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert draft.status_code == 200
     body = draft.json()
     assert body["session"]["status"] == "ready"
-    assert body["candidates"]["input_candidates"][0]["locator"]["value"] == '//*[@class="android.widget.EditText"]'
+    assert (
+        body["candidates"]["input_candidates"][0]["locator"]["value"]
+        == '//*[@class="android.widget.EditText"]'
+    )
     assert "draft_profile.yaml" in body["session"]["artifacts"]
     assert body["draft_profile_yaml"].startswith("name: qwen")
     profile_data = yaml.safe_load(body["draft_profile_yaml"])
@@ -394,3 +410,96 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
         "type": "class",
         "value": "android.widget.TextView",
     }
+
+
+async def test_profile_builder_review_and_validate_flow(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    artifact_dir = get_settings().data_root / "profile_builder" / session["id"]
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "draft_profile.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "qwen",
+                "platform": "android",
+                "package": "com.aliyun.tongyi",
+                "activity": ".BrowserActivity",
+                "serial": "serial-1",
+                "input_method": "auto",
+                "ready_check": {"type": "ui_tree_contains", "text": "发消息", "timeout_sec": 5},
+                "recovery_path": [],
+                "input_locator": {
+                    "type": "xpath",
+                    "value": '//*[@class="android.widget.EditText"]',
+                },
+                "send_button_locator": {
+                    "type": "xpath",
+                    "value": '//*[@bounds="[909,1291][1020,1402]"]',
+                },
+                "response_extraction": {
+                    "method": "ui_tree_only",
+                    "response_container_locator": {
+                        "type": "xpath",
+                        "value": '//*[@bounds="[48,1340][1032,1640]"]',
+                    },
+                    "scroll_container_locator": {
+                        "type": "xpath",
+                        "value": '//*[@bounds="[0,320][1080,2060]"]',
+                    },
+                    "latest_bubble_match": {"type": "class", "value": "android.widget.TextView"},
+                },
+                "new_session_action": [],
+                "complete_detection": {
+                    "type": "ui_tree_stable",
+                    "stable_sec": 2,
+                    "max_wait_sec": 180,
+                },
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    from autoagent.models.api import SampleResult
+
+    async def _run_sync(sample):
+        assert sample.target_profile == f"pb_{session['id']}"
+        return SampleResult(
+            id=sample.id,
+            status="done",
+            prompts_sent=["hello"],
+            responses=["pong"],
+            mode=sample.mode,
+            target_profile=sample.target_profile,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_test", _run_sync)
+
+    review = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/review",
+        json={
+            "send_button_locator": {
+                "type": "xpath",
+                "value": '//*[@bounds="[909,2009][1020,2120]"]',
+            }
+        },
+        headers=headers,
+    )
+    assert review.status_code == 200
+    assert '//*[@bounds="[909,2009][1020,2120]"]' in review.json()["draft_profile_yaml"]
+
+    validate = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/validate",
+        headers=headers,
+    )
+    assert validate.status_code == 200
+    assert validate.json()["session"]["status"] == "validated"
+    assert validate.json()["connectivity_result"]["responses"] == ["pong"]
+    assert (artifact_dir / "connectivity_result.json").exists()

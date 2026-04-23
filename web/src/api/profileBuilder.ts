@@ -2,7 +2,9 @@ import { useMutation } from '@tanstack/react-query'
 
 import {
   ProfileBuilderDraftResponse,
+  ProfileBuilderReviewResponse,
   ProfileBuilderSessionCreate,
+  ProfileBuilderValidateResponse,
   ProfileBuilderSessionView,
 } from '../types/api'
 import { client } from './client'
@@ -31,6 +33,29 @@ export function useGenerateProfileBuilderDraft() {
       (
         await client.post<ProfileBuilderDraftResponse>(
           `/profile-builder/sessions/${sessionId}/draft`,
+        )
+      ).data,
+  })
+}
+
+export function useApplyProfileBuilderReview() {
+  return useMutation({
+    mutationFn: async (args: { sessionId: string; payload: Record<string, unknown> }) =>
+      (
+        await client.post<ProfileBuilderReviewResponse>(
+          `/profile-builder/sessions/${args.sessionId}/review`,
+          args.payload,
+        )
+      ).data,
+  })
+}
+
+export function useValidateProfileBuilderDraft() {
+  return useMutation({
+    mutationFn: async (sessionId: string) =>
+      (
+        await client.post<ProfileBuilderValidateResponse>(
+          `/profile-builder/sessions/${sessionId}/validate`,
         )
       ).data,
   })
