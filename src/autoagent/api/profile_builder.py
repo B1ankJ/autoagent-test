@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 from xml.etree import ElementTree
@@ -21,6 +22,7 @@ from autoagent.executors.profile_builder_generator import (
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderRuntimeCapture,
+    ProfileBuilderRuntimeConnectivity,
     ProfileBuilderRuntimeView,
     ProfileBuilderSessionCreate,
     ProfileBuilderSessionView,
@@ -107,6 +109,12 @@ def _default_runtime(session: ProfileBuilderSessionView) -> ProfileBuilderRuntim
         captures=[
             ProfileBuilderRuntimeCapture(step=step, status="pending") for step in session.steps
         ],
+        connectivity=ProfileBuilderRuntimeConnectivity(
+            status="idle",
+            result_status=None,
+            result_summary=None,
+            screens=[],
+        ),
     )
 
 
@@ -127,6 +135,58 @@ def _store_runtime(session_id: str, runtime: dict) -> dict:
     tmp.write_text(json.dumps(runtime, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(path)
     return runtime
+
+
+def _get_runtime(session: ProfileBuilderSessionView) -> ProfileBuilderRuntimeView:
+    runtime_data = _load_runtime_from_disk(session.id)
+    if runtime_data is None:
+        runtime = _default_runtime(session)
+        _store_runtime(session.id, runtime.model_dump(mode="json"))
+        return runtime
+    try:
+        runtime = ProfileBuilderRuntimeView.model_validate(runtime_data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=500, detail="profile builder runtime is invalid") from exc
+    if runtime.session_status != session.status:
+        runtime = runtime.model_copy(update={"session_status": session.status})
+        _store_runtime(session.id, runtime.model_dump(mode="json"))
+    return runtime
+
+
+def _upsert_capture_runtime(
+    runtime: ProfileBuilderRuntimeView,
+    *,
+    session: ProfileBuilderSessionView,
+    step: str,
+    status: str,
+    screenshot: str | None = None,
+) -> ProfileBuilderRuntimeView:
+    existing = next((item for item in runtime.captures if item.step == step), None)
+    capture = ProfileBuilderRuntimeCapture(
+        step=step,
+        status=status,
+        screenshot=(
+            screenshot if screenshot is not None else (existing.screenshot if existing else None)
+        ),
+        updated_at=datetime.now(timezone.utc),
+    )
+    captures = []
+    for step_name in session.steps:
+        if step_name == step:
+            captures.append(capture)
+            continue
+        prior = next((item for item in runtime.captures if item.step == step_name), None)
+        captures.append(prior or ProfileBuilderRuntimeCapture(step=step_name, status="pending"))
+    return runtime.model_copy(
+        update={
+            "session_status": session.status,
+            "current_step": f"capture_{step}",
+            "step_state": (
+                "running" if status == "running" else ("done" if status == "done" else "failed")
+            ),
+            "captures": captures,
+        }
+    )
 
 
 def _sync_artifacts(session: ProfileBuilderSessionView) -> ProfileBuilderSessionView:
@@ -289,7 +349,9 @@ async def create_session(payload: ProfileBuilderSessionCreate) -> ProfileBuilder
         artifacts=[],
         captures=[],
     )
-    return _store_session(session)
+    stored = _store_session(session)
+    _store_runtime(stored.id, _default_runtime(stored).model_dump(mode="json"))
+    return stored
 
 
 @router.get("/sessions/{session_id}", response_model=ProfileBuilderSessionView)
@@ -297,13 +359,37 @@ async def get_session(session_id: str) -> ProfileBuilderSessionView:
     return _get_session_or_404(session_id)
 
 
+@router.get("/sessions/{session_id}/runtime", response_model=ProfileBuilderRuntimeView)
+async def get_session_runtime(session_id: str) -> ProfileBuilderRuntimeView:
+    session = _get_session_or_404(session_id)
+    return _get_runtime(session)
+
+
 @router.post("/sessions/{session_id}/capture/{step}", response_model=ProfileBuilderSessionView)
 async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSessionView:
     session = _get_session_or_404(session_id)
     _validate_capture_step(session, step)
+    _store_runtime(
+        session.id,
+        _upsert_capture_runtime(
+            _get_runtime(session),
+            session=session,
+            step=step,
+            status="running",
+        ).model_dump(mode="json"),
+    )
     try:
         device = await asyncio.to_thread(u2.connect, session.device_serial)
     except Exception as exc:
+        _store_runtime(
+            session.id,
+            _upsert_capture_runtime(
+                _get_runtime(session),
+                session=session,
+                step=step,
+                status="failed",
+            ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
+        )
         raise HTTPException(
             status_code=502,
             detail=f"profile builder capture connect failed: {exc}",
@@ -316,6 +402,15 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
             step=step,
         )
     except Exception as exc:
+        _store_runtime(
+            session.id,
+            _upsert_capture_runtime(
+                _get_runtime(session),
+                session=session,
+                step=step,
+                status="failed",
+            ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
+        )
         raise HTTPException(
             status_code=502,
             detail=f"profile builder capture failed: {exc}",
@@ -329,7 +424,18 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
         captures.append(capture_record)
         captures.sort(key=lambda record: current_session.steps.index(record.step))
         updated = current_session.model_copy(update={"captures": captures})
-        return _store_session(updated)
+        stored = _store_session(updated)
+        _store_runtime(
+            stored.id,
+            _upsert_capture_runtime(
+                _get_runtime(stored),
+                session=stored,
+                step=step,
+                status="done",
+                screenshot=captured.screenshot_path.name,
+            ).model_dump(mode="json"),
+        )
+        return stored
 
 
 @router.post("/sessions/{session_id}/draft")

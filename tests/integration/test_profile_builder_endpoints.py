@@ -503,3 +503,38 @@ async def test_profile_builder_review_and_validate_flow(client, monkeypatch):
     assert validate.json()["session"]["status"] == "validated"
     assert validate.json()["connectivity_result"]["responses"] == ["pong"]
     assert (artifact_dir / "connectivity_result.json").exists()
+
+
+async def test_profile_builder_runtime_endpoint_reflects_capture_progress(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.return_value = "<hierarchy><node text='发消息'/></hierarchy>"
+    device.app_current.return_value = {
+        "package": "com.aliyun.tongyi",
+        "activity": ".BrowserActivity",
+    }
+    device.screenshot.return_value = b"png-bytes"
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    capture = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert capture.status_code == 200
+
+    runtime = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}/runtime",
+        headers=headers,
+    )
+    assert runtime.status_code == 200
+    body = runtime.json()
+    assert body["current_step"] == "capture_idle"
+    assert body["captures"][0]["status"] == "done"
+    assert body["captures"][0]["screenshot"] == "capture_idle.png"
