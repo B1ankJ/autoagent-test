@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import OperationalError
 from sse_starlette.sse import EventSourceResponse
 
 from autoagent.api._deps import get_scheduler
@@ -55,7 +56,10 @@ def _apply_default_profile(samples, default_profile: str | None):
 
 
 async def _screenshot_meta_map(batch_id: str, sample_id: str) -> dict[str, dict]:
-    samples = await list_samples_for_batch(batch_id)
+    try:
+        samples = await list_samples_for_batch(batch_id)
+    except OperationalError:
+        return {}
     for sample in samples:
         if sample.id != sample_id:
             continue
