@@ -4,7 +4,7 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android execution work has started with dependency/doc prep and will land in Tier 1 (`android-executor-tier1-v0.4.0`) and Tier 2 (`android-executor-v0.4.0`) milestones.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 now includes persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, and sample detail device/replay metadata. Remaining Tier 1 work is the fake-chat APK real-device loop and final verification.
 
 ## Requirements
 
@@ -43,6 +43,12 @@ adb devices
 Tier 1 uses `uiautomator2` plus a connected emulator or real device. If you plan to use
 `input_method: adb_keyboard`, install `com.android.adbkeyboard` on the device manually; this
 repo does not bundle that APK.
+
+The optional Tier 1 fake-chat smoke target lives under `tests/fixtures/fake_chat_apk/`. Build its
+debug APK in Android Studio and place it at `tests/fixtures/fake_chat_apk/fake_chat-debug.apk`, or
+set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest -m android`.
+If you skip this fixture, final Android verification can be done directly on a real device + real
+target app via the Web UI.
 
 ## Run
 

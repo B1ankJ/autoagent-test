@@ -1796,6 +1796,8 @@ git commit -m "feat(android): wire scheduler and batch api for devices"
 
 ### Task 13: Add the fake-chat APK fixture and real-device Tier 1 tests
 
+> Execution note (2026-04-23): the user chose to skip local `fake_chat-debug.apk` build/installation in this coding session. Keep the fixture source and `@pytest.mark.android` test in the repo, but treat APK-backed execution as deferred to final manual validation on a real device and real target app.
+
 **Files:**
 - Create: `tests/fixtures/fake_chat_apk/README.md`
 - Create: `tests/fixtures/fake_chat_apk/app/src/main/AndroidManifest.xml`
@@ -1838,13 +1840,13 @@ async def test_fake_chat_apk_round_trip(android_profile, android_serial, tmp_pat
     assert result.responses == ["echo: hi", "echo: bb", "echo: ccc"]
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: FAIL because the fixture APK/profile are missing.
+Expected: FAIL/skip until a built APK artifact is supplied. In this session the test is allowed to skip when `AUTOAGENT_FAKE_CHAT_APK` is absent.
 
 - [x] **Step 3: Add the fixture app and install flow**
 
@@ -1888,7 +1890,7 @@ Run:
 ```bash
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: PASS on a machine with a connected device/emulator; deselect or skip in CI fast runs.
+Expected: PASS on a machine with a connected device/emulator and a built APK. Deferred from this session by user request; final validation will happen against a real device + real app.
 
 - [x] **Step 5: Commit**
 
@@ -2324,6 +2326,8 @@ git commit -m "feat(web): show android sample metadata and replay download"
 
 ### Task 18: Tier 1 verification, docs, and release tag
 
+> Execution note (2026-04-23): final Tier 1 manual validation is now defined as user-run testing on a real device and real app. The fake-chat fixture remains optional scaffolding, not a gating requirement for this session.
+
 **Files:**
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
@@ -2337,9 +2341,10 @@ Add to `CLAUDE.md`:
 - Tier 1 Android smoke:
   1. `adb devices -l`
   2. `/devices` shows the device and it can be enabled
-  3. save a `platform: android` profile
+  3. save a `platform: android` profile for a real target app
   4. run `Tests / Quick` with `mode=gui_android`
   5. run a 3-sample Android batch and verify SSE/sample detail screenshots
+  6. optionally run the `fake_chat_apk` fixture if a built APK is available
 ```
 
 Update `README.md` project status to:
@@ -2361,16 +2366,16 @@ pnpm --dir web lint
 pnpm --dir web format:check
 pnpm --dir web build
 ```
-Expected: all pass; Android tests pass only on a prepared machine.
+Expected: all non-Android checks pass. Android real-device checks are optional in-session and may be skipped until the user performs final validation on a prepared machine.
 
 - [ ] **Step 3: Execute the manual Tier 1 smoke**
 
-Use the browser UI to verify:
+Use the browser UI to verify on a real device and real target app:
 
 ```text
 1. /devices can refresh and show the connected device
 2. enable the device if needed
-3. create an android profile for fake_chat.apk
+3. create an android profile for the real target app
 4. run Tests / Quick with prompt "hi"
 5. create a 3-sample gui_android batch
 6. watch BatchDetail update via SSE

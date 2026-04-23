@@ -17,10 +17,35 @@ from autoagent.profiles.schemas import (
 @pytest.mark.asyncio
 async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     device = MagicMock()
-    device.dump_hierarchy.return_value = (
-        '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
-    )
+    input_target = MagicMock()
+    send_target = MagicMock()
+    reset_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        if kwargs == {"resourceId": "demo:id/newChat"}:
+            return reset_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+    xmls = iter(
+        [
+            '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>',
+            '<hierarchy><node class="android.widget.TextView" text="echo: bb"/></hierarchy>',
+        ]
+    )
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return next(xmls)
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
 
     profile = AndroidProfile(
         name="fake_android",
@@ -39,11 +64,17 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
                 value="android.widget.TextView",
             ),
         ),
+        new_session_action=[
+            {
+                "action": "click_locator",
+                "locator": {"type": "resource_id", "value": "demo:id/newChat"},
+            }
+        ],
         complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
     )
     sample = Sample(
         id="s1",
-        prompts=["hi"],
+        prompts=["hi", "bb"],
         mode="gui_android",
         target_profile="fake_android",
         retry=0,
@@ -55,4 +86,9 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
     )
 
-    assert out == ["echo: hi"]
+    assert out == ["echo: hi", "echo: bb"]
+    device.app_start.assert_called_once_with("demo.app", None, True)
+    input_target.set_text.assert_any_call("hi")
+    input_target.set_text.assert_any_call("bb")
+    assert send_target.click.call_count == 2
+    reset_target.click.assert_called_once()

@@ -6,13 +6,14 @@ from typing import Any
 
 import uiautomator2 as u2
 
+from autoagent.executors.android_action_runner import AndroidActionRunner
 from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.complete_detector import wait_for_ui_tree_stable
 from autoagent.executors.response_extractor import UiTreeExtractor
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
-from autoagent.profiles.schemas import AndroidProfile
+from autoagent.profiles.schemas import ActionStep, AndroidProfile
 
 
 class AndroidExecutor(Executor):
@@ -37,8 +38,19 @@ class AndroidExecutor(Executor):
 
         await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
         async with AndroidInput(device, profile.input_method) as input_ctl:
+            action_runner = AndroidActionRunner(
+                device=device,
+                input_controller=input_ctl,
+                action_log=ctx.action_log,
+                replay_path=ctx.action_replay_path,
+            )
+            if profile.new_session_action:
+                await action_runner.run(profile.new_session_action)
             for idx, prompt in enumerate(sample.prompts, start=1):
                 await input_ctl.set_text(profile.input_locator, prompt)
+                await action_runner.run(
+                    [ActionStep(action="click_locator", locator=profile.send_button_locator)]
+                )
                 xml = await wait_for_ui_tree_stable(
                     device,
                     stable_sec=profile.complete_detection.stable_sec,
