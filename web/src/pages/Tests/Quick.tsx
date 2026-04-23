@@ -34,7 +34,8 @@ export function TestsQuick() {
   const { message } = App.useApp()
   const [lastSyncResult, setLastSyncResult] = useState<SingleTestSyncResponse | null>(null)
   const mode = Form.useWatch('mode', form) ?? 'api'
-  const selectedPlatform = mode === 'gui_pc_web' ? 'web' : 'api'
+  const selectedPlatform =
+    mode === 'gui_pc_web' ? 'web' : mode === 'gui_android' ? 'android' : 'api'
 
   const profileOptions = (profiles.data ?? [])
     .filter((profile) => profile.platform === selectedPlatform)
@@ -47,7 +48,7 @@ export function TestsQuick() {
       mode: values.mode,
       target_profile: values.target_profile,
       retry: 0,
-      timeout_sec: values.mode === 'gui_pc_web' ? 180 : 60,
+      timeout_sec: values.mode === 'api' ? 60 : 180,
     }
 
     if (values.kind === 'sync') {
@@ -56,7 +57,7 @@ export function TestsQuick() {
         setLastSyncResult(null)
         const result = (
           await client.post<SingleTestSyncResponse>('/tests/sync', sample, {
-            timeout: values.mode === 'gui_pc_web' ? 240_000 : 60_000,
+            timeout: values.mode === 'api' ? 60_000 : 240_000,
           })
         ).data
         setLastSyncResult(result)
@@ -103,6 +104,7 @@ export function TestsQuick() {
               options={[
                 { label: 'API', value: 'api' },
                 { label: 'Web (GUI)', value: 'gui_pc_web' },
+                { label: 'Android (GUI)', value: 'gui_android' },
               ]}
             />
           </Form.Item>

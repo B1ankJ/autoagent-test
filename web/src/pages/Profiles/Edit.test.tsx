@@ -55,4 +55,22 @@ describe('ProfileEdit', () => {
     await userEvent.click(button)
     expect(screen.getByText('modal:web_demo')).toBeInTheDocument()
   })
+
+  it('enables connectivity test for android profiles', async () => {
+    vi.spyOn(client, 'get').mockResolvedValueOnce({
+      data: { yaml: 'platform: android\nname: fake_android\npackage: demo\n' },
+    } as never)
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/profiles/:name" element={<ProfileEdit />} />
+      </Routes>,
+      { initialPath: '/profiles/fake_android' },
+    )
+
+    const button = screen.getByRole('button', { name: '连通性测试' })
+    await waitFor(() => {
+      expect(button).toBeEnabled()
+    })
+  })
 })

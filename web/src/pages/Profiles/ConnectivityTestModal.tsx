@@ -20,7 +20,7 @@ export function ConnectivityTestModal({ open, profileName, mode, onClose }: Prop
       prompts: [prompt],
       mode,
       target_profile: profileName,
-      timeout_sec: mode === 'gui_pc_web' ? 180 : 60,
+      timeout_sec: mode === 'api' ? 60 : 180,
     })
   }
 

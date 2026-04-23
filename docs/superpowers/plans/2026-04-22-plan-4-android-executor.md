@@ -2135,7 +2135,7 @@ git commit -m "feat(web): add devices management page"
 - Modify: `web/src/pages/Profiles/ConnectivityTestModal.tsx`
 - Modify: `web/src/pages/Profiles/Edit.test.tsx`
 
-- [ ] **Step 1: Write the failing UI tests**
+- [x] **Step 1: Write the failing UI tests**
 
 Extend `web/src/pages/Profiles/Edit.test.tsx`:
 
@@ -2149,7 +2149,7 @@ it('enables connectivity test for android profiles', async () => {
 
 Create `web/src/pages/Batches/New.test.tsx` and `web/src/pages/Tests/Quick.test.tsx` with assertions that the mode select includes `Android (GUI)` and filters profiles to `platform === 'android'`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2157,7 +2157,7 @@ pnpm --dir web test -- src/pages/Profiles/Edit.test.tsx src/pages/Batches/New.te
 ```
 Expected: FAIL because only API/Web are wired today.
 
-- [ ] **Step 3: Implement the UI changes**
+- [x] **Step 3: Implement the UI changes**
 
 In `web/src/pages/Profiles/Edit.tsx`, extend the `profileMode` detection:
 
@@ -2197,7 +2197,7 @@ Also add the helper text under concurrency in `BatchNew.tsx`:
 </Typography.Text>
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash

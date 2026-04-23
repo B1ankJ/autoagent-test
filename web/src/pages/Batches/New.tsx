@@ -51,12 +51,15 @@ export function BatchNew() {
   const [uploadForm] = Form.useForm<UploadFormValues>()
 
   const availableProfiles = (profiles.data ?? []).filter(
-    (profile) => profile.platform === 'api' || profile.platform === 'web',
+    (profile) =>
+      profile.platform === 'api' || profile.platform === 'web' || profile.platform === 'android',
   )
   const jsonMode = Form.useWatch('mode', jsonForm) ?? 'api'
   const uploadMode = Form.useWatch('mode', uploadForm) ?? 'api'
-  const jsonPlatform = jsonMode === 'gui_pc_web' ? 'web' : 'api'
-  const uploadPlatform = uploadMode === 'gui_pc_web' ? 'web' : 'api'
+  const jsonPlatform =
+    jsonMode === 'gui_pc_web' ? 'web' : jsonMode === 'gui_android' ? 'android' : 'api'
+  const uploadPlatform =
+    uploadMode === 'gui_pc_web' ? 'web' : uploadMode === 'gui_android' ? 'android' : 'api'
   const jsonProfileOptions = availableProfiles
     .filter((profile) => profile.platform === jsonPlatform)
     .map((profile) => ({
@@ -153,12 +156,18 @@ export function BatchNew() {
                       options={[
                         { label: 'API', value: 'api' },
                         { label: 'Web (GUI)', value: 'gui_pc_web' },
+                        { label: 'Android (GUI)', value: 'gui_android' },
                       ]}
                     />
                   </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
                   </Form.Item>
+                  {jsonMode === 'gui_android' ? (
+                    <Typography.Text type="secondary">
+                      Android 模式下，实际并发上限取决于在线可用设备数。
+                    </Typography.Text>
+                  ) : null}
                   <Form.Item
                     name="target_profile_default"
                     label="默认 Profile"
@@ -234,12 +243,18 @@ export function BatchNew() {
                       options={[
                         { label: 'API', value: 'api' },
                         { label: 'Web (GUI)', value: 'gui_pc_web' },
+                        { label: 'Android (GUI)', value: 'gui_android' },
                       ]}
                     />
                   </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
                   </Form.Item>
+                  {uploadMode === 'gui_android' ? (
+                    <Typography.Text type="secondary">
+                      Android 模式下，实际并发上限取决于在线可用设备数。
+                    </Typography.Text>
+                  ) : null}
                   <Form.Item name="target_profile_default" label="默认 Profile">
                     <Select options={uploadProfileOptions} allowClear />
                   </Form.Item>
