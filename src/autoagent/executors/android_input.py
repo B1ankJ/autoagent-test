@@ -25,12 +25,19 @@ class AndroidInput:
     def __init__(self, device, configured_method: str = "auto") -> None:
         self.device = device
         self.configured_method = configured_method
+        self._pending_restore_ime: str | None = None
 
     async def __aenter__(self) -> AndroidInput:
         return self
 
     async def __aexit__(self, *_exc_info) -> None:
+        await self.restore_pending_ime()
         return None
+
+    async def restore_pending_ime(self) -> None:
+        if self._pending_restore_ime:
+            await asyncio.to_thread(set_ime, self.device.serial, self._pending_restore_ime)
+            self._pending_restore_ime = None
 
     async def set_text(self, locator: Locator, text: str) -> None:
         method = resolve_input_method(self.configured_method, text)
@@ -41,25 +48,22 @@ class AndroidInput:
             return
         if method == "adb_keyboard":
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
-            await asyncio.to_thread(target.click)
             previous_ime = await asyncio.to_thread(ensure_adb_keyboard_ready, self.device)
-            try:
-                await asyncio.to_thread(
-                    self.device.shell,
-                    [
-                        "am",
-                        "broadcast",
-                        "-a",
-                        "ADB_INPUT_B64",
-                        "--es",
-                        "msg",
-                        payload,
-                    ],
-                )
-                await asyncio.sleep(0.3)
-            finally:
-                if previous_ime:
-                    await asyncio.to_thread(set_ime, self.device.serial, previous_ime)
+            self._pending_restore_ime = previous_ime
+            await asyncio.to_thread(target.click)
+            await asyncio.to_thread(
+                self.device.shell,
+                [
+                    "am",
+                    "broadcast",
+                    "-a",
+                    "ADB_INPUT_B64",
+                    "--es",
+                    "msg",
+                    payload,
+                ],
+            )
+            await asyncio.sleep(0.3)
             return
         raise ValueError(f"unsupported input method: {method}")
 

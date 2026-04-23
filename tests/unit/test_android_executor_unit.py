@@ -32,6 +32,8 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         raise AssertionError(f"unexpected selector: {kwargs}")
 
     device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
     xmls = iter(
         [
@@ -112,7 +114,10 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     assert "start: device=emulator-5554 package=demo.app activity=None" in log_text
     assert "prompt 1 set_text start: method=u2_send_keys" in log_text
     assert "locator=resource_id:demo:id/input" in log_text
+    assert "captured after_input artifacts: xml=after_input_1.xml png=after_input_1.png" in log_text
     assert "prompt 1 extraction done: method=ui_tree_only text='echo: hi'" in log_text
+    assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.xml").is_file()
+    assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.png").is_file()
 
 
 @pytest.mark.asyncio
@@ -134,6 +139,7 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         raise AssertionError(f"unexpected selector: {kwargs}")
 
     device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
     wait_pixel = MagicMock()
     wait_ui = MagicMock()
@@ -233,6 +239,8 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
         raise AssertionError(f"unexpected selector: {kwargs}")
 
     device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
     ready_states = iter(
@@ -314,6 +322,8 @@ async def test_execute_writes_exception_to_executor_log(
         raise AssertionError(f"unexpected selector: {kwargs}")
 
     device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
     async def fake_wait_for_ready_text(*_args, **_kwargs):
@@ -370,3 +380,81 @@ async def test_execute_writes_exception_to_executor_log(
     log_text = (tmp_path / "ad_hoc" / "s1" / "executor.log").read_text(encoding="utf-8")
     assert "prompt 1 send click: locator=resource_id:missing:id/send" in log_text
     assert "android sample s1 failed" in log_text
+
+
+@pytest.mark.asyncio
+async def test_execute_reuses_existing_logs_dir_without_nesting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hi"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+    existing_logs_dir = tmp_path / "b1" / "s1"
+    existing_logs_dir.mkdir(parents=True)
+
+    ctx = ExecutorContext(
+        device_serial="emulator-5554",
+        verbose_logs=True,
+        logs_dir=str(existing_logs_dir),
+    )
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(sample, profile, ctx)
+
+    assert out == ["echo: hi"]
+    assert ctx.logs_dir == str(existing_logs_dir.resolve())
+    assert (existing_logs_dir / "executor.log").is_file()
+    assert not (existing_logs_dir / "s1").exists()

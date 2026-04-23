@@ -46,3 +46,15 @@ class ScreenshotStore:
         self._counter += 1
         n = f"{self._counter:02d}" if self._counter < 100 else f"{self._counter:03d}"
         return self._dir / f"{n}_{slug_label(label)}.png"
+
+    def artifact_path(self, label: str, suffix: str) -> Path:
+        normalized = suffix if suffix.startswith(".") else f".{suffix}"
+        return self._dir / f"{slug_label(label)}{normalized}"
+
+    @classmethod
+    def from_logs_dir(cls, logs_dir: Path) -> ScreenshotStore:
+        self = cls.__new__(cls)
+        self._dir = logs_dir.resolve()
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._counter = 0
+        return self

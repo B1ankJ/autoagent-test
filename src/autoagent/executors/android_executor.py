@@ -61,8 +61,11 @@ class AndroidExecutor(Executor):
             raise ValueError("AndroidExecutor requires ctx.device_serial")
 
         device = await asyncio.to_thread(u2.connect, ctx.device_serial)
-        batch_id = ctx.logs_dir or "ad_hoc"
-        store = ScreenshotStore(root=self._root, batch_id=batch_id, sample_id=sample.id)
+        if ctx.logs_dir and Path(ctx.logs_dir).is_absolute():
+            store = ScreenshotStore.from_logs_dir(Path(ctx.logs_dir))
+        else:
+            batch_id = ctx.logs_dir or "ad_hoc"
+            store = ScreenshotStore(root=self._root, batch_id=batch_id, sample_id=sample.id)
         ctx.logs_dir = store.logs_dir
         sample_log = _SampleLogger(Path(store.logs_dir) / "executor.log")
 
@@ -119,6 +122,19 @@ class AndroidExecutor(Executor):
                         profile.input_locator.value,
                     )
                     await input_ctl.set_text(profile.input_locator, prompt)
+                    xml_path = store.artifact_path(f"after_input_{idx}", "xml")
+                    screenshot_path = store.artifact_path(f"after_input_{idx}", "png")
+                    current_xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+                    await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
+                    after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
+                    await asyncio.to_thread(screenshot_path.write_bytes, after_input)
+                    sample_log.info(
+                        "android sample %s prompt %s captured after_input artifacts: xml=%s png=%s",
+                        sample.id,
+                        idx,
+                        xml_path.name,
+                        screenshot_path.name,
+                    )
                     sample_log.info(
                         "android sample %s prompt %s send click: locator=%s:%s",
                         sample.id,
@@ -129,6 +145,7 @@ class AndroidExecutor(Executor):
                     await action_runner.run(
                         [ActionStep(action="click_locator", locator=profile.send_button_locator)]
                     )
+                    await input_ctl.restore_pending_ime()
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
                         sample_log.info(
