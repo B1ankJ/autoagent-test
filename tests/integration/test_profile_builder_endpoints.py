@@ -191,3 +191,82 @@ async def test_profile_builder_session_reload_from_persisted_json(client, monkey
             "screenshot_artifact": "capture_idle.png",
         }
     ]
+
+
+async def test_profile_builder_capture_multi_step_accumulates_from_disk_truth(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    original_session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        "<hierarchy><node text='idle'/></hierarchy>",
+        "<hierarchy><node text='editing'/></hierarchy>",
+    ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle-png", b"editing-png"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    first = await client.post(
+        f"/api/v1/profile-builder/sessions/{original_session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert first.status_code == 200
+
+    import autoagent.api.profile_builder as profile_builder_mod
+    from autoagent.models.api import ProfileBuilderSessionView
+
+    profile_builder_mod._SESSIONS[original_session["id"]] = ProfileBuilderSessionView.model_validate(
+        original_session
+    )
+
+    second = await client.post(
+        f"/api/v1/profile-builder/sessions/{original_session['id']}/capture/editing",
+        headers=headers,
+    )
+    assert second.status_code == 200
+    assert second.json()["captures"] == [
+        {
+            "step": "idle",
+            "package": "com.aliyun.tongyi",
+            "activity": ".IdleActivity",
+            "xml_artifact": "capture_idle.xml",
+            "screenshot_artifact": "capture_idle.png",
+        },
+        {
+            "step": "editing",
+            "package": "com.aliyun.tongyi",
+            "activity": ".EditingActivity",
+            "xml_artifact": "capture_editing.xml",
+            "screenshot_artifact": "capture_editing.png",
+        },
+    ]
+
+
+async def test_profile_builder_corrupted_session_json_returns_clear_error(client):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    from autoagent.api.profile_builder import _session_json_path, reset_sessions_for_tests
+
+    _session_json_path(session["id"]).write_text("{not-json", encoding="utf-8")
+    reset_sessions_for_tests()
+
+    fetched = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 500
+    assert fetched.json()["detail"] == "profile builder session load failed"

@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import uiautomator2 as u2
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
@@ -50,14 +51,19 @@ def _persist_session(session: ProfileBuilderSessionView) -> None:
     artifact_dir = Path(session.artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     session_json = artifact_dir / "session.json"
-    session_json.write_text(session.model_dump_json(indent=2), encoding="utf-8")
+    session_tmp = artifact_dir / "session.json.tmp"
+    session_tmp.write_text(session.model_dump_json(indent=2), encoding="utf-8")
+    session_tmp.replace(session_json)
 
 
 def _load_session_from_disk(session_id: str) -> ProfileBuilderSessionView | None:
     session_json = _session_json_path(session_id)
     if not session_json.exists():
         return None
-    return ProfileBuilderSessionView.model_validate_json(session_json.read_text(encoding="utf-8"))
+    try:
+        return ProfileBuilderSessionView.model_validate_json(session_json.read_text(encoding="utf-8"))
+    except (OSError, ValidationError) as exc:
+        raise HTTPException(status_code=500, detail="profile builder session load failed") from exc
 
 
 def _sync_artifacts(session: ProfileBuilderSessionView) -> ProfileBuilderSessionView:
@@ -75,16 +81,15 @@ def _store_session(session: ProfileBuilderSessionView) -> ProfileBuilderSessionV
 
 
 def _get_session_or_404(session_id: str) -> ProfileBuilderSessionView:
-    session = _SESSIONS.get(session_id)
+    session = _load_session_from_disk(session_id)
     if session is None:
-        session = _load_session_from_disk(session_id)
+        session = _SESSIONS.get(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="session not found")
-        _SESSIONS[session_id] = session
     synced = _sync_artifacts(session)
     if synced != session:
         _persist_session(synced)
-        _SESSIONS[session_id] = synced
+    _SESSIONS[session_id] = synced
     return synced
 
 
