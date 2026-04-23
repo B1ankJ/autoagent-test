@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from autoagent.auth.passwords import hash_password
 from autoagent.config.settings import get_settings
+from autoagent.models.api import SampleResult
 from autoagent.storage.database import init_db
 from autoagent.storage.users import upsert_user
 
@@ -538,3 +539,91 @@ async def test_profile_builder_runtime_endpoint_reflects_capture_progress(client
     assert body["current_step"] == "capture_idle"
     assert body["captures"][0]["status"] == "done"
     assert body["captures"][0]["screenshot"] == "capture_idle.png"
+
+
+async def test_profile_builder_validate_updates_runtime_and_screens(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+    artifact_dir = get_settings().data_root / "profile_builder" / session["id"]
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "draft_profile.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": "qwen",
+                "platform": "android",
+                "package": "demo",
+                "activity": ".BrowserActivity",
+                "serial": "serial-1",
+                "input_method": "auto",
+                "ready_check": {"type": "ui_tree_contains", "text": "发消息", "timeout_sec": 5},
+                "recovery_path": [],
+                "input_locator": {"type": "xpath", "value": "//*[contains(@text, '发消息')]"},
+                "send_button_locator": {"type": "xpath", "value": "//*[@bounds='[1,1][2,2]']"},
+                "response_extraction": {
+                    "method": "ui_tree_only",
+                    "response_container_locator": {
+                        "type": "class",
+                        "value": "androidx.recyclerview.widget.RecyclerView",
+                    },
+                    "scroll_container_locator": {
+                        "type": "class",
+                        "value": "androidx.recyclerview.widget.RecyclerView",
+                    },
+                    "latest_bubble_match": {
+                        "type": "class",
+                        "value": "android.widget.TextView",
+                    },
+                },
+                "new_session_action": [],
+                "complete_detection": {
+                    "type": "ui_tree_stable",
+                    "stable_sec": 2,
+                    "max_wait_sec": 30,
+                },
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    async def _run_sync(sample):
+        for name in (
+            "validate_before_input.png",
+            "validate_after_input.png",
+            "validate_after_send.png",
+            "validate_after_result.png",
+        ):
+            (artifact_dir / name).write_bytes(b"png")
+        return SampleResult(
+            id=sample.id,
+            status="done",
+            prompts_sent=["hello"],
+            responses=["pong"],
+            mode=sample.mode,
+            target_profile=sample.target_profile,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_test", _run_sync)
+
+    validate = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/validate",
+        headers=headers,
+    )
+    assert validate.status_code == 200
+
+    runtime = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}/runtime",
+        headers=headers,
+    )
+    assert runtime.status_code == 200
+    body = runtime.json()
+    assert body["session_status"] == "validated"
+    assert body["connectivity"]["status"] == "done"
+    assert body["connectivity"]["result_summary"] == "pong"
+    assert len(body["connectivity"]["screens"]) >= 1

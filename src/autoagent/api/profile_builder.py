@@ -23,6 +23,7 @@ from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderRuntimeCapture,
     ProfileBuilderRuntimeConnectivity,
+    ProfileBuilderRuntimeScreen,
     ProfileBuilderRuntimeView,
     ProfileBuilderSessionCreate,
     ProfileBuilderSessionView,
@@ -274,6 +275,33 @@ def _write_draft_profile_yaml(session: ProfileBuilderSessionView, draft_profile:
     return draft_profile_yaml
 
 
+def _runtime_screens_for_validation(
+    session: ProfileBuilderSessionView,
+) -> list[ProfileBuilderRuntimeScreen]:
+    artifact_dir = Path(session.artifact_dir)
+    names = [
+        "validate_before_input.png",
+        "validate_after_input.png",
+        "validate_after_send.png",
+        "validate_after_result.png",
+        "validate_on_error.png",
+    ]
+    screens = []
+    for name in names:
+        path = artifact_dir / name
+        if not path.exists():
+            continue
+        screens.append(
+            ProfileBuilderRuntimeScreen(
+                step="connectivity",
+                label=path.stem,
+                path=name,
+                taken_at=datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc),
+            )
+        )
+    return screens
+
+
 def _ready_check_text(idle_xml: str) -> str:
     try:
         root = ElementTree.fromstring(idle_xml)
@@ -517,6 +545,19 @@ async def apply_review(session_id: str, payload: dict) -> dict:
 async def validate_draft(session_id: str) -> dict:
     session = _get_session_or_404(session_id)
     draft_profile_yaml = _read_draft_profile_yaml(session)
+    _store_runtime(
+        session.id,
+        _get_runtime(session).model_copy(
+            update={
+                "session_status": "validating",
+                "current_step": "connectivity",
+                "step_state": "running",
+                "last_error": None,
+                "connectivity": ProfileBuilderRuntimeConnectivity(status="running"),
+                "recent_screens": [],
+            }
+        ).model_dump(mode="json"),
+    )
     temp_profile_name = f"pb_{session.id}"
     save_profile_yaml(temp_profile_name, draft_profile_yaml)
     try:
@@ -539,6 +580,26 @@ async def validate_draft(session_id: str) -> dict:
     )
     next_status = "validated" if result.status == "done" else "ready"
     updated_session = _store_session(session.model_copy(update={"status": next_status}))
+    runtime_screens = _runtime_screens_for_validation(updated_session)
+    result_summary = result.responses[0] if result.responses else result.error
+    _store_runtime(
+        updated_session.id,
+        _get_runtime(updated_session).model_copy(
+            update={
+                "session_status": next_status,
+                "current_step": "connectivity",
+                "step_state": "done" if result.status == "done" else "failed",
+                "last_error": None if result.status == "done" else result.error,
+                "connectivity": ProfileBuilderRuntimeConnectivity(
+                    status="done" if result.status == "done" else "failed",
+                    result_status=result.status,
+                    result_summary=result_summary,
+                    screens=runtime_screens,
+                ),
+                "recent_screens": runtime_screens[-3:],
+            }
+        ).model_dump(mode="json"),
+    )
     return {
         "session": updated_session.model_dump(mode="json"),
         "draft_profile_yaml": draft_profile_yaml,
