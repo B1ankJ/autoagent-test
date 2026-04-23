@@ -138,6 +138,14 @@ class ProfileBuilderSessionCreate(BaseModel):
     name: str
 
 
+class ProfileBuilderCaptureArtifact(BaseModel):
+    step: str
+    package: str
+    activity: str | None = None
+    xml_artifact: str
+    screenshot_artifact: str
+
+
 class ProfileBuilderSessionView(BaseModel):
     id: str
     platform: Literal["android"]
@@ -147,3 +155,4 @@ class ProfileBuilderSessionView(BaseModel):
     steps: list[str]
     artifact_dir: str
     artifacts: list[str] = Field(default_factory=list)
+    captures: list[ProfileBuilderCaptureArtifact] = Field(default_factory=list)

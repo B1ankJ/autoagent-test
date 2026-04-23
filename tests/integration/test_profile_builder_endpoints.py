@@ -95,4 +95,99 @@ async def test_profile_builder_capture_idle(client, monkeypatch):
         headers=headers,
     )
     assert capture.status_code == 200
-    assert "capture_idle.xml" in capture.json()["artifacts"]
+    body = capture.json()
+    assert "capture_idle.xml" in body["artifacts"]
+    assert body["captures"] == [
+        {
+            "step": "idle",
+            "package": "com.aliyun.tongyi",
+            "activity": ".BrowserActivity",
+            "xml_artifact": "capture_idle.xml",
+            "screenshot_artifact": "capture_idle.png",
+        }
+    ]
+
+
+async def test_profile_builder_capture_rejects_unknown_step(client):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    capture = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/bad-step",
+        headers=headers,
+    )
+    assert capture.status_code == 422
+    assert capture.json()["detail"] == "unknown capture step: bad-step"
+
+
+async def test_profile_builder_capture_wraps_device_failures(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    def _boom(serial: str):
+        raise RuntimeError(f"cannot connect to {serial}")
+
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", _boom)
+
+    capture = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert capture.status_code == 502
+    assert capture.json()["detail"] == "profile builder capture connect failed: cannot connect to serial-1"
+
+
+async def test_profile_builder_session_reload_from_persisted_json(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.return_value = "<hierarchy><node text='发消息'/></hierarchy>"
+    device.app_current.return_value = {
+        "package": "com.aliyun.tongyi",
+        "activity": ".BrowserActivity",
+    }
+    device.screenshot.return_value = b"png-bytes"
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    capture = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+        headers=headers,
+    )
+    assert capture.status_code == 200
+
+    from autoagent.api.profile_builder import reset_sessions_for_tests
+
+    reset_sessions_for_tests()
+
+    fetched = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["artifacts"] == ["capture_idle.png", "capture_idle.xml"]
+    assert body["captures"] == [
+        {
+            "step": "idle",
+            "package": "com.aliyun.tongyi",
+            "activity": ".BrowserActivity",
+            "xml_artifact": "capture_idle.xml",
+            "screenshot_artifact": "capture_idle.png",
+        }
+    ]
