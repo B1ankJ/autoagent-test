@@ -345,3 +345,46 @@ async def test_profile_builder_concurrent_capture_preserves_both_records(client,
             "screenshot_artifact": "capture_editing.png",
         },
     ]
+
+
+async def test_profile_builder_generate_draft_persists_rule_artifacts(client, monkeypatch):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        """<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" bounds="[177,2066][777,2123]" /></hierarchy>""",
+        """<hierarchy><node text="你好" class="android.widget.EditText" bounds="[36,1882][1032,2002]" /><node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>""",
+        """<hierarchy><node text="你好" class="android.widget.EditText" /><node text="当然可以" class="android.widget.TextView" /></hierarchy>""",
+    ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".ResponseActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle", b"editing", b"response"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    for step in ("idle", "editing", "response"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
+            headers=headers,
+        )
+        assert capture.status_code == 200
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        headers=headers,
+    )
+
+    assert draft.status_code == 200
+    body = draft.json()
+    assert body["session"]["status"] == "ready"
+    assert body["candidates"]["input_candidates"][0]["locator"]["value"] == '//*[@class="android.widget.EditText"]'
+    assert "draft_profile.yaml" in body["session"]["artifacts"]
+    assert body["draft_profile_yaml"].startswith("name: qwen")
