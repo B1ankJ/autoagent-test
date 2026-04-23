@@ -54,6 +54,21 @@ def _apply_default_profile(samples, default_profile: str | None):
             s.target_profile = default_profile
 
 
+async def _screenshot_meta_map(batch_id: str, sample_id: str) -> dict[str, dict]:
+    samples = await list_samples_for_batch(batch_id)
+    for sample in samples:
+        if sample.id != sample_id:
+            continue
+        shots = sample.metadata.get("screenshots")
+        if isinstance(shots, list):
+            return {
+                str(item.get("name")): item
+                for item in shots
+                if isinstance(item, dict) and item.get("name")
+            }
+    return {}
+
+
 @router.post("", response_model=BatchCreatedResponse, status_code=201)
 async def create_batch_json(body: BatchCreateJSON) -> BatchCreatedResponse:
     _apply_default_profile(body.samples, body.target_profile_default)
@@ -196,14 +211,41 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
     if not sample_dir.is_dir():
         return []
 
+    meta_map = await _screenshot_meta_map(batch_id, sample_id)
     out: list[ScreenshotInfo] = []
     for entry in sorted(sample_dir.iterdir()):
         if not entry.is_file() or not _SCREENSHOT_RE.match(entry.name):
             continue
-        label = entry.stem.split("_", 1)[1] if "_" in entry.stem else entry.stem
+        meta = meta_map.get(entry.name, {})
+        fallback_label = entry.stem.split("_", 1)[1] if "_" in entry.stem else entry.stem
+        label = str(meta.get("label") or fallback_label)
         taken = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
-        out.append(ScreenshotInfo(name=entry.name, label=label, taken_at=taken))
+        out.append(
+            ScreenshotInfo(
+                name=entry.name,
+                label=label,
+                taken_at=taken,
+                is_sensitive=bool(meta.get("is_sensitive")) if meta else None,
+            )
+        )
     return out
+
+
+@router.get("/{batch_id}/samples/{sample_id}/actions.jsonl")
+async def download_actions(batch_id: str, sample_id: str) -> FileResponse:
+    root = get_settings().logs_root.resolve()
+    target = (root / batch_id / sample_id / "actions.jsonl").resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="path traversal blocked") from e
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="actions replay not found")
+    return FileResponse(
+        target,
+        media_type="application/x-ndjson",
+        filename=f"{sample_id}.actions.jsonl",
+    )
 
 
 @router.get("/{batch_id}/samples/{sample_id}/screenshots/{name}")

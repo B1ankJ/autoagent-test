@@ -45,7 +45,9 @@ def get_scheduler() -> BatchScheduler:
     global _scheduler
     if _scheduler is None:
         _scheduler = BatchScheduler(
-            executor_factory=_build_executor, profile_lookup=_lookup_profile
+            executor_factory=_build_executor,
+            profile_lookup=_lookup_profile,
+            device_pool=get_device_pool(),
         )
     return _scheduler
 

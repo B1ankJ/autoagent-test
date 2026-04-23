@@ -98,6 +98,7 @@ class ScreenshotInfo(BaseModel):
     name: str
     label: str
     taken_at: datetime
+    is_sensitive: bool | None = None
 
 
 class DeviceInfo(BaseModel):

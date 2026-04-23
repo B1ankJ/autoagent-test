@@ -23,9 +23,10 @@ async def run_sync(sample: Sample) -> SampleResult:
         concurrency=1,
         samples=[sample],
     )
+    wait_timeout = sample.timeout_sec or (180 if sample.mode == "gui_android" else 600)
     # sample.timeout_sec is the per-sample timeout; we wait slightly longer
-    # to absorb executor startup/teardown, including Playwright launch time.
-    await sch.wait_done(batch_id, timeout_sec=(sample.timeout_sec or 600) + 30)
+    # to absorb executor startup/teardown, including GUI driver startup time.
+    await sch.wait_done(batch_id, timeout_sec=wait_timeout + 30)
     results = await list_samples_for_batch(batch_id)
     if not results:
         raise HTTPException(status_code=500, detail="no result recorded")
