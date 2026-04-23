@@ -299,5 +299,11 @@ describe('Builder', () => {
     expect(await screen.findByText('Runtime Status')).toBeInTheDocument()
     expect(screen.getByText('Current Step: connectivity')).toBeInTheDocument()
     expect(screen.getAllByText('validate_after_send').length).toBeGreaterThan(0)
+    expect(screen.getByText('Following Latest')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('capture_editing'))
+
+    expect(screen.getByText('Manual Selection')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Follow Latest' })).toBeEnabled()
   })
 })

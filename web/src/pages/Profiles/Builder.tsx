@@ -130,15 +130,32 @@ export default function Builder() {
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
   const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
   const [currentScreenUrl, setCurrentScreenUrl] = useState<string | null>(null)
+  const [selectedScreenPath, setSelectedScreenPath] = useState<string | null>(null)
+  const [followLatestScreen, setFollowLatestScreen] = useState(true)
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(session?.captures.map((capture) => capture.step) ?? [])
   const runtimeData = runtime.data
+  const availableScreens = runtimeData
+    ? [...runtimeData.recent_screens, ...runtimeData.connectivity.screens].filter(
+        (screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index,
+      )
+    : []
+  const latestScreen = availableScreens[availableScreens.length - 1] ?? null
   const currentScreen =
-    runtimeData?.recent_screens[runtimeData.recent_screens.length - 1] ??
-    runtimeData?.connectivity.screens[runtimeData.connectivity.screens.length - 1] ??
-    null
+    availableScreens.find((screen) => screen.path === selectedScreenPath) ??
+    (followLatestScreen ? latestScreen : latestScreen)
+
+  useEffect(() => {
+    if (!latestScreen) {
+      setSelectedScreenPath(null)
+      return
+    }
+    if (followLatestScreen || !selectedScreenPath) {
+      setSelectedScreenPath(latestScreen.path)
+    }
+  }, [followLatestScreen, latestScreen?.path, selectedScreenPath])
 
   useEffect(() => {
     const revokeObjectUrl = (value: string) => {
@@ -198,6 +215,9 @@ export default function Builder() {
       setSession(nextSession)
       setDraft(null)
       setConnectivitySummary(null)
+      setCurrentScreenUrl(null)
+      setSelectedScreenPath(null)
+      setFollowLatestScreen(true)
       message.success('Builder session 已创建')
     } catch (error) {
       message.error((error as Error).message)
@@ -427,13 +447,45 @@ export default function Builder() {
                       )}
                     </>
                   ) : null}
+                  <Space>
+                    <Tag color={followLatestScreen ? 'blue' : 'default'}>
+                      {followLatestScreen ? 'Following Latest' : 'Manual Selection'}
+                    </Tag>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setFollowLatestScreen(true)
+                        if (latestScreen) {
+                          setSelectedScreenPath(latestScreen.path)
+                        }
+                      }}
+                      disabled={!latestScreen || followLatestScreen}
+                    >
+                      Follow Latest
+                    </Button>
+                  </Space>
                   <List
                     size="small"
-                    dataSource={runtimeData.recent_screens.slice().reverse()}
+                    dataSource={availableScreens.slice().reverse()}
                     renderItem={(item) => (
-                      <List.Item>
-                        <Space direction="vertical" size={0}>
-                          <Typography.Text>{item.label}</Typography.Text>
+                      <List.Item
+                        style={{
+                          cursor: 'pointer',
+                          background:
+                            item.path === currentScreen?.path ? 'rgba(22, 119, 255, 0.08)' : undefined,
+                          borderRadius: 8,
+                          paddingInline: 8,
+                        }}
+                        onClick={() => {
+                          setFollowLatestScreen(false)
+                          setSelectedScreenPath(item.path)
+                        }}
+                      >
+                        <Space direction="vertical" size={0} style={{ width: '100%' }}>
+                          <Typography.Text strong={item.path === currentScreen?.path}>
+                            {item.label}
+                          </Typography.Text>
+                          <Typography.Text type="secondary">{item.step}</Typography.Text>
                           <Typography.Text type="secondary">
                             {new Date(item.taken_at).toLocaleString()}
                           </Typography.Text>
