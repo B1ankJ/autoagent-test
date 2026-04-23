@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,8 @@ from autoagent.executors.response_extractor import OcrExtractor, UiTreeExtractor
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import ActionStep, AndroidProfile
+
+log = logging.getLogger(__name__)
 
 
 class AndroidExecutor(Executor):
@@ -37,6 +41,13 @@ class AndroidExecutor(Executor):
         ocr_extractor = OcrExtractor()
         responses: list[str] = []
 
+        log.info(
+            "android sample %s start: device=%s package=%s activity=%s",
+            sample.id,
+            ctx.device_serial,
+            profile.package,
+            profile.activity,
+        )
         await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
         async with AndroidInput(device, profile.input_method) as input_ctl:
             action_runner = AndroidActionRunner(
@@ -45,21 +56,43 @@ class AndroidExecutor(Executor):
                 action_log=ctx.action_log,
                 replay_path=ctx.action_replay_path,
             )
+            ready = await _wait_for_ready_text(
+                device,
+                profile.ready_check.text,
+                timeout_sec=profile.ready_check.timeout_sec,
+            )
+            if not ready and profile.recovery_path:
+                log.info("android sample %s ready_check failed, running recovery_path", sample.id)
+                await action_runner.run(profile.recovery_path)
+                ready = await _wait_for_ready_text(
+                    device,
+                    profile.ready_check.text,
+                    timeout_sec=profile.ready_check.timeout_sec,
+                )
+            if not ready:
+                raise TimeoutError(
+                    f"ready_check text not found: {profile.ready_check.text!r}"
+                )
             if profile.new_session_action:
+                log.info("android sample %s running new_session_action", sample.id)
                 await action_runner.run(profile.new_session_action)
             for idx, prompt in enumerate(sample.prompts, start=1):
+                log.info("android sample %s prompt %s set_text start", sample.id, idx)
                 await input_ctl.set_text(profile.input_locator, prompt)
+                log.info("android sample %s prompt %s send click", sample.id, idx)
                 await action_runner.run(
                     [ActionStep(action="click_locator", locator=profile.send_button_locator)]
                 )
                 xml: str | None = None
                 if profile.complete_detection.type == "pixel_stable":
+                    log.info("android sample %s prompt %s wait pixel_stable", sample.id, idx)
                     await wait_for_pixel_stable(
                         device,
                         stable_sec=profile.complete_detection.stable_sec,
                         max_wait_sec=profile.complete_detection.max_wait_sec,
                     )
                 else:
+                    log.info("android sample %s prompt %s wait ui_tree_stable", sample.id, idx)
                     xml = await wait_for_ui_tree_stable(
                         device,
                         stable_sec=profile.complete_detection.stable_sec,
@@ -109,3 +142,13 @@ class AndroidExecutor(Executor):
                 )
 
         return responses
+
+
+async def _wait_for_ready_text(device: Any, text: str, *, timeout_sec: float) -> bool:
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        if text in xml:
+            return True
+        await asyncio.sleep(0.2)
+    return False

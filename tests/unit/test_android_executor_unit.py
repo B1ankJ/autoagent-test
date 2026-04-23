@@ -47,6 +47,12 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
     )
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
 
     profile = AndroidProfile(
         name="fake_android",
@@ -142,6 +148,12 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         "autoagent.executors.android_executor.OcrExtractor",
         lambda: FakeOcrExtractor(),
     )
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
     device.screenshot.return_value = b"raw-frame"
 
     profile = AndroidProfile(
@@ -186,3 +198,89 @@ async def test_execute_ocr_mode_uses_pixel_stable(
     assert out == ["ocr result"]
     wait_pixel.assert_called_once()
     wait_ui.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+    recovery_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        if kwargs == {"text": "Chat"}:
+            return recovery_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    ready_states = iter(
+        [
+            False,
+            True,
+        ]
+    )
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return next(ready_states)
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
+        recovery_path=[
+            {
+                "action": "click_locator",
+                "locator": {"type": "text", "value": "Chat"},
+            }
+        ],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hi"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(
+        sample,
+        profile,
+        ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
+    )
+
+    assert out == ["echo: hi"]
+    recovery_target.click.assert_called_once()
+    input_target.set_text.assert_called_once_with("hi")
