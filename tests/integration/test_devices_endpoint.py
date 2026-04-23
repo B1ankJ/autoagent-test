@@ -26,13 +26,41 @@ async def test_refresh_returns_devices(client, monkeypatch):
     from autoagent.api import devices as mod
 
     async def fake_refresh():
-        return [DeviceInfo(serial="emulator-5554", online=True, enabled=True)]
+        return [
+            DeviceInfo(
+                serial="emulator-5554",
+                online=True,
+                enabled=True,
+                adb_keyboard_installed=True,
+                adb_keyboard_enabled=False,
+            )
+        ]
 
     monkeypatch.setattr(mod, "refresh_devices_now", fake_refresh)
     h = await _h(client)
     r = await client.post("/api/v1/devices/refresh", headers=h)
     assert r.status_code == 200
     assert r.json()[0]["serial"] == "emulator-5554"
+    assert r.json()[0]["adb_keyboard_installed"] is True
+
+
+async def test_install_adb_keyboard_route(client, monkeypatch):
+    from autoagent.api import devices as mod
+
+    async def fake_install(_serial: str):
+        return DeviceInfo(
+            serial="emulator-5554",
+            online=True,
+            enabled=True,
+            adb_keyboard_installed=True,
+            adb_keyboard_enabled=False,
+        )
+
+    monkeypatch.setattr(mod, "install_adb_keyboard_for_device", fake_install)
+    h = await _h(client)
+    r = await client.post("/api/v1/devices/emulator-5554/install-adb-keyboard", headers=h)
+    assert r.status_code == 200
+    assert r.json()["adb_keyboard_installed"] is True
 
 
 async def test_patch_label_404(client):

@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from autoagent.config.settings import get_settings
@@ -32,6 +33,17 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if engine.url.get_backend_name().startswith("sqlite"):
+            result = await conn.execute(text("PRAGMA table_info(devices)"))
+            columns = {row[1] for row in result.fetchall()}
+            if "adb_keyboard_installed" not in columns:
+                await conn.execute(
+                    text("ALTER TABLE devices ADD COLUMN adb_keyboard_installed BOOLEAN")
+                )
+            if "adb_keyboard_enabled" not in columns:
+                await conn.execute(
+                    text("ALTER TABLE devices ADD COLUMN adb_keyboard_enabled BOOLEAN")
+                )
 
 
 async def reset_db_for_tests() -> None:

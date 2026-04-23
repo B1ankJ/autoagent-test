@@ -106,6 +106,8 @@ class DeviceInfo(BaseModel):
     label: str | None = None
     model: str | None = None
     android_version: str | None = None
+    adb_keyboard_installed: bool | None = None
+    adb_keyboard_enabled: bool | None = None
     online: bool
     enabled: bool
     last_seen_at: datetime | None = None

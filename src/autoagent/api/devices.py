@@ -1,15 +1,22 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from autoagent.api._deps import get_device_monitor
 from autoagent.auth.deps import require_user
-from autoagent.devices.adb import AdbCommandError
-from autoagent.models.api import DeviceInfo, DeviceLabelUpdate
-from autoagent.storage.devices import (
-    list_devices as list_stored_devices,
+from autoagent.config.settings import get_settings
+from autoagent.devices.adb import (
+    AdbCommandError,
+    install_apk,
+    is_ime_enabled,
+    is_package_installed,
 )
+from autoagent.models.api import DeviceInfo, DeviceLabelUpdate
+from autoagent.storage.devices import list_devices as list_stored_devices
 from autoagent.storage.devices import (
     update_device_enabled,
     update_device_label,
+    upsert_discovered_device,
 )
 
 router = APIRouter(prefix="/devices", tags=["devices"], dependencies=[Depends(require_user)])
@@ -19,6 +26,30 @@ async def refresh_devices_now() -> list[DeviceInfo]:
     monitor = get_device_monitor()
     await monitor.sync_once()
     return await list_stored_devices()
+
+
+async def install_adb_keyboard_for_device(serial: str) -> DeviceInfo:
+    settings = get_settings()
+    apk_path = settings.adb_keyboard_apk_path
+    if apk_path is None:
+        raise HTTPException(status_code=400, detail="ADB_KEYBOARD_APK_PATH is not configured")
+    if not apk_path.exists():
+        raise HTTPException(status_code=400, detail=f"ADB Keyboard APK not found: {apk_path}")
+
+    try:
+        install_apk(serial, apk_path)
+    except AdbCommandError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    return await upsert_discovered_device(
+        serial=serial,
+        model=None,
+        android_version=None,
+        adb_keyboard_installed=is_package_installed(serial, "com.android.adbkeyboard"),
+        adb_keyboard_enabled=is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME"),
+        online=True,
+        seen_at=datetime.now(timezone.utc),
+    )
 
 
 @router.get("", response_model=list[DeviceInfo])
@@ -56,3 +87,8 @@ async def patch_label(serial: str, body: DeviceLabelUpdate) -> DeviceInfo:
     if row is None:
         raise HTTPException(status_code=404, detail="device not found")
     return row
+
+
+@router.post("/{serial}/install-adb-keyboard", response_model=DeviceInfo)
+async def install_adb_keyboard_route(serial: str) -> DeviceInfo:
+    return await install_adb_keyboard_for_device(serial)

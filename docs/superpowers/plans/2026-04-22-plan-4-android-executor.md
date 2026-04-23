@@ -159,7 +159,7 @@ Android mode requires:
     python3.11 -m pip install -e '.[dev]'
     adb devices
 
-Tier 1 uses `uiautomator2` plus a connected emulator/real device. If you plan to use `input_method: adb_keyboard`, install `com.android.adbkeyboard` on the device manually; we do not bundle that APK in this repo.
+Tier 1 uses `uiautomator2` plus a connected emulator/real device. If you plan to use `input_method: adb_keyboard`, point `ADB_KEYBOARD_APK_PATH` at a local APK so the Devices page can install `com.android.adbkeyboard`; we still do not bundle that APK in this repo.
 ```
 
 In `CLAUDE.md`, extend the common commands block and environment notes:
@@ -172,7 +172,7 @@ adb devices -l
 
 ```md
 - **Android verification:** real-device tests are marked `@pytest.mark.android` and are skipped in the fast suite.
-- **ADB Keyboard:** `input_method: adb_keyboard` expects `com.android.adbkeyboard` to be preinstalled; Plan 4 does not auto-install it.
+- **ADB Keyboard:** `input_method: adb_keyboard` relies on `com.android.adbkeyboard`. The device list reports install/enable status, the Devices page can install from `ADB_KEYBOARD_APK_PATH`, and Android execution auto-switches/restores the IME for non-ASCII input.
 ```
 
 - [x] **Step 4: Reinstall deps and verify the baseline remains green**

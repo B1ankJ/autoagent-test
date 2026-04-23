@@ -94,6 +94,8 @@ export interface Device {
   label: string | null
   model: string | null
   android_version: string | null
+  adb_keyboard_installed: boolean | null
+  adb_keyboard_enabled: boolean | null
   online: boolean
   enabled: boolean
   last_seen_at: string | null

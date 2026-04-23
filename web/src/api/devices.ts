@@ -19,3 +19,17 @@ export function useRefreshDevices() {
     onSuccess: (rows) => queryClient.setQueryData(['devices'], rows),
   })
 }
+
+export function useInstallAdbKeyboard() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) =>
+      (await client.post<Device>(`/devices/${serial}/install-adb-keyboard`)).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}

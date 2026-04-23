@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
 import { DevicesPage } from './Index'
+
+const mutateAsync = vi.fn()
 
 vi.mock('../../api/devices', () => ({
   useDevices: () => ({
@@ -13,6 +16,8 @@ vi.mock('../../api/devices', () => ({
         label: 'Pixel 8',
         model: 'sdk',
         android_version: '14',
+        adb_keyboard_installed: false,
+        adb_keyboard_enabled: false,
         online: true,
         enabled: true,
       },
@@ -20,6 +25,7 @@ vi.mock('../../api/devices', () => ({
     isLoading: false,
   }),
   useRefreshDevices: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useInstallAdbKeyboard: () => ({ mutateAsync, isPending: false }),
 }))
 
 it('renders device rows', () => {
@@ -32,4 +38,20 @@ it('renders device rows', () => {
   )
   expect(screen.getByText('emulator-5554')).toBeInTheDocument()
   expect(screen.getByText('Pixel 8')).toBeInTheDocument()
+  expect(screen.getByText('not installed')).toBeInTheDocument()
+})
+
+it('installs adb keyboard from device table action', async () => {
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <DevicesPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  )
+
+  await user.click(screen.getByRole('button', { name: 'Install ADB Keyboard' }))
+
+  expect(mutateAsync).toHaveBeenCalledWith('emulator-5554')
 })

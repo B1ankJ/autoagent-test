@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     data_root: Path = Path("./data")
     logs_root: Path = Path("./logs")
+    adb_keyboard_apk_path: Path | None = None
 
     default_api_timeout_sec: int = 60
     default_gui_timeout_sec: int = 180

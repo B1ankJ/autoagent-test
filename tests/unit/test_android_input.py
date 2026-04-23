@@ -41,3 +41,42 @@ async def test_set_text_escapes_shell_input_spaces() -> None:
 
     target.click.assert_called_once()
     device.shell.assert_called_once_with(["input", "text", "hello%sworld"])
+
+
+@pytest.mark.asyncio
+async def test_set_text_adb_keyboard_switches_and_restores_ime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    device = MagicMock()
+    target = MagicMock()
+    device.return_value = target
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    restored: list[tuple[object, object]] = []
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: restored.append((_serial, _ime)),
+    )
+
+    async with AndroidInput(device, "adb_keyboard") as ctl:
+        await ctl.set_text(
+            Locator(type="resource_id", value="demo:id/input"),
+            "你好",
+        )
+
+    target.click.assert_called_once()
+    device.shell.assert_any_call(
+        [
+            "am",
+            "broadcast",
+            "-a",
+            "ADB_INPUT_B64",
+            "--es",
+            "msg",
+            "5L2g5aW9",
+        ]
+    )
+    assert restored == [(device.serial, "com.example/.Ime")]

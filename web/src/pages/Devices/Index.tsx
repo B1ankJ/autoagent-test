@@ -1,11 +1,12 @@
 import { Button, Card, Empty, Space, Table, Tag, Typography } from 'antd'
 
-import { useDevices, useRefreshDevices } from '../../api/devices'
+import { useDevices, useInstallAdbKeyboard, useRefreshDevices } from '../../api/devices'
 import { Device } from '../../types/api'
 
 export function DevicesPage() {
   const devices = useDevices()
   const refresh = useRefreshDevices()
+  const installAdbKeyboard = useInstallAdbKeyboard()
 
   return (
     <Card
@@ -53,6 +54,40 @@ export function DevicesPage() {
                     {row.enabled ? 'enabled' : 'disabled'}
                   </Tag>
                 </Space>
+              ),
+            },
+            {
+              title: 'ADB Keyboard',
+              render: (_, row) => (
+                <Space>
+                  <Tag color={row.adb_keyboard_installed ? 'green' : 'default'}>
+                    {row.adb_keyboard_installed === null
+                      ? 'install unknown'
+                      : row.adb_keyboard_installed
+                        ? 'installed'
+                        : 'not installed'}
+                  </Tag>
+                  <Tag color={row.adb_keyboard_enabled ? 'blue' : 'default'}>
+                    {row.adb_keyboard_enabled === null
+                      ? 'ime unknown'
+                      : row.adb_keyboard_enabled
+                        ? 'ime enabled'
+                        : 'ime disabled'}
+                  </Tag>
+                </Space>
+              ),
+            },
+            {
+              title: 'Actions',
+              render: (_, row) => (
+                <Button
+                  size="small"
+                  disabled={!row.online || row.adb_keyboard_installed === true}
+                  loading={installAdbKeyboard.isPending}
+                  onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
+                >
+                  Install ADB Keyboard
+                </Button>
               ),
             },
           ]}

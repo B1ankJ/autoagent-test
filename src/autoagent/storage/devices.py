@@ -15,6 +15,8 @@ def _to_info(row: Device) -> DeviceInfo:
         label=row.label,
         model=row.model,
         android_version=row.android_version,
+        adb_keyboard_installed=row.adb_keyboard_installed,
+        adb_keyboard_enabled=row.adb_keyboard_enabled,
         online=row.online,
         enabled=row.enabled,
         last_seen_at=row.last_seen_at,
@@ -26,6 +28,8 @@ async def upsert_discovered_device(
     serial: str,
     model: str | None,
     android_version: str | None,
+    adb_keyboard_installed: bool | None,
+    adb_keyboard_enabled: bool | None,
     online: bool,
     seen_at: datetime,
 ) -> DeviceInfo:
@@ -37,6 +41,8 @@ async def upsert_discovered_device(
             s.add(row)
         row.model = model
         row.android_version = android_version
+        row.adb_keyboard_installed = adb_keyboard_installed
+        row.adb_keyboard_enabled = adb_keyboard_enabled
         row.online = online
         row.last_seen_at = seen_at
         await s.commit()

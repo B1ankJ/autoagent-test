@@ -18,6 +18,8 @@ async def test_upsert_and_patch_device() -> None:
         serial="emulator-5554",
         model="sdk_gphone64_arm64",
         android_version="14",
+        adb_keyboard_installed=True,
+        adb_keyboard_enabled=False,
         online=True,
         seen_at=datetime.now(timezone.utc),
     )
@@ -29,3 +31,5 @@ async def test_upsert_and_patch_device() -> None:
     assert rows[0].label == "Pixel 8 API 34"
     assert rows[0].enabled is False
     assert rows[0].online is True
+    assert rows[0].adb_keyboard_installed is True
+    assert rows[0].adb_keyboard_enabled is False

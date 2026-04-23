@@ -31,6 +31,8 @@ class DeviceMonitor:
                 serial=row.serial,
                 model=row.model,
                 android_version=row.android_version,
+                adb_keyboard_installed=row.adb_keyboard_installed,
+                adb_keyboard_enabled=row.adb_keyboard_enabled,
                 online=row.online,
                 seen_at=now,
             )

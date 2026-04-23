@@ -59,6 +59,8 @@ class Device(Base):
     label = Column(String, nullable=True)
     model = Column(String, nullable=True)
     android_version = Column(String, nullable=True)
+    adb_keyboard_installed = Column(Boolean, nullable=True)
+    adb_keyboard_enabled = Column(Boolean, nullable=True)
     online = Column(Boolean, nullable=False, default=False)
     enabled = Column(Boolean, nullable=False, default=True)
     last_seen_at = Column(DateTime, nullable=True)

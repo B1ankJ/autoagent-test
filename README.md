@@ -41,8 +41,9 @@ adb devices
 ```
 
 Tier 1 uses `uiautomator2` plus a connected emulator or real device. If you plan to use
-`input_method: adb_keyboard`, install `com.android.adbkeyboard` on the device manually; this
-repo does not bundle that APK.
+`input_method: adb_keyboard`, point `ADB_KEYBOARD_APK_PATH` at a local APK file so the Devices
+page can offer one-click installation. The executor auto-switches to
+`com.android.adbkeyboard/.AdbIME` for non-ASCII input and restores the previous IME afterwards.
 
 The optional Tier 1 fake-chat smoke target lives under `tests/fixtures/fake_chat_apk/`. Build its
 debug APK in Android Studio and place it at `tests/fixtures/fake_chat_apk/fake_chat-debug.apk`, or
