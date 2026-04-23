@@ -164,8 +164,19 @@ def _nearest_scroll_container(
 def _latest_bubble_locator(text_nodes: list[ElementTree.Element]) -> dict:
     classes = {node.attrib.get("class") for node in text_nodes if node.attrib.get("class")}
     if len(classes) == 1:
-        return _xpath_locator(f'//*[@class="{next(iter(classes))}"]')
-    return _locator_from_node(text_nodes[-1] if text_nodes else None)
+        return _class_locator(next(iter(classes)))
+    fallback = text_nodes[-1].attrib.get("class") if text_nodes else None
+    if fallback:
+        return _class_locator(fallback)
+    return _class_locator("android.widget.TextView")
+
+
+def _response_review_option(candidate: dict) -> dict:
+    return {
+        "response_container_locator": candidate["response_container_locator"],
+        "scroll_container_locator": candidate["scroll_container_locator"],
+        "latest_bubble_match": candidate["latest_bubble_match"],
+    }
 
 
 def _response_candidate(
@@ -286,9 +297,9 @@ def _build_review_items(
             _review_item(
                 field="latest_bubble_match",
                 reason="Multiple response containers look plausible from repeated response text.",
-                recommended_option=response_candidates[0]["latest_bubble_match"],
+                recommended_option=_response_review_option(response_candidates[0]),
                 alternative_candidates=[
-                    candidate["latest_bubble_match"] for candidate in response_candidates[1:]
+                    _response_review_option(candidate) for candidate in response_candidates[1:]
                 ],
                 evidence_refs=response_candidates[0].get("evidence_refs", []),
             )
@@ -298,7 +309,7 @@ def _build_review_items(
             _review_item(
                 field="latest_bubble_match",
                 reason="Response candidate confidence is low because the XML has weak repetition or container hints.",
-                recommended_option=response_candidates[0]["latest_bubble_match"],
+                recommended_option=_response_review_option(response_candidates[0]),
                 alternative_candidates=[],
                 evidence_refs=response_candidates[0].get("evidence_refs", []),
             )

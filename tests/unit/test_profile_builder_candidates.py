@@ -33,7 +33,10 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
         draft.response_candidates[0]["scroll_container_locator"]["value"]
         == '//*[@bounds="[0,320][1080,2060]"]'
     )
-    assert draft.response_candidates[0]["latest_bubble_match"]["value"] == '//*[@class="android.widget.TextView"]'
+    assert draft.response_candidates[0]["latest_bubble_match"] == {
+        "type": "class",
+        "value": "android.widget.TextView",
+    }
     assert draft.review_items == []
 
 
@@ -70,10 +73,20 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
     assert len(draft.review_items) == 1
     review_item = draft.review_items[0]
     assert review_item["field"] == "latest_bubble_match"
-    assert review_item["recommended_option"] == draft.response_candidates[0]["latest_bubble_match"]
+    assert review_item["recommended_option"] == {
+        "response_container_locator": draft.response_candidates[0]["response_container_locator"],
+        "scroll_container_locator": draft.response_candidates[0]["scroll_container_locator"],
+        "latest_bubble_match": draft.response_candidates[0]["latest_bubble_match"],
+    }
     assert review_item["alternative_candidates"] == [
-        candidate["latest_bubble_match"] for candidate in draft.response_candidates[1:]
+        {
+            "response_container_locator": candidate["response_container_locator"],
+            "scroll_container_locator": candidate["scroll_container_locator"],
+            "latest_bubble_match": candidate["latest_bubble_match"],
+        }
+        for candidate in draft.response_candidates[1:]
     ]
+    assert review_item["recommended_option"] != review_item["alternative_candidates"][0]
     assert review_item["evidence_refs"][0]["source"] == "response_xml"
     assert (
         review_item["evidence_refs"][0]["container_locator"]

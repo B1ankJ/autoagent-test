@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 from httpx import ASGITransport, AsyncClient
 
 from autoagent.auth.passwords import hash_password
@@ -388,3 +389,8 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert body["candidates"]["input_candidates"][0]["locator"]["value"] == '//*[@class="android.widget.EditText"]'
     assert "draft_profile.yaml" in body["session"]["artifacts"]
     assert body["draft_profile_yaml"].startswith("name: qwen")
+    profile_data = yaml.safe_load(body["draft_profile_yaml"])
+    assert profile_data["response_extraction"]["latest_bubble_match"] == {
+        "type": "class",
+        "value": "android.widget.TextView",
+    }
