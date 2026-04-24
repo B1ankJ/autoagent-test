@@ -2,6 +2,15 @@ from dataclasses import asdict, dataclass
 from xml.etree import ElementTree
 
 _INPUT_HINT_KEYWORDS = ("发消息", "说话", "输入", "send", "message", "chat")
+_RESPONSE_UI_CHROME_PATTERNS = (
+    "内容由AI生成",
+    "深度思考",
+    "AI生图",
+    "AI打车",
+    "拍题答疑",
+    "发消息",
+    "按住说话",
+)
 _SYSTEM_PACKAGE_PREFIXES = (
     "com.android.systemui",
     "com.baidu.input",
@@ -309,6 +318,41 @@ def _review_locator_from_node(node: ElementTree.Element) -> dict:
     return _class_locator("android.widget.TextView")
 
 
+def _looks_like_response_ui_chrome(text: str) -> bool:
+    stripped = text.strip()
+    return bool(stripped and any(pattern in stripped for pattern in _RESPONSE_UI_CHROME_PATTERNS))
+
+
+def _response_text_score(text: str) -> int:
+    stripped = text.strip()
+    if not stripped:
+        return -2000
+    if _looks_like_response_ui_chrome(stripped):
+        return -4000
+    if len(stripped) <= 3:
+        return -1200
+    return min(len(stripped) * 8, 320)
+
+
+def _response_layout_score(bounds: tuple[int, int, int, int] | None) -> int:
+    if bounds is None:
+        return 0
+    x1, y1, x2, y2 = bounds
+    width = x2 - x1
+    score = y2
+    if y2 > 1850:
+        score -= 2500
+    if width > 600 and x1 < 120:
+        score += 600
+    if x1 > 300:
+        score -= 900
+    if width < 280:
+        score -= 600
+    if y1 < 180:
+        score -= 300
+    return score
+
+
 def _response_review_option(candidate: dict) -> dict:
     option = {
         "response_container_locator": candidate["response_container_locator"],
@@ -334,7 +378,6 @@ def _response_candidate(
     scroll_bonus = 40 if scroll_container is not None else 0
     bubble_bounds = _parse_bounds(bubble_node.attrib.get("bounds"))
     bubble_text = (bubble_node.attrib.get("text") or "").strip()
-    bubble_y = bubble_bounds[3] if bubble_bounds is not None else 0
     score = repeated_count * 100 + total_text_len * 5 + _bounds_area(container_bounds) // 1000
     locator = _locator_from_node(container)
     scroll_locator = _locator_from_node(scroll_container or container)
@@ -345,7 +388,13 @@ def _response_candidate(
         "latest_bubble_match": latest_locator,
         "review_latest_bubble_match": _review_locator_from_node(bubble_node),
         "bubble_preview": bubble_text[:80],
-        "score": score + container_bonus + scroll_bonus + bubble_y,
+        "score": (
+            score
+            + container_bonus
+            + scroll_bonus
+            + _response_layout_score(bubble_bounds)
+            + _response_text_score(bubble_text)
+        ),
         "reason": "visible response text node inside repeated response container",
         "evidence_refs": [
             _evidence_ref(

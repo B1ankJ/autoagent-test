@@ -227,6 +227,52 @@ def test_build_android_candidates_prefers_input_placeholder_and_small_send_contr
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,2038][1020,2149]"]'
 
 
+def test_build_android_candidates_prefers_latest_assistant_response_over_ui_chrome() -> None:
+    idle_xml = """
+    <hierarchy>
+      <node text="发消息或按住说话..." class="android.widget.TextView" bounds="[177,2066][777,2123]" />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node text="hello" class="android.widget.EditText" bounds="[36,1882][1032,2002]" />
+      <node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+        <node class="android.widget.FrameLayout" bounds="[0,300][1080,622]">
+          <node class="android.widget.TextView" text="123" bounds="[858,300][1020,436]" />
+          <node class="android.widget.TextView" text="在呢，说吧，想聊点啥？" bounds="[0,484][1080,622]" />
+        </node>
+        <node class="android.widget.FrameLayout" bounds="[0,622][1080,1100]">
+          <node class="android.widget.TextView" text="hello" bounds="[838,622][1020,758]" />
+          <node class="android.widget.TextView" text="嗨，来啦。今天怎么样？" bounds="[0,806][1080,944]" />
+        </node>
+        <node class="android.widget.FrameLayout" bounds="[0,1866][1080,1974]">
+          <node class="android.widget.TextView" text="AI打车" bounds="[267,1896][382,1943]" />
+          <node class="android.widget.TextView" text="深度思考" bounds="[535,1896][691,1943]" />
+          <node class="android.widget.TextView" text="AI生图" bounds="[844,1896][959,1943]" />
+        </node>
+        <node class="android.widget.FrameLayout" bounds="[0,1866][1080,2214]">
+          <node class="android.widget.TextView" text="发消息或按住说话..." bounds="[177,2066][777,2123]" />
+          <node class="android.widget.TextView" text="内容由AI生成" bounds="[450,2208][629,2244]" />
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+
+    assert draft.response_candidates[0]["bubble_preview"] == "嗨，来啦。今天怎么样？"
+    assert any(candidate["bubble_preview"] == "AI打车" for candidate in draft.response_candidates)
+
+
 def test_build_android_candidates_ignores_system_ui_send_like_controls():
     idle_xml = """
     <hierarchy>
