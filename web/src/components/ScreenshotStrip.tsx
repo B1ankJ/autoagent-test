@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Image, Space, Spin, Typography } from 'antd'
-import { listScreenshots, screenshotPath } from '../api/screenshots'
+import { fetchScreenshotBlobUrl, listScreenshots } from '../api/screenshots'
 
 interface Props {
   batchId: string
@@ -12,6 +13,29 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
     queryKey: ['screenshots', batchId, sampleId],
     queryFn: async () => listScreenshots(batchId, sampleId),
   })
+  const screenshotUrls = useQueries({
+    queries: (screenshots.data ?? [])
+      .filter((shot) => !shot.is_sensitive)
+      .map((shot) => ({
+        queryKey: ['screenshot-blob', batchId, sampleId, shot.name],
+        queryFn: async () => fetchScreenshotBlobUrl(batchId, sampleId, shot.name),
+        staleTime: Infinity,
+      })),
+  })
+
+  useEffect(() => {
+    return () => {
+      const revoke = URL.revokeObjectURL
+      if (typeof revoke !== 'function') {
+        return
+      }
+      screenshotUrls.forEach((query) => {
+        if (typeof query.data === 'string') {
+          revoke(query.data)
+        }
+      })
+    }
+  }, [screenshotUrls])
 
   if (screenshots.isLoading) {
     return <Spin />
@@ -24,7 +48,7 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
   return (
     <Image.PreviewGroup>
       <Space wrap>
-        {screenshots.data.map((shot) =>
+        {screenshots.data.map((shot, index) =>
           shot.is_sensitive ? (
             <div
               key={shot.name}
@@ -44,7 +68,7 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
             <Image
               key={shot.name}
               width={160}
-              src={screenshotPath(batchId, sampleId, shot.name)}
+              src={screenshotUrls[index]?.data}
               alt={shot.label}
             />
           ),

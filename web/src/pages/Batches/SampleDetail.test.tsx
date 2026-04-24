@@ -7,6 +7,7 @@ import { SampleDetail } from './SampleDetail'
 
 const useBatchStream = vi.fn()
 const listScreenshots = vi.fn()
+const fetchScreenshotBlobUrl = vi.fn()
 const downloadSampleActions = vi.fn()
 
 vi.mock('../../hooks/useBatchStream', () => ({
@@ -15,8 +16,7 @@ vi.mock('../../hooks/useBatchStream', () => ({
 
 vi.mock('../../api/screenshots', () => ({
   listScreenshots: (...args: unknown[]) => listScreenshots(...args),
-  screenshotPath: (batchId: string, sampleId: string, name: string) =>
-    `/api/v1/batches/${batchId}/samples/${sampleId}/screenshots/${name}`,
+  fetchScreenshotBlobUrl: (...args: unknown[]) => fetchScreenshotBlobUrl(...args),
 }))
 
 vi.mock('../../api/batches', async () => {
@@ -58,6 +58,7 @@ describe('SampleDetail', () => {
     listScreenshots.mockResolvedValue([
       { name: '001_ready.png', label: 'ready', taken_at: '2026-04-22T00:00:00Z' },
     ])
+    fetchScreenshotBlobUrl.mockResolvedValue('blob:ready')
 
     renderWithProviders(
       <Routes>
@@ -74,9 +75,10 @@ describe('SampleDetail', () => {
     expect(screen.getByRole('button', { name: /下载回放/i })).toBeInTheDocument()
     await waitFor(() => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
+      expect(fetchScreenshotBlobUrl).toHaveBeenCalledWith('b1', 's1', '001_ready.png')
       expect(screen.getByRole('img', { name: 'ready' })).toHaveAttribute(
         'src',
-        '/api/v1/batches/b1/samples/s1/screenshots/001_ready.png',
+        'blob:ready',
       )
     })
 
@@ -129,6 +131,7 @@ describe('SampleDetail', () => {
     listScreenshots.mockResolvedValue([
       { name: 'after_send_1.png', label: 'after_send_1', taken_at: '2026-04-24T00:00:00Z' },
     ])
+    fetchScreenshotBlobUrl.mockResolvedValue('blob:after-send')
 
     renderWithProviders(
       <Routes>
