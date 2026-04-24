@@ -75,6 +75,7 @@ Builder behavior:
 - `Start Builder Session` enables `ADB Keyboard` once for the whole builder session and restores the previous IME after `Generate Draft`
 - `Capture Editing State` does not auto-tap into the input area and does not run an extra runtime probe; the draft is derived only from the manual `idle` and `editing` captures
 - Review generation now keeps raw node-level candidates instead of collapsing them away early; when multiple plausible `input_locator`, `send_action`, or `latest_bubble_match` targets exist, the UI should show all candidate boxes and let the user choose
+- Android response extraction now treats `response_container_locator` as a structural anchor, not a single frozen bounds box. Runtime extraction ranks matching containers and selects the latest valid bubble inside the best match, so the response target can move as the conversation grows.
 
 Builder artifacts are stored under `data/profile_builder/<session_id>/` and include
 `capture_<step>.*`, `candidates.json`, `review_items.json`, `draft_profile.yaml`, and

@@ -62,6 +62,10 @@ def _class_locator(value: str) -> dict:
     return {"type": "class", "value": value}
 
 
+def _resource_id_locator(value: str) -> dict:
+    return {"type": "resource_id", "value": value}
+
+
 def _bounds_payload(bounds: tuple[int, int, int, int] | None) -> list[int] | None:
     if bounds is None:
         return None
@@ -126,6 +130,21 @@ def _locator_from_node(node: ElementTree.Element | None) -> dict:
     node_class = node.attrib.get("class")
     if node_class:
         return _xpath_locator(f'//*[@class="{node_class}"]')
+    return _class_locator("android.widget.TextView")
+
+
+def _stable_locator_from_node(node: ElementTree.Element | None) -> dict:
+    if node is None:
+        return _class_locator("android.widget.TextView")
+    resource_id = (node.attrib.get("resource-id") or "").strip()
+    if resource_id:
+        return _resource_id_locator(resource_id)
+    node_class = (node.attrib.get("class") or "").strip()
+    if node_class:
+        return _class_locator(node_class)
+    bounds = node.attrib.get("bounds")
+    if bounds:
+        return _xpath_locator(f'//*[@bounds="{bounds}"]')
     return _class_locator("android.widget.TextView")
 
 
@@ -379,8 +398,8 @@ def _response_candidate(
     bubble_bounds = _parse_bounds(bubble_node.attrib.get("bounds"))
     bubble_text = (bubble_node.attrib.get("text") or "").strip()
     score = repeated_count * 100 + total_text_len * 5 + _bounds_area(container_bounds) // 1000
-    locator = _locator_from_node(container)
-    scroll_locator = _locator_from_node(scroll_container or container)
+    locator = _stable_locator_from_node(scroll_container or container)
+    scroll_locator = _stable_locator_from_node(scroll_container or container)
     latest_locator = _latest_bubble_locator(text_nodes)
     return {
         "response_container_locator": locator,

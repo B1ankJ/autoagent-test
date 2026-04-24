@@ -103,3 +103,28 @@ def test_ui_tree_extractor_does_not_fallback_to_whole_page_when_container_is_mis
     )
 
     assert result.text == ""
+
+
+def test_ui_tree_extractor_prefers_latest_visible_assistant_reply_over_bottom_chips() -> None:
+    xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+        <node class="android.widget.TextView" text="在呢，说吧，想聊点啥？" bounds="[0,484][1080,622]" />
+        <node class="android.widget.TextView" text="嗨，来啦。今天怎么样？" bounds="[0,806][1080,944]" />
+        <node class="android.widget.TextView" text="hello呀，今天心情怎么样？" bounds="[0,1128][1080,1266]" />
+        <node class="android.widget.TextView" text="内容由AI生成" bounds="[450,2208][629,2244]" />
+        <node class="android.widget.TextView" text="AI打车" bounds="[267,1768][382,1815]" />
+        <node class="android.widget.TextView" text="深度思考" bounds="[535,1768][691,1815]" />
+        <node class="android.widget.TextView" text="AI生图" bounds="[844,1768][959,1815]" />
+        <node class="android.widget.EditText" text="hello" bounds="[36,1882][1032,2002]" />
+      </node>
+    </hierarchy>
+    """
+
+    result = UiTreeExtractor().extract_from_xml(
+        xml,
+        response_container_locator=Locator(type="resource_id", value="missing:id/container"),
+        latest_bubble_locator=Locator(type="class", value="android.widget.TextView"),
+    )
+
+    assert result.text == "hello呀，今天心情怎么样？"

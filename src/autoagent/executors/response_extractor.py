@@ -38,6 +38,7 @@ _UI_CHROME_PATTERNS = (
     "发消息",
     "按住说话",
 )
+_MIN_BUBBLE_HEIGHT = 80
 
 
 def _looks_like_ui_chrome(text: str) -> bool:
@@ -80,6 +81,10 @@ def _find_first_match(root: ET.Element, locator: Locator) -> ET.Element | None:
     return None
 
 
+def _find_all_matches(root: ET.Element, locator: Locator) -> list[ET.Element]:
+    return [node for node in root.iter("node") if _matches_locator(node, locator)]
+
+
 def _candidate_nodes(container: ET.Element, locator: Locator) -> list[ET.Element]:
     matches = [node for node in container.iter("node") if _matches_locator(node, locator)]
     if locator.type == "last_child_with_class":
@@ -91,6 +96,35 @@ def _requires_strict_container_match(locator: Locator) -> bool:
     return locator.type == "xpath" and "@bounds=" in locator.value
 
 
+def _node_bounds(node: ET.Element) -> tuple[int, int, int, int] | None:
+    raw = node.attrib.get("bounds")
+    if not raw:
+        return None
+    normalized = raw.replace("][", ",").replace("[", "").replace("]", "")
+    parts = normalized.split(",")
+    if len(parts) != 4:
+        return None
+    try:
+        return tuple(int(part) for part in parts)  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _bubble_score(node: ET.Element, *, index: int) -> tuple[int, int, int, int]:
+    bounds = _node_bounds(node)
+    text = node.attrib.get("text", "").strip()
+    if bounds is not None:
+        return (1, bounds[3], len(text), index)
+    return (0, index, len(text), index)
+
+
+def _is_latest_bubble_candidate(node: ET.Element) -> bool:
+    bounds = _node_bounds(node)
+    if bounds is not None and (bounds[3] - bounds[1]) < _MIN_BUBBLE_HEIGHT:
+        return False
+    return not _looks_like_ui_chrome(node.attrib.get("text", ""))
+
+
 class UiTreeExtractor:
     def extract_from_xml(
         self,
@@ -100,11 +134,9 @@ class UiTreeExtractor:
         latest_bubble_locator: Locator,
     ) -> ExtractionResult:
         root = ET.fromstring(xml)
-        container = _find_first_match(root, response_container_locator)
-        if container is None:
-            if not _requires_strict_container_match(response_container_locator):
-                container = root
-            else:
+        containers = _find_all_matches(root, response_container_locator)
+        if not containers:
+            if _requires_strict_container_match(response_container_locator):
                 return ExtractionResult(
                     text="",
                     method_used="ui_tree",
@@ -112,24 +144,39 @@ class UiTreeExtractor:
                     container_found=False,
                     matched_locator_count=0,
                 )
-        matches = _candidate_nodes(container, latest_bubble_locator)
-        candidates = [
-            (index, node.attrib.get("text", "").strip())
-            for index, node in enumerate(matches)
-            if not _looks_like_ui_chrome(node.attrib.get("text", ""))
-        ]
-        if candidates:
-            meaningful = [item for item in candidates if not _is_suspect(item[1])]
-            pool = meaningful or candidates
-            text = pool[-1][1]
-        else:
-            text = ""
+            containers = [root]
+
+        best_text = ""
+        best_container_found = False
+        best_count = 0
+        best_score: tuple[int, int, int] | None = None
+
+        for container in containers:
+            matches = _candidate_nodes(container, latest_bubble_locator)
+            scored_candidates = [
+                (index, node, node.attrib.get("text", "").strip())
+                for index, node in enumerate(matches)
+                if _is_latest_bubble_candidate(node) and not _is_suspect(node.attrib.get("text", ""))
+            ]
+            if not scored_candidates:
+                continue
+            winner_index, winner_node, winner_text = max(
+                scored_candidates,
+                key=lambda item: _bubble_score(item[1], index=item[0]),
+            )
+            winner_score = _bubble_score(winner_node, index=winner_index)
+            if best_score is None or winner_score > best_score:
+                best_score = winner_score
+                best_text = winner_text
+                best_container_found = True
+                best_count = len(matches)
+
         return ExtractionResult(
-            text=text,
+            text=best_text,
             method_used="ui_tree",
-            ui_tree_node_count=len(matches),
-            container_found=True,
-            matched_locator_count=len(matches),
+            ui_tree_node_count=best_count,
+            container_found=best_container_found,
+            matched_locator_count=best_count,
         )
 
 

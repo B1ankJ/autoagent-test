@@ -53,11 +53,11 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,2009][1020,2120]"]'
     assert (
         draft.response_candidates[0]["response_container_locator"]["value"]
-        == '//*[@bounds="[48,1340][1032,1640]"]'
+        == "androidx.recyclerview.widget.RecyclerView"
     )
     assert (
         draft.response_candidates[0]["scroll_container_locator"]["value"]
-        == '//*[@bounds="[0,320][1080,2060]"]'
+        == "androidx.recyclerview.widget.RecyclerView"
     )
     assert draft.response_candidates[0]["latest_bubble_match"] == {
         "type": "class",
