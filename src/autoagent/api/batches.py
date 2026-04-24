@@ -30,10 +30,33 @@ from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
 _SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.png$")
+_STAGE_ORDER = {
+    "before_input": 0,
+    "after_input": 1,
+    "after_send": 2,
+    "after_result": 3,
+    "done": 4,
+    "on_error": 5,
+}
 
 
 def _json_dumps(obj: object) -> str:
     return json.dumps(obj, separators=(",", ":"))
+
+
+def _screenshot_order_key(name: str) -> tuple[int, int, str]:
+    stem = Path(name).stem
+    for prefix, order in _STAGE_ORDER.items():
+        if stem == prefix:
+            return (order, 0, name)
+        if stem.startswith(f"{prefix}_"):
+            suffix = stem[len(prefix) + 1 :]
+            try:
+                step = int(suffix)
+            except ValueError:
+                step = 0
+            return (order, step, name)
+    return (99, 0, name)
 
 
 def _parse_file(filename: str, text: str):
@@ -239,7 +262,11 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
     out: list[ScreenshotInfo] = []
     entries = sorted(
         sample_dir.iterdir(),
-        key=lambda entry: (order_map.get(entry.name, 10_000), entry.name),
+        key=lambda entry: (
+            0 if entry.name in order_map else 1,
+            order_map.get(entry.name, 10_000),
+            _screenshot_order_key(entry.name),
+        ),
     )
     for entry in entries:
         if not entry.is_file() or not _SCREENSHOT_RE.match(entry.name):
