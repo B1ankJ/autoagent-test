@@ -8,6 +8,23 @@ interface Props {
   sampleId: string
 }
 
+function formatScreenshotLabel(label: string): string {
+  const patterns: Array<[RegExp, (match: RegExpExecArray) => string]> = [
+    [/^before_input_(\d+)$/, (match) => `输入前 ${match[1]}`],
+    [/^after_input_(\d+)$/, (match) => `输入后 ${match[1]}`],
+    [/^after_send_(\d+)$/, (match) => `发送后 ${match[1]}`],
+    [/^after_result_(\d+)$/, (match) => `结果后 ${match[1]}`],
+    [/^done_(\d+)$/, (match) => `完成后 ${match[1]}`],
+  ]
+  for (const [pattern, formatter] of patterns) {
+    const match = pattern.exec(label)
+    if (match) {
+      return formatter(match)
+    }
+  }
+  return label
+}
+
 export function ScreenshotStrip({ batchId, sampleId }: Props) {
   const screenshots = useQuery({
     queryKey: ['screenshots', batchId, sampleId],
@@ -74,9 +91,9 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
               <Image width={160} src={screenshotUrls[index]?.data} alt={shot.label} />
               <Typography.Text
                 style={{ width: '100%', textAlign: 'center' }}
-                ellipsis={{ tooltip: shot.label }}
+                ellipsis={{ tooltip: `${formatScreenshotLabel(shot.label)} (${shot.label})` }}
               >
-                {shot.label}
+                {formatScreenshotLabel(shot.label)}
               </Typography.Text>
             </Space>
           ),

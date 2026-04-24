@@ -14,7 +14,11 @@ vi.mock('../api/screenshots', () => ({
 describe('ScreenshotStrip', () => {
   it('renders screenshot previews for a sample', async () => {
     listScreenshots.mockResolvedValue([
-      { name: '001_ready.png', label: 'ready', taken_at: '2026-04-22T00:00:00Z' },
+      {
+        name: 'before_input_1.png',
+        label: 'before_input_1',
+        taken_at: '2026-04-22T00:00:00Z',
+      },
     ])
     fetchScreenshotBlobUrl.mockResolvedValue('blob:ready')
 
@@ -22,12 +26,12 @@ describe('ScreenshotStrip', () => {
 
     await waitFor(() => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
-      expect(fetchScreenshotBlobUrl).toHaveBeenCalledWith('b1', 's1', '001_ready.png')
-      expect(screen.getByRole('img', { name: 'ready' })).toHaveAttribute(
+      expect(fetchScreenshotBlobUrl).toHaveBeenCalledWith('b1', 's1', 'before_input_1.png')
+      expect(screen.getByRole('img', { name: 'before_input_1' })).toHaveAttribute(
         'src',
         'blob:ready',
       )
-      expect(screen.getByText('ready')).toBeInTheDocument()
+      expect(screen.getByText('输入前 1')).toBeInTheDocument()
     })
   })
 })

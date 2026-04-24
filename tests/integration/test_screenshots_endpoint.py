@@ -100,6 +100,59 @@ async def test_list_screenshots_uses_sample_logs_dir_when_it_is_absolute(
         assert names == ["after_send_1.png", "before_input_1.png"]
 
 
+async def test_list_screenshots_prefers_metadata_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    actual_logs = tmp_path / "data" / "logs"
+    sample_dir = actual_logs / "b1" / "s1"
+    sample_dir.mkdir(parents=True)
+    for name in [
+        "before_input_1.png",
+        "after_input_1.png",
+        "after_send_1.png",
+        "after_result_1.png",
+    ]:
+        (sample_dir / name).write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    async def _fake_list_samples(_batch_id: str) -> list[SampleResult]:
+        return [
+            SampleResult(
+                id="s1",
+                status="done",
+                mode="gui_android",
+                target_profile="android_demo",
+                logs_dir=str(sample_dir.resolve()),
+                metadata={
+                    "screenshots": [
+                        {"name": "before_input_1.png", "label": "before_input_1"},
+                        {"name": "after_input_1.png", "label": "after_input_1"},
+                        {"name": "after_send_1.png", "label": "after_send_1"},
+                        {"name": "after_result_1.png", "label": "after_result_1"},
+                    ]
+                },
+            )
+        ]
+
+    monkeypatch.setattr("autoagent.api.batches.list_samples_for_batch", _fake_list_samples)
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": tmp_path / "logs"}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == [
+            "before_input_1.png",
+            "after_input_1.png",
+            "after_send_1.png",
+            "after_result_1.png",
+        ]
+
+
 async def test_download_screenshot(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
 ) -> None:

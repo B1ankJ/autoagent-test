@@ -55,22 +55,28 @@ def _apply_default_profile(samples, default_profile: str | None):
             s.target_profile = default_profile
 
 
-async def _screenshot_meta_map(batch_id: str, sample_id: str) -> dict[str, dict]:
+async def _screenshot_meta_map(batch_id: str, sample_id: str) -> tuple[dict[str, dict], dict[str, int]]:
     try:
         samples = await list_samples_for_batch(batch_id)
     except OperationalError:
-        return {}
+        return {}, {}
     for sample in samples:
         if sample.id != sample_id:
             continue
         shots = sample.metadata.get("screenshots")
         if isinstance(shots, list):
-            return {
+            meta_map = {
                 str(item.get("name")): item
                 for item in shots
                 if isinstance(item, dict) and item.get("name")
             }
-    return {}
+            order_map = {
+                str(item.get("name")): index
+                for index, item in enumerate(shots)
+                if isinstance(item, dict) and item.get("name")
+            }
+            return meta_map, order_map
+    return {}, {}
 
 
 async def _sample_logs_dir(batch_id: str, sample_id: str) -> Path | None:
@@ -229,9 +235,13 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
     if not sample_dir.is_dir():
         return []
 
-    meta_map = await _screenshot_meta_map(batch_id, sample_id)
+    meta_map, order_map = await _screenshot_meta_map(batch_id, sample_id)
     out: list[ScreenshotInfo] = []
-    for entry in sorted(sample_dir.iterdir()):
+    entries = sorted(
+        sample_dir.iterdir(),
+        key=lambda entry: (order_map.get(entry.name, 10_000), entry.name),
+    )
+    for entry in entries:
         if not entry.is_file() or not _SCREENSHOT_RE.match(entry.name):
             continue
         meta = meta_map.get(entry.name, {})
