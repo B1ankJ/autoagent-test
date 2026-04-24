@@ -85,3 +85,21 @@ def test_ui_tree_extractor_limits_matches_to_selected_response_container() -> No
     )
 
     assert result.text == "在呢，说吧，想聊点啥？"
+
+
+def test_ui_tree_extractor_does_not_fallback_to_whole_page_when_container_is_missing() -> None:
+    xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,1738][1080,2244]">
+        <node class="android.widget.TextView" text="AI打车" bounds="[267,1768][382,1815]" />
+      </node>
+    </hierarchy>
+    """
+
+    result = UiTreeExtractor().extract_from_xml(
+        xml,
+        response_container_locator=Locator(type="xpath", value='//*[@bounds="[0,944][1080,1422]"]'),
+        latest_bubble_locator=Locator(type="class", value="android.widget.TextView"),
+    )
+
+    assert result.text == ""

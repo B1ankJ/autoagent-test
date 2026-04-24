@@ -207,6 +207,15 @@ class AndroidExecutor(Executor):
                             response_container_locator=profile.response_extraction.response_container_locator,
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
+                        sample_log.info(
+                            "android sample %s prompt %s ui_tree extraction: container_found=%s matched=%s response_container=%s latest_bubble=%s",
+                            sample.id,
+                            idx,
+                            result.container_found,
+                            result.matched_locator_count,
+                            profile.response_extraction.response_container_locator.model_dump(mode="json"),
+                            profile.response_extraction.latest_bubble_match.model_dump(mode="json"),
+                        )
                         responses.append(result.text)
                     elif profile.response_extraction.method == "ocr_only":
                         raw = await asyncio.to_thread(capture_screenshot_bytes, device)
@@ -224,6 +233,15 @@ class AndroidExecutor(Executor):
                             response_container_locator=profile.response_extraction.response_container_locator,
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
+                        sample_log.info(
+                            "android sample %s prompt %s ui_tree extraction: container_found=%s matched=%s response_container=%s latest_bubble=%s",
+                            sample.id,
+                            idx,
+                            result.container_found,
+                            result.matched_locator_count,
+                            profile.response_extraction.response_container_locator.model_dump(mode="json"),
+                            profile.response_extraction.latest_bubble_match.model_dump(mode="json"),
+                        )
                         if result.text.strip():
                             responses.append(result.text)
                         else:
@@ -235,6 +253,9 @@ class AndroidExecutor(Executor):
                             "unsupported response extraction method: "
                             f"{profile.response_extraction.method}"
                         )
+                    after_result_xml_path = store.artifact_path(f"after_result_{idx}", "xml")
+                    if xml is not None:
+                        await asyncio.to_thread(after_result_xml_path.write_text, xml, "utf-8")
                     after_result_path = store.artifact_path(f"after_result_{idx}", "png")
                     after_result = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(after_result_path.write_bytes, after_result)

@@ -126,6 +126,7 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.xml").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.png").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_send_1.png").is_file()
+    assert (tmp_path / "ad_hoc" / "s1" / "after_result_1.xml").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_result_1.png").is_file()
 
 

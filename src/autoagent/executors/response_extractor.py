@@ -18,6 +18,8 @@ class ExtractionResult:
     ui_tree_node_count: int | None = None
     frames: int = 1
     stitched: bool = False
+    container_found: bool = True
+    matched_locator_count: int | None = None
 
 
 def _is_suspect(text: str) -> bool:
@@ -85,6 +87,10 @@ def _candidate_nodes(container: ET.Element, locator: Locator) -> list[ET.Element
     return matches
 
 
+def _requires_strict_container_match(locator: Locator) -> bool:
+    return locator.type == "xpath" and "@bounds=" in locator.value
+
+
 class UiTreeExtractor:
     def extract_from_xml(
         self,
@@ -94,7 +100,18 @@ class UiTreeExtractor:
         latest_bubble_locator: Locator,
     ) -> ExtractionResult:
         root = ET.fromstring(xml)
-        container = _find_first_match(root, response_container_locator) or root
+        container = _find_first_match(root, response_container_locator)
+        if container is None:
+            if not _requires_strict_container_match(response_container_locator):
+                container = root
+            else:
+                return ExtractionResult(
+                    text="",
+                    method_used="ui_tree",
+                    ui_tree_node_count=0,
+                    container_found=False,
+                    matched_locator_count=0,
+                )
         matches = _candidate_nodes(container, latest_bubble_locator)
         candidates = [
             (index, node.attrib.get("text", "").strip())
@@ -107,7 +124,13 @@ class UiTreeExtractor:
             text = pool[-1][1]
         else:
             text = ""
-        return ExtractionResult(text=text, method_used="ui_tree", ui_tree_node_count=len(matches))
+        return ExtractionResult(
+            text=text,
+            method_used="ui_tree",
+            ui_tree_node_count=len(matches),
+            container_found=True,
+            matched_locator_count=len(matches),
+        )
 
 
 class OcrExtractor:
