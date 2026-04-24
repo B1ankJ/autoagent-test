@@ -447,7 +447,7 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     ]
     assert profile_data["input_locator"] == {
         "type": "xpath",
-        "value": '//*[contains(@text, "发消息")]',
+        "value": '//*[@class="android.widget.EditText"]',
     }
     assert profile_data["send_button_locator"] == {
         "type": "xpath",

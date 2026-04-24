@@ -585,7 +585,6 @@ def _draft_profile_from_candidates(
             if placeholder_tap_action is not None
             else [{"action": "click_locator", "locator": placeholder_locator}]
         )
-        input_locator = placeholder_locator
     return {
         "name": session.name,
         "platform": session.platform,
