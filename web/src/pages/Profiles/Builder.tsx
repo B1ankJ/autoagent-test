@@ -26,6 +26,7 @@ import {
   useGenerateProfileBuilderDraft,
   useValidateProfileBuilderDraft,
 } from '../../api/profileBuilder'
+import { useSaveProfile } from '../../api/profiles'
 import {
   fetchProfileBuilderArtifactBlobUrl,
   useProfileBuilderRuntime,
@@ -165,6 +166,7 @@ export default function Builder() {
   const generateDraft = useGenerateProfileBuilderDraft()
   const applyReview = useApplyProfileBuilderReview()
   const validateDraft = useValidateProfileBuilderDraft()
+  const saveProfile = useSaveProfile()
   const { message } = App.useApp()
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
@@ -179,6 +181,7 @@ export default function Builder() {
   const [selectedEvidenceRefs, setSelectedEvidenceRefs] = useState<ReviewEvidenceRef[]>([])
   const [selectedEvidenceLabel, setSelectedEvidenceLabel] = useState<string | null>(null)
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
+  const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const runtime = useProfileBuilderRuntime(session?.id)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
@@ -335,6 +338,7 @@ export default function Builder() {
       setFollowLatestScreen(true)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
+      setAppliedReviewChoices({})
       message.success('Builder session 已创建')
     } catch (error) {
       message.error((error as Error).message)
@@ -369,6 +373,7 @@ export default function Builder() {
       setConnectivitySummary(null)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
+      setAppliedReviewChoices({})
       message.success('Draft profile 已生成')
     } catch (error) {
       message.error((error as Error).message)
@@ -392,8 +397,11 @@ export default function Builder() {
         ...draft,
         session: updated.session,
         draft_profile_yaml: updated.draft_profile_yaml,
-        review_items: draft.review_items.filter((reviewItem) => reviewItem !== item),
       })
+      setAppliedReviewChoices((previous) => ({
+        ...previous,
+        [item.field]: reviewOptionText(option),
+      }))
       message.success(`${item.field} 已更新`)
     } catch (error) {
       message.error((error as Error).message)
@@ -435,6 +443,27 @@ export default function Builder() {
     setSelectedScreenPath(target.artifact)
     setSelectedEvidenceRefs(refs)
     setSelectedEvidenceLabel(label)
+  }
+
+  const saveDraftAsProfile = async () => {
+    if (!draft) {
+      return
+    }
+    const name = profileName.trim() || session?.name.trim()
+    if (!name) {
+      message.warning('请先填写 Profile Name')
+      return
+    }
+    try {
+      await saveProfile.mutateAsync({
+        name,
+        yaml: draft.draft_profile_yaml,
+        create: true,
+      })
+      message.success(`已保存到 Profiles: ${name}`)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
   }
 
   return (
@@ -653,6 +682,18 @@ export default function Builder() {
                           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
                             {reviewOptionText(item.recommended_option)}
                           </Typography.Paragraph>
+                          {appliedReviewChoices[item.field] ? (
+                            <Alert
+                              type="success"
+                              showIcon
+                              message="当前已应用"
+                              description={
+                                <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>
+                                  {appliedReviewChoices[item.field]}
+                                </Typography.Text>
+                              }
+                            />
+                          ) : null}
                           <Space wrap>
                             <Button
                               size="small"
@@ -707,7 +748,20 @@ export default function Builder() {
                 <Empty description="尚未运行连通性测试" />
               )}
             </Card>
-            <Card title="Draft YAML" style={{ marginTop: 16 }}>
+            <Card
+              title="Draft YAML"
+              style={{ marginTop: 16 }}
+              extra={
+                <Button
+                  type="primary"
+                  disabled={!draft}
+                  loading={saveProfile.isPending}
+                  onClick={saveDraftAsProfile}
+                >
+                  保存/覆盖到 Profiles
+                </Button>
+              }
+            >
               {draft ? (
                 <Input.TextArea
                   readOnly

@@ -11,6 +11,7 @@ const {
   generateDraftMock,
   applyReviewMock,
   validateDraftMock,
+  saveProfileMock,
   fetchArtifactBlobUrlMock,
 } = vi.hoisted(() => ({
   createSessionMock: vi.fn(),
@@ -18,6 +19,7 @@ const {
   generateDraftMock: vi.fn(),
   applyReviewMock: vi.fn(),
   validateDraftMock: vi.fn(),
+  saveProfileMock: vi.fn(async () => ({ name: 'qwen_android' })),
   fetchArtifactBlobUrlMock: vi.fn(async (_sessionId: string, name: string) => `blob:${name}`),
 }))
 let runtimeMockData: unknown = null
@@ -69,6 +71,13 @@ vi.mock('../../api/profileBuilder', () => ({
   useValidateProfileBuilderDraft: () => ({
     isPending: false,
     mutateAsync: validateDraftMock,
+  }),
+}))
+
+vi.mock('../../api/profiles', () => ({
+  useSaveProfile: () => ({
+    isPending: false,
+    mutateAsync: saveProfileMock,
   }),
 }))
 
@@ -276,12 +285,20 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: '查看推荐定位' }))
     await userEvent.click(screen.getByRole('button', { name: 'Apply Recommended' }))
+    expect(screen.getByText('当前已应用')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply Recommended' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '保存/覆盖到 Profiles' }))
     await userEvent.click(screen.getByRole('button', { name: /Run Connectivity Test/ }))
 
     await waitFor(() => {
       expect(generateDraftMock).toHaveBeenCalledWith('pb_1')
     })
     expect(applyReviewMock).toHaveBeenCalled()
+    expect(saveProfileMock).toHaveBeenCalledWith({
+      name: 'qwen_android',
+      yaml: 'name: qwen_android\nplatform: android\nsend_button_locator:\n',
+      create: true,
+    })
     expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'capture_editing.png')
     expect(validateDraftMock).toHaveBeenCalledWith('pb_1')
     expect(screen.getByDisplayValue(/name: qwen_android/)).toBeInTheDocument()
