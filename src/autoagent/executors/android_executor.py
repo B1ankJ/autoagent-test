@@ -126,6 +126,9 @@ class AndroidExecutor(Executor):
                     before_input_path = store.artifact_path(f"before_input_{idx}", "png")
                     before_input = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(before_input_path.write_bytes, before_input)
+                    ctx.screenshot_index.append(
+                        ScreenshotResult(path=before_input_path, label=f"before_input_{idx}")
+                    )
                     sample_log.info(
                         "android sample %s prompt %s set_text start: method=%s locator=%s:%s",
                         sample.id,
@@ -141,6 +144,9 @@ class AndroidExecutor(Executor):
                     await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
                     after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(screenshot_path.write_bytes, after_input)
+                    ctx.screenshot_index.append(
+                        ScreenshotResult(path=screenshot_path, label=f"after_input_{idx}")
+                    )
                     sample_log.info(
                         "android sample %s prompt %s captured after_input artifacts: xml=%s png=%s",
                         sample.id,
@@ -175,6 +181,9 @@ class AndroidExecutor(Executor):
                     after_send_path = store.artifact_path(f"after_send_{idx}", "png")
                     after_send = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(after_send_path.write_bytes, after_send)
+                    ctx.screenshot_index.append(
+                        ScreenshotResult(path=after_send_path, label=f"after_send_{idx}")
+                    )
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
                         sample_log.info(
@@ -208,7 +217,11 @@ class AndroidExecutor(Executor):
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
                         sample_log.info(
-                            "android sample %s prompt %s ui_tree extraction: container_found=%s matched=%s response_container=%s latest_bubble=%s",
+                            (
+                                "android sample %s prompt %s ui_tree extraction: "
+                                "container_found=%s matched=%s response_container=%s "
+                                "latest_bubble=%s"
+                            ),
                             sample.id,
                             idx,
                             result.container_found,
@@ -234,7 +247,11 @@ class AndroidExecutor(Executor):
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
                         sample_log.info(
-                            "android sample %s prompt %s ui_tree extraction: container_found=%s matched=%s response_container=%s latest_bubble=%s",
+                            (
+                                "android sample %s prompt %s ui_tree extraction: "
+                                "container_found=%s matched=%s response_container=%s "
+                                "latest_bubble=%s"
+                            ),
                             sample.id,
                             idx,
                             result.container_found,
@@ -267,7 +284,7 @@ class AndroidExecutor(Executor):
                         responses[-1],
                     )
                     ctx.screenshot_index.append(
-                        ScreenshotResult(path=store.next_path(f"done_{idx}"), label=f"done_{idx}")
+                        ScreenshotResult(path=after_result_path, label=f"after_result_{idx}")
                     )
         except Exception:
             error_path = store.artifact_path("on_error", "png")

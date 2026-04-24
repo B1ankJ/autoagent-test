@@ -28,6 +28,7 @@ class AndroidActionRunner:
     async def run(self, steps: list[ActionStep]) -> None:
         for step in steps:
             entry = {"t_ms": int((time.monotonic() - self._t0) * 1000), "action": step.action}
+            self._annotate_entry(entry, step)
             try:
                 await self._dispatch(step)
                 entry["ok"] = True
@@ -39,6 +40,27 @@ class AndroidActionRunner:
                 raise
             self.log.append(entry)
             self._write_replay(entry)
+
+    def _annotate_entry(self, entry: dict[str, Any], step: ActionStep) -> None:
+        locator = getattr(step, "locator", None)
+        if locator is not None:
+            entry["locator"] = locator.model_dump(mode="json")
+        if step.action == "tap_xy":
+            entry["x"] = step.x
+            entry["y"] = step.y
+        elif step.action == "swipe":
+            entry["x1"] = step.x1
+            entry["y1"] = step.y1
+            entry["x2"] = step.x2
+            entry["y2"] = step.y2
+        elif step.action == "press_key":
+            entry["key"] = step.key
+        elif step.action in {"launch_app", "kill_app"}:
+            entry["package"] = step.package
+            if getattr(step, "activity", None):
+                entry["activity"] = step.activity
+        elif step.action == "input" and getattr(step, "text", None) is not None:
+            entry["text_length"] = len(step.text or "")
 
     async def _dispatch(self, step: ActionStep) -> None:
         if step.action == "click_locator":

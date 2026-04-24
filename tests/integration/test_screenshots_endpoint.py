@@ -23,6 +23,13 @@ def _seed(tmp_logs: Path, batch_id: str, sample_id: str) -> None:
     (directory / "02_filled.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
 
 
+def _seed_android_style(tmp_logs: Path, batch_id: str, sample_id: str) -> None:
+    directory = tmp_logs / batch_id / sample_id
+    directory.mkdir(parents=True)
+    (directory / "before_input_1.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    (directory / "after_send_1.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+
 async def test_list_screenshots(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
 ) -> None:
@@ -40,6 +47,25 @@ async def test_list_screenshots(
         assert response.status_code == 200
         names = [item["name"] for item in response.json()]
         assert names == ["01_ready.png", "02_filled.png"]
+
+
+async def test_list_screenshots_accepts_android_style_names(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    logs = tmp_path / "logs"
+    _seed_android_style(logs, "b1", "s1")
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": logs}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == ["after_send_1.png", "before_input_1.png"]
 
 
 async def test_download_screenshot(
@@ -69,7 +95,6 @@ async def test_download_screenshot(
         "..%2f..%2fetc%2fpasswd",
         "01_ready.jpg",
         "01_READY.png",
-        "a.png",
     ],
 )
 async def test_download_rejects_invalid_names(

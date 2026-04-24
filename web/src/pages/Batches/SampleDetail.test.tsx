@@ -84,6 +84,68 @@ describe('SampleDetail', () => {
     expect(downloadSampleActions).toHaveBeenCalledWith('b1', 's1')
   })
 
+  it('renders tap targets and metadata summaries for android samples', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b3',
+        name: 'Batch 3',
+        mode: 'gui_android',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 4,
+        samples: [
+          {
+            id: 's3',
+            prompts: ['hello'],
+            mode: 'gui_android',
+            target_profile: 'qwen_android',
+            status: 'done',
+            responses: ['world'],
+            metadata: {
+              device_serial: '24108eff',
+              action_replay_available: true,
+              screenshots: [
+                { name: 'after_send_1.png', label: 'after_send_1' },
+                { name: 'after_result_1.png', label: 'after_result_1' },
+              ],
+              action_log: [
+                { action: 'tap_xy', x: 495, y: 2059, ok: true, t_ms: 123 },
+                {
+                  action: 'click_locator',
+                  locator: { type: 'xpath', value: '//*[@text="发送"]' },
+                  ok: true,
+                  t_ms: 456,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([
+      { name: 'after_send_1.png', label: 'after_send_1', taken_at: '2026-04-24T00:00:00Z' },
+    ])
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b3/samples/s3' },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('动作日志')).toBeInTheDocument()
+    })
+    expect(screen.getByText('(495, 2059)')).toBeInTheDocument()
+    expect(screen.getByText('xpath://*[@text="发送"]')).toBeInTheDocument()
+    expect(screen.getByText('截图数量')).toBeInTheDocument()
+    expect(screen.getAllByText('2').length).toBeGreaterThan(0)
+  })
+
   it('renders prompt rounds from prompts_sent when prompts is absent', async () => {
     useBatchStream.mockReturnValue({
       data: {

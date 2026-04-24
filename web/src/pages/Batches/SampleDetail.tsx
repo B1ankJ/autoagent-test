@@ -5,12 +5,63 @@ import { useBatchStream } from '../../hooks/useBatchStream'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
 
+function formatLocator(locator: unknown): string {
+  if (!locator || typeof locator !== 'object') return '-'
+  const maybeLocator = locator as { type?: unknown; value?: unknown }
+  if (typeof maybeLocator.type === 'string' && typeof maybeLocator.value === 'string') {
+    return `${maybeLocator.type}:${maybeLocator.value}`
+  }
+  return '-'
+}
+
+function formatActionTarget(record: Record<string, unknown>): string {
+  if (typeof record.x === 'number' && typeof record.y === 'number') {
+    return `(${record.x}, ${record.y})`
+  }
+  if (record.locator) {
+    return formatLocator(record.locator)
+  }
+  if (typeof record.url === 'string') {
+    return record.url
+  }
+  if (
+    typeof record.x1 === 'number' &&
+    typeof record.y1 === 'number' &&
+    typeof record.x2 === 'number' &&
+    typeof record.y2 === 'number'
+  ) {
+    return `(${record.x1}, ${record.y1}) -> (${record.x2}, ${record.y2})`
+  }
+  if (typeof record.key === 'string') {
+    return record.key
+  }
+  if (typeof record.package === 'string' && typeof record.activity === 'string') {
+    return `${record.package}/${record.activity}`
+  }
+  if (typeof record.package === 'string') {
+    return record.package
+  }
+  return '-'
+}
+
+function metadataSummary(metadata: Record<string, unknown> | undefined) {
+  const screenshots = Array.isArray(metadata?.screenshots) ? metadata.screenshots.length : 0
+  const actionLog = Array.isArray(metadata?.action_log) ? metadata.action_log.length : 0
+  return {
+    deviceSerial: typeof metadata?.device_serial === 'string' ? metadata.device_serial : '-',
+    screenshots,
+    actionLog,
+    replay: metadata?.action_replay_available ? '是' : '否',
+  }
+}
+
 export function SampleDetail() {
   const { id, sid } = useParams()
   const navigate = useNavigate()
   const { data } = useBatchStream(id)
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
+  const summary = metadataSummary(sample?.metadata)
 
   if (!data) {
     return <div>加载中...</div>
@@ -102,7 +153,9 @@ export function SampleDetail() {
         <Card title="动作日志">
           <Table
             size="small"
-            rowKey={(_record, index) => String(index)}
+            rowKey={(record) =>
+              `${String(record.action ?? 'action')}-${String(record.t_ms ?? '-')}-${formatActionTarget(record)}`
+            }
             pagination={false}
             dataSource={sample.metadata.action_log as Array<Record<string, unknown>>}
             columns={[
@@ -113,9 +166,17 @@ export function SampleDetail() {
               },
               {
                 title: 'Target',
-                dataIndex: 'selector',
-                render: (value?: string, record?: Record<string, unknown>) =>
-                  value ?? (record?.url as string | undefined) ?? '-',
+                render: (_value: unknown, record: Record<string, unknown>) => formatActionTarget(record),
+              },
+              {
+                title: 'Result',
+                render: (_value: unknown, record: Record<string, unknown>) =>
+                  record.ok === false ? `failed: ${String(record.error ?? '-')}` : 'ok',
+              },
+              {
+                title: 't_ms',
+                dataIndex: 't_ms',
+                render: (value?: number) => value ?? '-',
               },
             ]}
           />
@@ -124,6 +185,12 @@ export function SampleDetail() {
 
       {sample.metadata ? (
         <Card title="Metadata">
+          <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="设备序列号">{summary.deviceSerial}</Descriptions.Item>
+            <Descriptions.Item label="截图数量">{summary.screenshots}</Descriptions.Item>
+            <Descriptions.Item label="动作数">{summary.actionLog}</Descriptions.Item>
+            <Descriptions.Item label="可下载回放">{summary.replay}</Descriptions.Item>
+          </Descriptions>
           <pre>{JSON.stringify(sample.metadata, null, 2)}</pre>
         </Card>
       ) : null}

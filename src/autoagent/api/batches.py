@@ -29,7 +29,7 @@ from autoagent.storage.batches import get_batch, list_batches
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
-_SCREENSHOT_RE = re.compile(r"^\d{2,3}_[a-z0-9_]+\.png$")
+_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.png$")
 
 
 def _json_dumps(obj: object) -> str:

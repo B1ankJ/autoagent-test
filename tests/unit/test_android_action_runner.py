@@ -40,3 +40,16 @@ async def test_click_locator_supports_xpath() -> None:
 
     device.xpath.assert_called_once_with('//node[@class="android.widget.FrameLayout"]')
     xpath_target.click.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_tap_xy_records_coordinates_in_action_log() -> None:
+    device = MagicMock()
+
+    runner = AndroidActionRunner(device=device, input_controller=MagicMock(), action_log=[])
+    await runner.run([ActionStep(action="tap_xy", x=320, y=640)])
+
+    device.click.assert_called_once_with(320, 640)
+    assert runner.log[0]["action"] == "tap_xy"
+    assert runner.log[0]["x"] == 320
+    assert runner.log[0]["y"] == 640
