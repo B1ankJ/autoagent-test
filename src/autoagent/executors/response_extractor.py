@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 from autoagent.executors.ocr import OcrLine, get_engine
 from autoagent.executors.scroll_stitcher import stitch_lines
+from autoagent.profiles.schemas import Locator
 
 
 @dataclass
@@ -46,10 +47,55 @@ def _looks_like_ui_chrome(text: str) -> bool:
     )
 
 
+def _matches_locator(node: ET.Element, locator: Locator) -> bool:
+    if locator.type == "resource_id":
+        return node.attrib.get("resource-id") == locator.value
+    if locator.type == "text":
+        return node.attrib.get("text", "").strip() == locator.value
+    if locator.type == "class":
+        return node.attrib.get("class") == locator.value
+    if locator.type == "last_child_with_class":
+        return node.attrib.get("class") == locator.value
+    if locator.type == "xpath":
+        value = locator.value
+        bounds_match = re.fullmatch(r'//\*\[@bounds="([^"]+)"\]', value)
+        if bounds_match:
+            return node.attrib.get("bounds") == bounds_match.group(1)
+        class_match = re.fullmatch(r'//\*\[@class="([^"]+)"\]', value)
+        if class_match:
+            return node.attrib.get("class") == class_match.group(1)
+        text_contains_match = re.fullmatch(r'//\*\[contains\(@text, "([^"]+)"\)\]', value)
+        if text_contains_match:
+            return text_contains_match.group(1) in node.attrib.get("text", "")
+        return False
+    return False
+
+
+def _find_first_match(root: ET.Element, locator: Locator) -> ET.Element | None:
+    for node in root.iter("node"):
+        if _matches_locator(node, locator):
+            return node
+    return None
+
+
+def _candidate_nodes(container: ET.Element, locator: Locator) -> list[ET.Element]:
+    matches = [node for node in container.iter("node") if _matches_locator(node, locator)]
+    if locator.type == "last_child_with_class":
+        return matches[-1:] if matches else []
+    return matches
+
+
 class UiTreeExtractor:
-    def extract_from_xml(self, xml: str, *, bubble_class: str) -> ExtractionResult:
+    def extract_from_xml(
+        self,
+        xml: str,
+        *,
+        response_container_locator: Locator,
+        latest_bubble_locator: Locator,
+    ) -> ExtractionResult:
         root = ET.fromstring(xml)
-        matches = [node for node in root.iter("node") if node.attrib.get("class") == bubble_class]
+        container = _find_first_match(root, response_container_locator) or root
+        matches = _candidate_nodes(container, latest_bubble_locator)
         candidates = [
             (index, node.attrib.get("text", "").strip())
             for index, node in enumerate(matches)

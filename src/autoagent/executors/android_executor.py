@@ -204,7 +204,8 @@ class AndroidExecutor(Executor):
                             )
                         result = ui_tree_extractor.extract_from_xml(
                             xml,
-                            bubble_class=profile.response_extraction.latest_bubble_match.value,
+                            response_container_locator=profile.response_extraction.response_container_locator,
+                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
                         responses.append(result.text)
                     elif profile.response_extraction.method == "ocr_only":
@@ -220,7 +221,8 @@ class AndroidExecutor(Executor):
                             )
                         result = ui_tree_extractor.extract_from_xml(
                             xml,
-                            bubble_class=profile.response_extraction.latest_bubble_match.value,
+                            response_container_locator=profile.response_extraction.response_container_locator,
+                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
                         if result.text.strip():
                             responses.append(result.text)
