@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass
 from xml.etree import ElementTree
 
 _INPUT_HINT_KEYWORDS = ("发消息", "说话", "输入", "send", "message", "chat")
+_SEND_KEYWORDS = ("发送", "send", "提交", "确认")
 _RESPONSE_UI_CHROME_PATTERNS = (
     "内容由AI生成",
     "深度思考",
@@ -187,6 +188,11 @@ def _is_input_hint_text(text: str) -> bool:
     return bool(text and any(keyword in lowered for keyword in _INPUT_HINT_KEYWORDS))
 
 
+def _is_send_hint_text(text: str) -> bool:
+    lowered = text.lower()
+    return bool(text and any(keyword in lowered for keyword in _SEND_KEYWORDS))
+
+
 def _node_locator(node: dict[str, str], fallback_class: str) -> dict:
     resource_id = (node.get("resource-id") or "").strip()
     if resource_id:
@@ -319,8 +325,6 @@ def _build_send_candidates_from_nodes(
     app_package = _app_package(editing_nodes)
     candidates: list[dict] = []
     for index, node in enumerate(editing_nodes):
-        if node.get("clickable") != "true":
-            continue
         package = node.get("package", "").strip()
         if app_package and package and package != app_package:
             continue
@@ -338,17 +342,38 @@ def _build_send_candidates_from_nodes(
             continue
         if area > 240_000:
             continue
+        is_clickable = node.get("clickable") == "true"
+        text = (node.get("text") or "").strip()
+        node_class = (node.get("class") or "").strip()
+        is_visual_send = (
+            not is_clickable
+            and node_class != "android.widget.EditText"
+            and (_is_send_hint_text(text) or (x1 > 700 and area < 30_000))
+        )
+        if not is_clickable and not is_visual_send:
+            continue
         locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
         score = y2 + x2 - (area // 5000) - index
         if x1 > 700:
             score += 400
         if area < 20_000:
             score += 120
+        if node_class == "android.widget.EditText":
+            score -= 1800
+        if _is_send_hint_text(text):
+            score += 1200
+        if is_visual_send:
+            score += 800
         candidates.append(
             {
                 "locator": locator,
                 "score": score,
-                "reason": "composer clickable control",
+                "reason": (
+                    "composer visual send control"
+                    if is_visual_send and not is_clickable
+                    else "composer clickable control"
+                ),
+                "allow_click_locator": is_clickable,
                 "evidence_refs": [
                     _evidence_ref(
                         source=source,
@@ -671,7 +696,7 @@ def _send_review_choices(candidate: dict) -> list[tuple[list[dict], list[dict]]]
     tap_or_click = _action_option_from_locator(locator, bounds=bounds)
     options.append((tap_or_click, evidence_refs))
     click_option = _click_locator_option(locator)
-    if click_option != tap_or_click:
+    if candidate.get("allow_click_locator", True) and click_option != tap_or_click:
         options.append((click_option, evidence_refs))
     return options
 

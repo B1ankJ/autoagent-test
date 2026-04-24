@@ -434,6 +434,57 @@ def test_build_android_candidates_groups_multi_textview_response_block() -> None
     assert not any(item["field"] == "latest_bubble_match" for item in draft.review_items)
 
 
+def test_build_android_candidates_keeps_non_clickable_send_icon_candidates() -> None:
+    idle_xml = """
+    <hierarchy>
+      <node text="请输入" class="android.widget.TextView" bounds="[920,2025][988,2095]" />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node class="android.view.View" bounds="[0,1953][1080,2244]">
+        <node class="android.view.View" bounds="[46,1987][1034,2132]">
+          <node
+            class="android.widget.EditText"
+            package="com.eg.android.AlipayGphone"
+            clickable="true"
+            focusable="true"
+            bounds="[92,2029][899,2090]"
+            hint="请输入"
+          />
+          <node
+            class="android.widget.Image"
+            package="com.eg.android.AlipayGphone"
+            text="发送"
+            clickable="false"
+            bounds="[915,2013][1009,2106]"
+          />
+        </node>
+      </node>
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.LinearLayout" bounds="[48,1500][1032,1760]">
+        <node text="第二段回复" class="android.widget.TextView" bounds="[96,1540][884,1610]" />
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+
+    assert len(draft.send_candidates) >= 2
+    assert any(
+        candidate["locator"]["value"] == '//*[@bounds="[915,2013][1009,2106]"]'
+        for candidate in draft.send_candidates
+    )
+    assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[915,2013][1009,2106]"]'
+
+
 def test_ready_check_text_prefers_input_placeholder_over_chat_content():
     idle_xml = """
     <hierarchy>
