@@ -1,4 +1,4 @@
-from autoagent.api.profile_builder import _ready_check_text
+from autoagent.api.profile_builder import _input_focus_action_review_item, _ready_check_text
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 
 
@@ -483,6 +483,51 @@ def test_build_android_candidates_keeps_non_clickable_send_icon_candidates() -> 
         for candidate in draft.send_candidates
     )
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[915,2013][1009,2106]"]'
+
+
+def test_build_android_candidates_keeps_all_bounded_nodes_for_manual_review() -> None:
+    idle_xml = """
+    <hierarchy>
+      <node class="android.widget.TextView" text="19:58" package="com.android.systemui" bounds="[51,19][173,110]" />
+      <node class="android.widget.TextView" text="输入区提示" package="com.example.app" bounds="[700,1800][980,1880]" />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node class="android.widget.TextView" text="顶部标题" package="com.example.app" bounds="[120,120][540,220]" />
+      <node class="android.widget.EditText" package="com.example.app" bounds="[92,2029][899,2090]" clickable="true" focusable="true" />
+      <node class="android.widget.Image" text="发送" package="com.example.app" bounds="[915,2013][1009,2106]" clickable="false" />
+      <node class="android.widget.ImageView" package="com.android.systemui" bounds="[152,2244][392,2376]" clickable="true" />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.LinearLayout" bounds="[48,1500][1032,1760]">
+        <node text="第二段回复" class="android.widget.TextView" bounds="[96,1540][884,1610]" />
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+
+    input_values = {candidate["locator"]["value"] for candidate in draft.input_candidates}
+    send_values = {candidate["locator"]["value"] for candidate in draft.send_candidates}
+    focus_review = _input_focus_action_review_item(idle_xml, draft.input_candidates)
+
+    assert '//*[@bounds="[120,120][540,220]"]' in input_values
+    assert '//*[@bounds="[51,19][173,110]"]' in input_values
+    assert '//*[@bounds="[152,2244][392,2376]"]' in input_values
+    assert '//*[@bounds="[120,120][540,220]"]' in send_values
+    assert '//*[@bounds="[152,2244][392,2376]"]' in send_values
+    assert focus_review is not None
+    assert any(
+        option == [{"action": "tap_xy", "x": 330, "y": 170}]
+        for option in focus_review["alternative_candidates"]
+    )
 
 
 def test_ready_check_text_prefers_input_placeholder_over_chat_content():

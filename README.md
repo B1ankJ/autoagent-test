@@ -74,7 +74,7 @@ Builder behavior:
 
 - `Start Builder Session` enables `ADB Keyboard` once for the whole builder session and restores the previous IME after `Generate Draft`
 - `Capture Editing State` does not auto-tap into the input area and does not run an extra runtime probe; the draft is derived only from the manual `idle` and `editing` captures
-- Review generation now keeps broader raw candidates instead of collapsing them away early; `input_locator`, `input_focus_action`, and `send_action` preserve plausible composer controls and rely on ranking rather than aggressive filtering
+- Review generation now keeps raw candidates without destructive filtering for `input_locator`, `input_focus_action`, and `send_action`; backend recommendation only affects ordering, and every bounded node remains available in manual review
 - `send_action` review now also keeps non-clickable visual send controls when the XML exposes a tappable-looking send icon or label without `clickable="true"`, so manual review can still choose the correct tap target
 - `latest_bubble_match` review is now conditional: if the structural response anchor resolves to one clear latest response block, the builder can skip that review item; ambiguous containers or blocks still surface all evidence for manual choice
 - Android response extraction now treats `response_container_locator` as a structural anchor, not a single frozen bounds box. Runtime extraction ranks matching containers, groups multi-`TextView` reply fragments into one response block, and selects the latest valid block inside the best match.

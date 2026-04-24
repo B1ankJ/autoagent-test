@@ -206,110 +206,106 @@ def _node_locator(node: dict[str, str], fallback_class: str) -> dict:
     return _class_locator(fallback_class)
 
 
-def _build_input_candidates(
-    editing_nodes: list[dict[str, str]],
-    idle_nodes: list[dict[str, str]],
+def _artifact_name_for_source(source: str) -> str:
+    return "capture_editing.png" if source == "editing_xml" else "capture_idle.png"
+
+
+def _input_candidate_score(node: dict[str, str], *, index: int, source: str) -> int:
+    bounds = _parse_bounds(node.get("bounds"))
+    area = _bounds_area(bounds)
+    score = (2000 if source == "editing_xml" else 1000) - index
+    node_class = (node.get("class") or "").strip()
+    text = (node.get("text") or "").strip()
+    if node_class == "android.widget.EditText":
+        score += 3000
+    if _is_input_hint_text(text):
+        score += 1500
+    if node.get("focusable") == "true":
+        score += 300
+    if node.get("clickable") == "true":
+        score += 200
+    if _composer_region(bounds):
+        score += 150
+    score += min(area // 4000, 200)
+    return score
+
+
+def _send_candidate_score(node: dict[str, str], *, index: int, primary_package: str | None) -> int:
+    bounds = _parse_bounds(node.get("bounds"))
+    area = _bounds_area(bounds)
+    x1, y1, x2, y2 = bounds or (0, 0, 0, 0)
+    text = (node.get("text") or "").strip()
+    node_class = (node.get("class") or "").strip()
+    package = (node.get("package") or "").strip()
+    score = y2 + x2 - index
+    if _is_send_hint_text(text):
+        score += 2500
+    if node.get("clickable") == "true":
+        score += 400
+    if node.get("focusable") == "true":
+        score += 150
+    if node_class == "android.widget.EditText":
+        score -= 1800
+    if _composer_region(bounds):
+        score += 250
+    if x1 > 700:
+        score += 300
+    if primary_package and package == primary_package:
+        score += 500
+    if any(package.startswith(prefix) for prefix in _SYSTEM_PACKAGE_PREFIXES):
+        score -= 1500
+    score += min(area // 5000, 200)
+    return score
+
+
+def _all_bounded_candidates(
+    nodes: list[dict[str, str]],
+    *,
+    source: str,
+    field: str,
+    primary_package: str | None = None,
 ) -> list[dict]:
     candidates: list[dict] = []
-
-    for index, node in enumerate(editing_nodes):
-        if node.get("class") != "android.widget.EditText":
+    for index, node in enumerate(nodes):
+        bounds_raw = node.get("bounds")
+        bounds = _parse_bounds(bounds_raw)
+        if bounds is None or bounds_raw is None:
             continue
-        bounds = _parse_bounds(node.get("bounds"))
-        locator = _xpath_locator(f'//*[@bounds="{node["bounds"]}"]') if node.get("bounds") else _xpath_locator('//*[@class="android.widget.EditText"]')
+        locator = _node_locator(node, "android.view.View")
+        score = (
+            _input_candidate_score(node, index=index, source=source)
+            if field == "input"
+            else _send_candidate_score(node, index=index, primary_package=primary_package)
+        )
         candidates.append(
             {
                 "locator": locator,
-                "score": 2000 - index,
-                "reason": "editing EditText",
+                "score": score,
+                "reason": f"{source.split('_')[0]} raw {field} candidate",
+                "allow_click_locator": node.get("clickable") == "true",
                 "evidence_refs": [
                     _evidence_ref(
-                        source="editing_xml",
-                        step="editing",
-                        artifact="capture_editing.png",
+                        source=source,
+                        step="editing" if source == "editing_xml" else "idle",
+                        artifact=_artifact_name_for_source(source),
                         locator=locator,
                         bounds=bounds,
-                        label="input",
+                        label=f"{field}-candidate",
                         text=(node.get("text") or "").strip() or None,
                     )
                 ],
             }
         )
+    return candidates
 
-    def _placeholder_candidates(nodes: list[dict[str, str]], *, source: str) -> None:
-        for index, node in enumerate(nodes):
-            text = node.get("text", "").strip()
-            if not _is_input_hint_text(text):
-                continue
-            bounds = _parse_bounds(node.get("bounds"))
-            locator = (
-                _xpath_locator(f'//*[@bounds="{node["bounds"]}"]')
-                if node.get("bounds")
-                else _xpath_locator(f'//*[contains(@text, "{text}")]')
-            )
-            candidates.append(
-                {
-                    "locator": locator,
-                    "score": (1000 if source == "idle_xml" else 1400) - index,
-                    "reason": f"{source.split('_')[0]} input placeholder",
-                    "evidence_refs": [
-                        _evidence_ref(
-                            source=source,
-                            step="editing" if source == "editing_xml" else "idle",
-                            artifact=(
-                                "capture_editing.png"
-                                if source == "editing_xml"
-                                else "capture_idle.png"
-                            ),
-                            locator=locator,
-                            bounds=bounds,
-                            label="input-placeholder",
-                            text=text,
-                        )
-                    ],
-                }
-            )
 
-    def _composer_proxy_candidates(nodes: list[dict[str, str]], *, source: str) -> None:
-        for index, node in enumerate(nodes):
-            bounds = _parse_bounds(node.get("bounds"))
-            if not _composer_region(bounds):
-                continue
-            if node.get("class") == "android.widget.EditText":
-                continue
-            if node.get("clickable") != "true" and node.get("focusable") != "true":
-                continue
-            area = _bounds_area(bounds)
-            if area <= 0 or area > 400_000:
-                continue
-            locator = _node_locator(node, "android.widget.EditText")
-            candidates.append(
-                {
-                    "locator": locator,
-                    "score": 900 - index + min(area // 2000, 180),
-                    "reason": f"{source.split('_')[0]} composer proxy",
-                    "evidence_refs": [
-                        _evidence_ref(
-                            source=source,
-                            step="editing" if source == "editing_xml" else "idle",
-                            artifact=(
-                                "capture_editing.png"
-                                if source == "editing_xml"
-                                else "capture_idle.png"
-                            ),
-                            locator=locator,
-                            bounds=bounds,
-                            label="input-proxy",
-                            text=(node.get("text") or "").strip() or None,
-                        )
-                    ],
-                }
-            )
-
-    _placeholder_candidates(editing_nodes, source="editing_xml")
-    _placeholder_candidates(idle_nodes, source="idle_xml")
-    _composer_proxy_candidates(editing_nodes, source="editing_xml")
-    _composer_proxy_candidates(idle_nodes, source="idle_xml")
+def _build_input_candidates(
+    editing_nodes: list[dict[str, str]],
+    idle_nodes: list[dict[str, str]],
+) -> list[dict]:
+    candidates: list[dict] = []
+    candidates.extend(_all_bounded_candidates(editing_nodes, source="editing_xml", field="input"))
+    candidates.extend(_all_bounded_candidates(idle_nodes, source="idle_xml", field="input"))
     return _dedupe_candidates(candidates)
 
 
@@ -322,74 +318,16 @@ def _build_send_candidates_from_nodes(
     *,
     source: str,
 ) -> list[dict]:
-    app_package = _app_package(editing_nodes)
-    candidates: list[dict] = []
-    for index, node in enumerate(editing_nodes):
-        package = node.get("package", "").strip()
-        if app_package and package and package != app_package:
-            continue
-        bounds_raw = node.get("bounds")
-        bounds = _parse_bounds(bounds_raw)
-        if bounds is None or bounds_raw is None:
-            continue
-        x1, y1, x2, y2 = bounds
-        width = x2 - x1
-        height = y2 - y1
-        area = _bounds_area(bounds)
-        if not _composer_region(bounds):
-            continue
-        if width < 24 or height < 24:
-            continue
-        if area > 240_000:
-            continue
-        is_clickable = node.get("clickable") == "true"
-        text = (node.get("text") or "").strip()
-        node_class = (node.get("class") or "").strip()
-        is_visual_send = (
-            not is_clickable
-            and node_class != "android.widget.EditText"
-            and (_is_send_hint_text(text) or (x1 > 700 and area < 30_000))
-        )
-        if not is_clickable and not is_visual_send:
-            continue
-        locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
-        score = y2 + x2 - (area // 5000) - index
-        if x1 > 700:
-            score += 400
-        if area < 20_000:
-            score += 120
-        if node_class == "android.widget.EditText":
-            score -= 1800
-        if _is_send_hint_text(text):
-            score += 1200
-        if is_visual_send:
-            score += 800
-        candidates.append(
-            {
-                "locator": locator,
-                "score": score,
-                "reason": (
-                    "composer visual send control"
-                    if is_visual_send and not is_clickable
-                    else "composer clickable control"
-                ),
-                "allow_click_locator": is_clickable,
-                "evidence_refs": [
-                    _evidence_ref(
-                        source=source,
-                        step="connectivity" if source == "runtime_probe_xml" else "editing",
-                        artifact=(
-                            "runtime_probe_editing.png"
-                            if source == "runtime_probe_xml"
-                            else "capture_editing.png"
-                        ),
-                        locator=locator,
-                        bounds=bounds,
-                        label="send-button",
-                    )
-                ],
-            }
-        )
+    candidates = _all_bounded_candidates(
+        editing_nodes,
+        source=source,
+        field="send",
+        primary_package=_app_package(editing_nodes),
+    )
+    for candidate in candidates:
+        for ref in candidate.get("evidence_refs", []):
+            if isinstance(ref, dict):
+                ref["label"] = "send-button"
     return _dedupe_candidates(candidates)
 
 
