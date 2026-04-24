@@ -9,6 +9,7 @@ from httpx import ASGITransport
 from autoagent.auth.jwt import create_access_token
 from autoagent.config.settings import get_settings
 from autoagent.main import app
+from autoagent.models.api import SampleResult
 
 
 @pytest.fixture
@@ -58,6 +59,37 @@ async def test_list_screenshots_accepts_android_style_names(
         "autoagent.api.batches.get_settings",
         lambda: get_settings().model_copy(update={"logs_root": logs}),
     )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == ["after_send_1.png", "before_input_1.png"]
+
+
+async def test_list_screenshots_uses_sample_logs_dir_when_it_is_absolute(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    actual_logs = tmp_path / "data" / "logs"
+    _seed_android_style(actual_logs, "b1", "s1")
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": tmp_path / "logs"}),
+    )
+    async def _fake_list_samples(_batch_id: str) -> list[SampleResult]:
+        return [
+            SampleResult(
+                id="s1",
+                status="done",
+                mode="gui_android",
+                target_profile="android_demo",
+                logs_dir=str((actual_logs / "b1" / "s1").resolve()),
+            )
+        ]
+
+    monkeypatch.setattr("autoagent.api.batches.list_samples_for_batch", _fake_list_samples)
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         response = await c.get(
             "/api/v1/batches/b1/samples/s1/screenshots",

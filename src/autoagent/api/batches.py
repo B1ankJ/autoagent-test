@@ -73,6 +73,18 @@ async def _screenshot_meta_map(batch_id: str, sample_id: str) -> dict[str, dict]
     return {}
 
 
+async def _sample_logs_dir(batch_id: str, sample_id: str) -> Path | None:
+    try:
+        samples = await list_samples_for_batch(batch_id)
+    except OperationalError:
+        return None
+    for sample in samples:
+        if sample.id != sample_id or not sample.logs_dir:
+            continue
+        return Path(sample.logs_dir).resolve()
+    return None
+
+
 @router.post("", response_model=BatchCreatedResponse, status_code=201)
 async def create_batch_json(body: BatchCreateJSON) -> BatchCreatedResponse:
     _apply_default_profile(body.samples, body.target_profile_default)
@@ -211,7 +223,9 @@ async def stream_batch_events(batch_id: str) -> EventSourceResponse:
 @router.get("/{batch_id}/samples/{sample_id}/screenshots", response_model=list[ScreenshotInfo])
 async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo]:
     settings = get_settings()
-    sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
     if not sample_dir.is_dir():
         return []
 
@@ -238,9 +252,12 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
 @router.get("/{batch_id}/samples/{sample_id}/actions.jsonl")
 async def download_actions(batch_id: str, sample_id: str) -> FileResponse:
     root = get_settings().logs_root.resolve()
-    target = (root / batch_id / sample_id / "actions.jsonl").resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (root / batch_id / sample_id).resolve()
+    target = (sample_dir / "actions.jsonl").resolve()
     try:
-        target.relative_to(root)
+        target.relative_to(sample_dir)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="path traversal blocked") from e
     if not target.is_file():
@@ -259,9 +276,12 @@ async def download_screenshot(batch_id: str, sample_id: str, name: str) -> FileR
 
     settings = get_settings()
     root = settings.logs_root.resolve()
-    target = (root / batch_id / sample_id / name).resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (root / batch_id / sample_id).resolve()
+    target = (sample_dir / name).resolve()
     try:
-        target.relative_to(root)
+        target.relative_to(sample_dir)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="path traversal blocked") from e
     if not target.is_file():
