@@ -589,7 +589,7 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert body["session"]["status"] == "ready"
     assert (
         body["candidates"]["input_candidates"][0]["locator"]["value"]
-        == '//*[@class="android.widget.EditText"]'
+        == '//*[@bounds="[36,1882][1032,2002]"]'
     )
     assert "draft_profile.yaml" in body["session"]["artifacts"]
     assert body["draft_profile_yaml"].startswith("name: qwen")
@@ -622,7 +622,7 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     ] in body["review_items"][0]["alternative_candidates"]
     assert profile_data["input_locator"] == {
         "type": "xpath",
-        "value": '//*[@class="android.widget.EditText"]',
+        "value": '//*[@bounds="[36,1882][1032,2002]"]',
     }
     assert profile_data["send_button_locator"] == {
         "type": "xpath",
@@ -642,10 +642,10 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     )
     assert input_review_item["recommended_option"] == {
         "type": "xpath",
-        "value": '//*[@class="android.widget.EditText"]',
+        "value": '//*[@bounds="[36,1882][1032,2002]"]',
     }
     assert input_review_item["alternative_candidates"] == [
-        {"type": "xpath", "value": '//*[contains(@text, "发消息")]'}
+        {"type": "xpath", "value": '//*[@bounds="[177,2066][777,2123]"]'}
     ]
     assert input_review_item["evidence_refs"][0]["artifact"] == "capture_editing.png"
     assert input_review_item["alternative_evidence_refs"][0][0]["artifact"] == "capture_idle.png"

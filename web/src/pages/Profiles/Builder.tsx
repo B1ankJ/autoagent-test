@@ -133,10 +133,13 @@ function reviewOptionText(value: ReviewItem['recommended_option']) {
     return `${value.type}: ${value.value}`
   }
   return [
+    value.bubble_preview ? `bubble_text=${value.bubble_preview}` : null,
     `response=${value.response_container_locator.value}`,
     `scroll=${value.scroll_container_locator.value}`,
     `bubble=${value.latest_bubble_match.value}`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function toReviewPayload(
@@ -153,7 +156,7 @@ function toReviewPayload(
     response_extraction: {
       response_container_locator: value.response_container_locator,
       scroll_container_locator: value.scroll_container_locator,
-      latest_bubble_match: value.latest_bubble_match,
+      latest_bubble_match: value.resolved_latest_bubble_match ?? value.latest_bubble_match,
     },
   }
 }

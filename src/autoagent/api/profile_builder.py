@@ -617,10 +617,7 @@ def _draft_profile_from_candidates(
     placeholder_locator = _input_placeholder_locator(idle_xml)
     placeholder_tap_action = _input_placeholder_tap_action(idle_xml)
     input_focus_action = []
-    if placeholder_locator is not None and (
-        input_locator.get("type") == "xpath"
-        and input_locator.get("value") == '//*[@class="android.widget.EditText"]'
-    ):
+    if placeholder_locator is not None and input_candidates[0].get("reason") == "editing EditText":
         input_focus_action = (
             [placeholder_tap_action]
             if placeholder_tap_action is not None

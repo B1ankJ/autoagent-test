@@ -168,6 +168,8 @@ export interface ResponseReviewOption {
   response_container_locator: LocatorChoice
   scroll_container_locator: LocatorChoice
   latest_bubble_match: LocatorChoice
+  resolved_latest_bubble_match?: LocatorChoice
+  bubble_preview?: string
 }
 
 export interface ActionStepChoice {
@@ -186,6 +188,7 @@ export interface ReviewEvidenceRef {
   locator?: LocatorChoice
   bounds?: [number, number, number, number] | number[]
   label?: string
+  text?: string
   scroll_locator?: LocatorChoice
   text_count?: number
   total_text_length?: number

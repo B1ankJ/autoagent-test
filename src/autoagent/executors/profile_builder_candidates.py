@@ -67,6 +67,7 @@ def _evidence_ref(
     locator: dict | None = None,
     bounds: tuple[int, int, int, int] | None = None,
     label: str | None = None,
+    text: str | None = None,
     scroll_locator: dict | None = None,
     text_count: int | None = None,
     total_text_length: int | None = None,
@@ -82,6 +83,8 @@ def _evidence_ref(
         ref["bounds"] = _bounds_payload(bounds)
     if label is not None:
         ref["label"] = label
+    if text is not None:
+        ref["text"] = text
     if scroll_locator is not None:
         ref["scroll_locator"] = scroll_locator
     if text_count is not None:
@@ -122,50 +125,46 @@ def _build_input_candidates(
     idle_nodes: list[dict[str, str]],
 ) -> list[dict]:
     candidates: list[dict] = []
-    seen_locators: set[tuple[str, str]] = set()
 
-    def _append_candidate(candidate: dict) -> None:
-        locator = candidate["locator"]
-        key = (locator["type"], locator["value"])
-        if key in seen_locators:
-            return
-        seen_locators.add(key)
-        candidates.append(candidate)
-
-    for node in editing_nodes:
+    for index, node in enumerate(editing_nodes):
         if node.get("class") != "android.widget.EditText":
             continue
         bounds = _parse_bounds(node.get("bounds"))
-        _append_candidate(
+        locator = _xpath_locator(f'//*[@bounds="{node["bounds"]}"]') if node.get("bounds") else _xpath_locator('//*[@class="android.widget.EditText"]')
+        candidates.append(
             {
-                "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                "score": 100 + _bounds_area(bounds),
+                "locator": locator,
+                "score": 2000 - index,
                 "reason": "editing EditText",
                 "evidence_refs": [
                     _evidence_ref(
                         source="editing_xml",
                         step="editing",
                         artifact="capture_editing.png",
-                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                        locator=locator,
                         bounds=bounds,
                         label="input",
+                        text=(node.get("text") or "").strip() or None,
                     )
                 ],
             }
         )
 
-    for node in idle_nodes:
+    for index, node in enumerate(idle_nodes):
         text = node.get("text", "").strip()
         if not text:
             continue
         if not any(keyword in text.lower() for keyword in _INPUT_HINT_KEYWORDS):
             continue
-        target = "发消息" if "发消息" in text else text
-        locator = _xpath_locator(f'//*[contains(@text, "{target}")]')
-        _append_candidate(
+        locator = (
+            _xpath_locator(f'//*[@bounds="{node["bounds"]}"]')
+            if node.get("bounds")
+            else _xpath_locator(f'//*[contains(@text, "{text}")]')
+        )
+        candidates.append(
             {
                 "locator": locator,
-                "score": 1000 - len(text),
+                "score": 1000 - index,
                 "reason": "idle input placeholder",
                 "evidence_refs": [
                     _evidence_ref(
@@ -175,6 +174,7 @@ def _build_input_candidates(
                         locator=locator,
                         bounds=_parse_bounds(node.get("bounds")),
                         label="input-placeholder",
+                        text=text,
                     )
                 ],
             }
@@ -299,12 +299,25 @@ def _latest_bubble_locator(text_nodes: list[ElementTree.Element]) -> dict:
     return _class_locator("android.widget.TextView")
 
 
+def _review_locator_from_node(node: ElementTree.Element) -> dict:
+    bounds = node.attrib.get("bounds")
+    if bounds:
+        return _xpath_locator(f'//*[@bounds="{bounds}"]')
+    node_class = node.attrib.get("class")
+    if node_class:
+        return _class_locator(node_class)
+    return _class_locator("android.widget.TextView")
+
+
 def _response_review_option(candidate: dict) -> dict:
-    return {
+    option = {
         "response_container_locator": candidate["response_container_locator"],
         "scroll_container_locator": candidate["scroll_container_locator"],
-        "latest_bubble_match": candidate["latest_bubble_match"],
+        "latest_bubble_match": candidate["review_latest_bubble_match"],
+        "resolved_latest_bubble_match": candidate["latest_bubble_match"],
+        "bubble_preview": candidate["bubble_preview"],
     }
+    return option
 
 
 def _response_candidate(
@@ -312,12 +325,16 @@ def _response_candidate(
     container: ElementTree.Element,
     scroll_container: ElementTree.Element | None,
     text_nodes: list[ElementTree.Element],
+    bubble_node: ElementTree.Element,
 ) -> dict:
     container_bounds = _parse_bounds(container.attrib.get("bounds"))
     total_text_len = sum(len((node.attrib.get("text") or "").strip()) for node in text_nodes)
     repeated_count = len(text_nodes)
     container_bonus = 60 if repeated_count >= 2 else 0
     scroll_bonus = 40 if scroll_container is not None else 0
+    bubble_bounds = _parse_bounds(bubble_node.attrib.get("bounds"))
+    bubble_text = (bubble_node.attrib.get("text") or "").strip()
+    bubble_y = bubble_bounds[3] if bubble_bounds is not None else 0
     score = repeated_count * 100 + total_text_len * 5 + _bounds_area(container_bounds) // 1000
     locator = _locator_from_node(container)
     scroll_locator = _locator_from_node(scroll_container or container)
@@ -326,9 +343,20 @@ def _response_candidate(
         "response_container_locator": locator,
         "scroll_container_locator": scroll_locator,
         "latest_bubble_match": latest_locator,
-        "score": score + container_bonus + scroll_bonus,
-        "reason": "container with repeated visible response text",
+        "review_latest_bubble_match": _review_locator_from_node(bubble_node),
+        "bubble_preview": bubble_text[:80],
+        "score": score + container_bonus + scroll_bonus + bubble_y,
+        "reason": "visible response text node inside repeated response container",
         "evidence_refs": [
+            _evidence_ref(
+                source="idle_xml",
+                step="idle",
+                artifact="capture_idle.png",
+                locator=_review_locator_from_node(bubble_node),
+                bounds=bubble_bounds,
+                label="response-bubble",
+                text=bubble_text,
+            ),
             _evidence_ref(
                 source="idle_xml",
                 step="idle",
@@ -362,21 +390,23 @@ def _build_response_candidates(response_xml: str) -> list[dict]:
         if not grouped_text_nodes:
             continue
         scroll_container = _nearest_scroll_container(container, parents)
-        candidate = _response_candidate(
-            container=container,
-            scroll_container=scroll_container,
-            text_nodes=grouped_text_nodes,
-        )
-        ranked.append(
-            (
-                (
-                    candidate["score"],
-                    len(grouped_text_nodes),
-                    _element_depth(container, parents),
-                ),
-                candidate,
+        for bubble_node in grouped_text_nodes:
+            candidate = _response_candidate(
+                container=container,
+                scroll_container=scroll_container,
+                text_nodes=grouped_text_nodes,
+                bubble_node=bubble_node,
             )
-        )
+            ranked.append(
+                (
+                    (
+                        candidate["score"],
+                        len(grouped_text_nodes),
+                        _element_depth(container, parents),
+                    ),
+                    candidate,
+                )
+            )
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [candidate for _, candidate in ranked]
 

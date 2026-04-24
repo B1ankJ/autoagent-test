@@ -31,6 +31,7 @@ Current untagged workspace changes after those commits:
 - Draft generation now uses only the manual `idle` and `editing` captures. The extra `runtime_probe_editing.*` artifact path has been removed.
 - Android profile draft semantics are corrected so `new_session_action` means "start a new conversation", input focusing lives in `input_focus_action`, and send triggering can live in `send_action`.
 - Builder review gating now blocks `Run Connectivity Test` until all generated review items are confirmed, and the UI can show all evidence boxes for a review item at once.
+- Review generation now keeps raw node-level Android candidates instead of collapsing them into a single summarized locator too early. In ambiguous cases, `input_locator`, `input_focus_action`, `send_action`, and `latest_bubble_match` should expose all visible candidate boxes and leave the final judgment to the user.
 
 ## How To Resume
 

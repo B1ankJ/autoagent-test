@@ -49,7 +49,7 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
         response_xml=response_xml,
     )
 
-    assert draft.input_candidates[0]["locator"]["value"] == '//*[@class="android.widget.EditText"]'
+    assert draft.input_candidates[0]["locator"]["value"] == '//*[@bounds="[36,1882][1032,2002]"]'
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,2009][1020,2120]"]'
     assert (
         draft.response_candidates[0]["response_container_locator"]["value"]
@@ -63,9 +63,13 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
         "type": "class",
         "value": "android.widget.TextView",
     }
-    assert len(draft.review_items) == 2
+    assert draft.response_candidates[0]["review_latest_bubble_match"]["value"].startswith(
+        "//*[@bounds="
+    )
+    assert len(draft.review_items) == 3
     assert draft.review_items[0]["field"] == "input_locator"
     assert draft.review_items[1]["field"] == "send_action"
+    assert draft.review_items[2]["field"] == "latest_bubble_match"
 
 
 def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_response_hints():
@@ -101,7 +105,7 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
         response_xml=response_xml,
     )
 
-    assert len(draft.response_candidates) >= 2
+    assert len(draft.response_candidates) == 4
     assert len(draft.review_items) == 3
     review_item = next(
         item for item in draft.review_items if item["field"] == "latest_bubble_match"
@@ -110,26 +114,61 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
     assert review_item["recommended_option"] == {
         "response_container_locator": draft.response_candidates[0]["response_container_locator"],
         "scroll_container_locator": draft.response_candidates[0]["scroll_container_locator"],
-        "latest_bubble_match": draft.response_candidates[0]["latest_bubble_match"],
+        "latest_bubble_match": draft.response_candidates[0]["review_latest_bubble_match"],
+        "resolved_latest_bubble_match": draft.response_candidates[0]["latest_bubble_match"],
+        "bubble_preview": draft.response_candidates[0]["bubble_preview"],
     }
     assert review_item["alternative_candidates"] == [
         {
             "response_container_locator": candidate["response_container_locator"],
             "scroll_container_locator": candidate["scroll_container_locator"],
-            "latest_bubble_match": candidate["latest_bubble_match"],
+            "latest_bubble_match": candidate["review_latest_bubble_match"],
+            "resolved_latest_bubble_match": candidate["latest_bubble_match"],
+            "bubble_preview": candidate["bubble_preview"],
         }
         for candidate in draft.response_candidates[1:]
     ]
     assert review_item["recommended_option"] != review_item["alternative_candidates"][0]
     assert review_item["evidence_refs"][0]["source"] == "idle_xml"
-    assert (
-        review_item["evidence_refs"][0]["locator"]
-        == draft.response_candidates[0]["response_container_locator"]
+    assert review_item["evidence_refs"][0]["label"] == "response-bubble"
+    assert review_item["evidence_refs"][0]["text"] == "继续补充"
+    assert review_item["evidence_refs"][1]["locator"] == draft.response_candidates[0]["response_container_locator"]
+    assert review_item["evidence_refs"][1]["scroll_locator"] == draft.response_candidates[0]["scroll_container_locator"]
+
+
+def test_build_android_candidates_keeps_all_matching_input_nodes_in_review():
+    idle_xml = """
+    <hierarchy>
+      <node text="发消息" class="android.widget.TextView" bounds="[100,2000][400,2080]" />
+      <node text="输入问题" class="android.widget.TextView" bounds="[500,2000][900,2080]" />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node text="你好" class="android.widget.EditText" bounds="[36,1882][520,2002]" />
+      <node text="再见" class="android.widget.EditText" bounds="[540,1882][1032,2002]" />
+      <node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.LinearLayout" bounds="[48,1500][1032,1760]">
+        <node text="第二段回复" class="android.widget.TextView" bounds="[96,1540][884,1610]" />
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
     )
-    assert (
-        review_item["evidence_refs"][0]["scroll_locator"]
-        == draft.response_candidates[0]["scroll_container_locator"]
-    )
+
+    assert len(draft.input_candidates) == 4
+    input_review = next(item for item in draft.review_items if item["field"] == "input_locator")
+    assert len(input_review["alternative_candidates"]) == 3
+    assert input_review["evidence_refs"][0]["bounds"] == [36, 1882, 520, 2002]
+    assert input_review["alternative_evidence_refs"][0][0]["bounds"] == [540, 1882, 1032, 2002]
 
 
 def test_build_android_candidates_prefers_input_placeholder_and_small_send_controls():
@@ -184,7 +223,7 @@ def test_build_android_candidates_prefers_input_placeholder_and_small_send_contr
         response_xml=response_xml,
     )
 
-    assert draft.input_candidates[0]["locator"]["value"] == '//*[contains(@text, "发消息")]'
+    assert draft.input_candidates[0]["locator"]["value"] == '//*[@bounds="[177,2066][777,2123]"]'
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,2038][1020,2149]"]'
 
 
