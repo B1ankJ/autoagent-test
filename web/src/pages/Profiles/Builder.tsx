@@ -637,9 +637,99 @@ export default function Builder() {
                 <Empty description="启动 session 后自动显示运行状态" />
               )}
             </Card>
+            <Card title="Review Items" style={{ marginTop: 16 }}>
+              {!draft?.review_items.length ? (
+                <Empty description="先完成 capture 并生成 draft" />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {draft.review_items.map((item, index) => (
+                    <Alert
+                      key={`${item.field}-${index}`}
+                      type="warning"
+                      showIcon
+                      message={`${item.field}: ${item.reason}`}
+                      description={
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                            {reviewOptionText(item.recommended_option)}
+                          </Typography.Paragraph>
+                          <Space wrap>
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={() => chooseReviewOption(item, item.recommended_option)}
+                              loading={applyReview.isPending}
+                            >
+                              Apply Recommended
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => focusEvidence(item.evidence_refs, `${item.field} · 推荐定位`)}
+                              disabled={!item.evidence_refs.length}
+                            >
+                              查看推荐定位
+                            </Button>
+                            {item.alternative_candidates.map((candidate, candidateIndex) => (
+                              <Space key={candidateIndex} size="small">
+                                <Button
+                                  size="small"
+                                  onClick={() => chooseReviewOption(item, candidate)}
+                                  loading={applyReview.isPending}
+                                >
+                                  Apply Alternative {candidateIndex + 1}
+                                </Button>
+                                <Button
+                                  size="small"
+                                  onClick={() =>
+                                    focusEvidence(
+                                      item.alternative_evidence_refs[candidateIndex] ?? [],
+                                      `${item.field} · 备选 ${candidateIndex + 1}`,
+                                    )
+                                  }
+                                  disabled={!(item.alternative_evidence_refs[candidateIndex] ?? []).length}
+                                >
+                                  查看备选 {candidateIndex + 1}
+                                </Button>
+                              </Space>
+                            ))}
+                          </Space>
+                        </Space>
+                      }
+                    />
+                  ))}
+                </Space>
+              )}
+            </Card>
+            <Card title="Connectivity Result" style={{ marginTop: 16 }}>
+              {connectivitySummary ? (
+                <Alert type="success" message="Connectivity Test Result" description={connectivitySummary} />
+              ) : (
+                <Empty description="尚未运行连通性测试" />
+              )}
+            </Card>
+            <Card title="Draft YAML" style={{ marginTop: 16 }}>
+              {draft ? (
+                <Input.TextArea
+                  readOnly
+                  autoSize={{ minRows: 12, maxRows: 24 }}
+                  value={draft.draft_profile_yaml}
+                />
+              ) : (
+                <Empty description="尚未生成 draft profile" />
+              )}
+            </Card>
           </Col>
           <Col xs={24} lg={10}>
-            <Card title="Key Screens" loading={runtime.isLoading && !runtimeData}>
+            <Card
+              title="Key Screens"
+              loading={runtime.isLoading && !runtimeData}
+              style={{
+                position: 'sticky',
+                top: 16,
+                maxHeight: 'calc(100vh - 32px)',
+                overflowY: 'auto',
+              }}
+            >
               {!runtimeData ? (
                 <Empty description="暂无关键截图" />
               ) : (
@@ -763,89 +853,6 @@ export default function Builder() {
         </Row>
       ) : null}
 
-      <Card title="Review Items">
-        {!draft?.review_items.length ? (
-          <Empty description="先完成 capture 并生成 draft" />
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            {draft.review_items.map((item, index) => (
-              <Alert
-                key={`${item.field}-${index}`}
-                type="warning"
-                showIcon
-                message={`${item.field}: ${item.reason}`}
-                description={
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                      {reviewOptionText(item.recommended_option)}
-                    </Typography.Paragraph>
-                    <Space wrap>
-                      <Button
-                        size="small"
-                        type="primary"
-                        onClick={() => chooseReviewOption(item, item.recommended_option)}
-                        loading={applyReview.isPending}
-                      >
-                        Apply Recommended
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={() => focusEvidence(item.evidence_refs, `${item.field} · 推荐定位`)}
-                        disabled={!item.evidence_refs.length}
-                      >
-                        查看推荐定位
-                      </Button>
-                      {item.alternative_candidates.map((candidate, candidateIndex) => (
-                        <Space key={candidateIndex} size="small">
-                          <Button
-                            size="small"
-                            onClick={() => chooseReviewOption(item, candidate)}
-                            loading={applyReview.isPending}
-                          >
-                            Apply Alternative {candidateIndex + 1}
-                          </Button>
-                          <Button
-                            size="small"
-                            onClick={() =>
-                              focusEvidence(
-                                item.alternative_evidence_refs[candidateIndex] ?? [],
-                                `${item.field} · 备选 ${candidateIndex + 1}`,
-                              )
-                            }
-                            disabled={!(item.alternative_evidence_refs[candidateIndex] ?? []).length}
-                          >
-                            查看备选 {candidateIndex + 1}
-                          </Button>
-                        </Space>
-                      ))}
-                    </Space>
-                  </Space>
-                }
-              />
-            ))}
-          </Space>
-        )}
-      </Card>
-
-      <Card title="Connectivity Result">
-        {connectivitySummary ? (
-          <Alert type="success" message="Connectivity Test Result" description={connectivitySummary} />
-        ) : (
-          <Empty description="尚未运行连通性测试" />
-        )}
-      </Card>
-
-      <Card title="Draft YAML">
-        {draft ? (
-          <Input.TextArea
-            readOnly
-            autoSize={{ minRows: 12, maxRows: 24 }}
-            value={draft.draft_profile_yaml}
-          />
-        ) : (
-          <Empty description="尚未生成 draft profile" />
-        )}
-      </Card>
     </Space>
   )
 }

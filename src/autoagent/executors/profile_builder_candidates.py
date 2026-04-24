@@ -248,7 +248,11 @@ def _build_send_candidates_from_nodes(
         if bounds is None or bounds_raw is None:
             continue
         x1, y1, x2, y2 = bounds
+        width = x2 - x1
+        height = y2 - y1
         area = _bounds_area(bounds)
+        if width < 48 or height < 48:
+            continue
         if area > 100_000:
             continue
         if y1 < 1200:
@@ -256,7 +260,7 @@ def _build_send_candidates_from_nodes(
         locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
         ranked.append(
             (
-                (x2, y2, area),
+                (y2, x2, -area),
                 {
                     "locator": locator,
                     "score": x2 + y2,
