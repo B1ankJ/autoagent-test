@@ -88,12 +88,16 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
               size={4}
               style={{ alignItems: 'center', width: 160 }}
             >
+              <Typography.Text strong>{`步骤 ${index + 1}`}</Typography.Text>
               <Image width={160} src={screenshotUrls[index]?.data} alt={shot.label} />
               <Typography.Text
                 style={{ width: '100%', textAlign: 'center' }}
                 ellipsis={{ tooltip: `${formatScreenshotLabel(shot.label)} (${shot.label})` }}
               >
                 {formatScreenshotLabel(shot.label)}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {shot.label}
               </Typography.Text>
             </Space>
           ),
