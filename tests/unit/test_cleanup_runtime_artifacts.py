@@ -102,3 +102,28 @@ def test_main_defaults_to_dry_run_and_prints_matches(
     assert "dry-run" in output
     assert "logs/old.log" in output
     assert (tmp_path / "logs" / "old.log").exists()
+
+
+def test_main_all_apply_removes_all_target_contents_and_keeps_roots(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_file(tmp_path / "logs" / "old.log", days_old=1)
+    _write_file(tmp_path / "nested" / "logs" / "batch" / "run.txt", days_old=1)
+    _make_session(tmp_path / "data" / "profile_builder" / "pb_any", days_old=1)
+
+    exit_code = main(["--all", "--apply"], repo_root=tmp_path)
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "apply: deleted" in output
+    assert (tmp_path / "logs").exists()
+    assert list((tmp_path / "logs").iterdir()) == []
+    assert (tmp_path / "nested" / "logs").exists()
+    assert list((tmp_path / "nested" / "logs").iterdir()) == []
+    assert (tmp_path / "data" / "profile_builder").exists()
+    assert list((tmp_path / "data" / "profile_builder").iterdir()) == []
+
+
+def test_main_rejects_all_without_apply(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(["--all"], repo_root=tmp_path)

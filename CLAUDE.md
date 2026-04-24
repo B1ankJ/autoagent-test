@@ -102,6 +102,7 @@ python3.11 -m ruff check .             # lint
 python3.11 -m ruff format .            # format
 python3.11 scripts/cleanup_runtime_artifacts.py --days 7          # preview old logs/profile-builder artifacts
 python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply  # delete old logs/profile-builder artifacts
+python3.11 scripts/cleanup_runtime_artifacts.py --all --apply     # clear all logs/profile-builder artifacts
 python3.11 -m playwright install chromium     # one-time: download Chromium
 adb devices -l                         # verify adb sees local devices
 python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server

@@ -181,9 +181,12 @@ directory plus `data/profile_builder/`:
 ```bash
 python3.11 scripts/cleanup_runtime_artifacts.py --days 7
 python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply
+python3.11 scripts/cleanup_runtime_artifacts.py --all --apply
 ```
 
-The default mode is dry-run. Only `--apply` performs deletion.
+The default mode is dry-run. Only `--apply` performs deletion. `--all --apply` clears all
+matched `logs/` and `data/profile_builder/` contents while keeping the root directories
+themselves.
 
 ## Web UI
 

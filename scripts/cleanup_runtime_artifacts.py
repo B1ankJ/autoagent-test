@@ -113,11 +113,16 @@ def apply_cleanup(entries: list[CleanupEntry], repo_root: Path) -> list[CleanupE
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Preview or delete old runtime artifacts.")
-    parser.add_argument(
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument(
         "--days",
         type=int,
-        required=True,
         help="Delete artifacts older than N days.",
+    )
+    target.add_argument(
+        "--all",
+        action="store_true",
+        help="Delete all cleanup targets under logs/ and data/profile_builder/.",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Preview matching artifacts.")
@@ -125,9 +130,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _validate_days(days: int) -> None:
-    if days <= 0:
+def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.days is not None and args.days <= 0:
         raise ValueError("--days must be a positive integer")
+    if args.all and not args.apply:
+        parser.error("--all requires --apply")
+
+
+def collect_all_cleanup_entries(repo_root: Path) -> list[CleanupEntry]:
+    root = repo_root.resolve()
+    entries: set[CleanupEntry] = set()
+
+    for logs_dir in _iter_logs_dirs(root):
+        for path in sorted(logs_dir.rglob("*")):
+            if not _is_under_repo(path, root):
+                continue
+            if path.is_file():
+                entries.add(CleanupEntry(path, "logs_file"))
+        for path in sorted(
+            (
+                candidate
+                for candidate in logs_dir.rglob("*")
+                if candidate.is_dir() and candidate != logs_dir
+            ),
+            key=lambda candidate: len(candidate.parts),
+            reverse=True,
+        ):
+            if _is_under_repo(path, root):
+                entries.add(CleanupEntry(path, "logs_dir"))
+
+    profile_builder_root = root / "data" / "profile_builder"
+    if profile_builder_root.exists():
+        for session_dir in sorted(path for path in profile_builder_root.iterdir() if path.is_dir()):
+            if _is_under_repo(session_dir, root):
+                entries.add(CleanupEntry(session_dir, "profile_builder_session"))
+
+    return sorted(entries, key=_cleanup_sort_key)
 
 
 def _relative_display(path: Path, repo_root: Path) -> str:
@@ -137,9 +175,13 @@ def _relative_display(path: Path, repo_root: Path) -> str:
 def main(argv: Sequence[str] | None = None, repo_root: Path | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    _validate_days(args.days)
+    _validate_args(args, parser)
     root = (repo_root or Path(__file__).resolve().parents[1]).resolve()
-    entries = collect_cleanup_entries(repo_root=root, days=args.days)
+    entries = (
+        collect_all_cleanup_entries(repo_root=root)
+        if args.all
+        else collect_cleanup_entries(repo_root=root, days=args.days)
+    )
     if args.apply:
         deleted = apply_cleanup(entries, repo_root=root)
         print(f"apply: deleted {len(deleted)} entries")
