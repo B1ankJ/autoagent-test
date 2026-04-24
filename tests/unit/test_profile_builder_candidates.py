@@ -66,10 +66,9 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
     assert draft.response_candidates[0]["review_latest_bubble_match"]["value"].startswith(
         "//*[@bounds="
     )
-    assert len(draft.review_items) == 3
+    assert len(draft.review_items) == 2
     assert draft.review_items[0]["field"] == "input_locator"
     assert draft.review_items[1]["field"] == "send_action"
-    assert draft.review_items[2]["field"] == "latest_bubble_match"
 
 
 def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_response_hints():
@@ -105,7 +104,7 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
         response_xml=response_xml,
     )
 
-    assert len(draft.response_candidates) == 4
+    assert len(draft.response_candidates) == 2
     assert len(draft.review_items) == 3
     review_item = next(
         item for item in draft.review_items if item["field"] == "latest_bubble_match"
@@ -131,7 +130,7 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
     assert review_item["recommended_option"] != review_item["alternative_candidates"][0]
     assert review_item["evidence_refs"][0]["source"] == "idle_xml"
     assert review_item["evidence_refs"][0]["label"] == "response-bubble"
-    assert review_item["evidence_refs"][0]["text"] == "继续补充"
+    assert review_item["evidence_refs"][0]["text"] == "第二段回复 继续补充"
     assert review_item["evidence_refs"][1]["locator"] == draft.response_candidates[0]["response_container_locator"]
     assert review_item["evidence_refs"][1]["scroll_locator"] == draft.response_candidates[0]["scroll_container_locator"]
 
@@ -164,9 +163,9 @@ def test_build_android_candidates_keeps_all_matching_input_nodes_in_review():
         response_xml=response_xml,
     )
 
-    assert len(draft.input_candidates) == 4
+    assert len(draft.input_candidates) >= 4
     input_review = next(item for item in draft.review_items if item["field"] == "input_locator")
-    assert len(input_review["alternative_candidates"]) == 3
+    assert len(input_review["alternative_candidates"]) >= 3
     assert input_review["evidence_refs"][0]["bounds"] == [36, 1882, 520, 2002]
     assert input_review["alternative_evidence_refs"][0][0]["bounds"] == [540, 1882, 1032, 2002]
 
@@ -318,6 +317,121 @@ def test_build_android_candidates_ignores_system_ui_send_like_controls():
     )
 
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,1291][1020,1402]"]'
+
+
+def test_build_android_candidates_preserves_raw_input_and_send_candidates() -> None:
+    idle_xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,1800][1080,2214]">
+        <node
+          text="发消息或按住说话..."
+          class="android.widget.TextView"
+          bounds="[177,2066][777,2123]"
+          focusable="false"
+        />
+        <node
+          class="android.widget.LinearLayout"
+          bounds="[40,1880][820,2140]"
+          clickable="true"
+          focusable="true"
+        />
+      </node>
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node
+        text="hello"
+        class="android.widget.EditText"
+        bounds="[120,1900][780,2010]"
+        package="com.example.chat"
+        focusable="true"
+      />
+      <node
+        class="android.widget.FrameLayout"
+        bounds="[36,1882][1032,2002]"
+        package="com.example.chat"
+        clickable="true"
+        focusable="true"
+      />
+      <node
+        class="android.widget.ImageView"
+        bounds="[904,1940][952,1988]"
+        package="com.example.chat"
+        clickable="true"
+      />
+      <node
+        class="android.widget.FrameLayout"
+        bounds="[876,1910][980,2018]"
+        package="com.example.chat"
+        clickable="true"
+      />
+      <node
+        class="android.widget.FrameLayout"
+        bounds="[980,1910][1068,2018]"
+        package="com.example.chat"
+        clickable="true"
+      />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+        <node class="android.widget.LinearLayout" bounds="[48,1200][1032,1460]">
+          <node text="第二段回复" class="android.widget.TextView" bounds="[96,1240][884,1310]" />
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+
+    assert len(draft.input_candidates) >= 4
+    assert len(draft.send_candidates) >= 3
+    input_review = next(item for item in draft.review_items if item["field"] == "input_locator")
+    send_review = next(item for item in draft.review_items if item["field"] == "send_action")
+    assert len(input_review["alternative_candidates"]) >= 3
+    assert len(send_review["alternative_candidates"]) >= 4
+
+
+def test_build_android_candidates_groups_multi_textview_response_block() -> None:
+    idle_xml = """
+    <hierarchy>
+      <node text="发消息或按住说话..." class="android.widget.TextView" bounds="[177,2066][777,2123]" />
+    </hierarchy>
+    """
+    editing_xml = """
+    <hierarchy>
+      <node text="hello" class="android.widget.EditText" bounds="[36,1882][1032,2002]" />
+      <node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" />
+    </hierarchy>
+    """
+    response_xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+        <node class="androidx.recyclerview.widget.RecyclerView" bounds="[0,320][1080,1960]" scrollable="true">
+          <node class="android.widget.LinearLayout" bounds="[48,1340][1032,1700]">
+            <node text="第一段回复" class="android.widget.TextView" bounds="[96,1400][620,1480]" />
+            <node text="继续说明" class="android.widget.TextView" bounds="[96,1496][660,1576]" />
+            <node text="补充结尾" class="android.widget.TextView" bounds="[96,1592][620,1672]" />
+          </node>
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    draft = build_android_candidates(
+        idle_xml=idle_xml,
+        editing_xml=editing_xml,
+        response_xml=response_xml,
+    )
+
+    assert draft.response_candidates[0]["bubble_preview"] == "第一段回复 继续说明 补充结尾"
+    assert not any(item["field"] == "latest_bubble_match" for item in draft.review_items)
 
 
 def test_ready_check_text_prefers_input_placeholder_over_chat_content():

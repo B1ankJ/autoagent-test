@@ -644,11 +644,15 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
         "type": "xpath",
         "value": '//*[@bounds="[36,1882][1032,2002]"]',
     }
-    assert input_review_item["alternative_candidates"] == [
-        {"type": "xpath", "value": '//*[@bounds="[177,2066][777,2123]"]'}
+    assert {"type": "xpath", "value": '//*[@bounds="[177,2066][777,2123]"]'} in input_review_item[
+        "alternative_candidates"
     ]
     assert input_review_item["evidence_refs"][0]["artifact"] == "capture_editing.png"
-    assert input_review_item["alternative_evidence_refs"][0][0]["artifact"] == "capture_idle.png"
+    assert any(
+        refs[0]["artifact"] == "capture_idle.png"
+        for refs in input_review_item["alternative_evidence_refs"]
+        if refs
+    )
 
 
 async def test_profile_builder_generate_draft_keeps_manual_editing_send_locator(

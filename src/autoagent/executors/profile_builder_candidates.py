@@ -49,6 +49,10 @@ def _bounds_area(bounds: tuple[int, int, int, int] | None) -> int:
     return max(0, x2 - x1) * max(0, y2 - y1)
 
 
+def _element_bounds(node: ElementTree.Element) -> tuple[int, int, int, int] | None:
+    return _parse_bounds(node.attrib.get("bounds"))
+
+
 def _node_attrs(xml_text: str) -> list[dict[str, str]]:
     root = ElementTree.fromstring(xml_text)
     return [dict(node.attrib) for node in root.iter() if node is not root]
@@ -148,6 +152,54 @@ def _stable_locator_from_node(node: ElementTree.Element | None) -> dict:
     return _class_locator("android.widget.TextView")
 
 
+def _candidate_key(candidate: dict) -> str:
+    locator = candidate.get("locator") or {}
+    return f"{locator.get('type')}:{locator.get('value')}"
+
+
+def _dedupe_candidates(candidates: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    for candidate in candidates:
+        key = _candidate_key(candidate)
+        existing = deduped.get(key)
+        if existing is None or candidate.get("score", 0) > existing.get("score", 0):
+            deduped[key] = {
+                **candidate,
+                "evidence_refs": list(candidate.get("evidence_refs", [])),
+            }
+            continue
+        merged_refs = existing.setdefault("evidence_refs", [])
+        for ref in candidate.get("evidence_refs", []):
+            if ref not in merged_refs:
+                merged_refs.append(ref)
+    return sorted(deduped.values(), key=lambda item: item.get("score", 0), reverse=True)
+
+
+def _composer_region(bounds: tuple[int, int, int, int] | None) -> bool:
+    if bounds is None:
+        return False
+    _x1, y1, _x2, y2 = bounds
+    return y2 >= 1200 or y1 >= 1100
+
+
+def _is_input_hint_text(text: str) -> bool:
+    lowered = text.lower()
+    return bool(text and any(keyword in lowered for keyword in _INPUT_HINT_KEYWORDS))
+
+
+def _node_locator(node: dict[str, str], fallback_class: str) -> dict:
+    resource_id = (node.get("resource-id") or "").strip()
+    if resource_id:
+        return _resource_id_locator(resource_id)
+    bounds_raw = node.get("bounds")
+    if bounds_raw:
+        return _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
+    node_class = (node.get("class") or "").strip()
+    if node_class:
+        return _class_locator(node_class)
+    return _class_locator(fallback_class)
+
+
 def _build_input_candidates(
     editing_nodes: list[dict[str, str]],
     idle_nodes: list[dict[str, str]],
@@ -178,36 +230,81 @@ def _build_input_candidates(
             }
         )
 
-    for index, node in enumerate(idle_nodes):
-        text = node.get("text", "").strip()
-        if not text:
-            continue
-        if not any(keyword in text.lower() for keyword in _INPUT_HINT_KEYWORDS):
-            continue
-        locator = (
-            _xpath_locator(f'//*[@bounds="{node["bounds"]}"]')
-            if node.get("bounds")
-            else _xpath_locator(f'//*[contains(@text, "{text}")]')
-        )
-        candidates.append(
-            {
-                "locator": locator,
-                "score": 1000 - index,
-                "reason": "idle input placeholder",
-                "evidence_refs": [
-                    _evidence_ref(
-                        source="idle_xml",
-                        step="idle",
-                        artifact="capture_idle.png",
-                        locator=locator,
-                        bounds=_parse_bounds(node.get("bounds")),
-                        label="input-placeholder",
-                        text=text,
-                    )
-                ],
-            }
-        )
-    return sorted(candidates, key=lambda item: item["score"], reverse=True)
+    def _placeholder_candidates(nodes: list[dict[str, str]], *, source: str) -> None:
+        for index, node in enumerate(nodes):
+            text = node.get("text", "").strip()
+            if not _is_input_hint_text(text):
+                continue
+            bounds = _parse_bounds(node.get("bounds"))
+            locator = (
+                _xpath_locator(f'//*[@bounds="{node["bounds"]}"]')
+                if node.get("bounds")
+                else _xpath_locator(f'//*[contains(@text, "{text}")]')
+            )
+            candidates.append(
+                {
+                    "locator": locator,
+                    "score": (1000 if source == "idle_xml" else 1400) - index,
+                    "reason": f"{source.split('_')[0]} input placeholder",
+                    "evidence_refs": [
+                        _evidence_ref(
+                            source=source,
+                            step="editing" if source == "editing_xml" else "idle",
+                            artifact=(
+                                "capture_editing.png"
+                                if source == "editing_xml"
+                                else "capture_idle.png"
+                            ),
+                            locator=locator,
+                            bounds=bounds,
+                            label="input-placeholder",
+                            text=text,
+                        )
+                    ],
+                }
+            )
+
+    def _composer_proxy_candidates(nodes: list[dict[str, str]], *, source: str) -> None:
+        for index, node in enumerate(nodes):
+            bounds = _parse_bounds(node.get("bounds"))
+            if not _composer_region(bounds):
+                continue
+            if node.get("class") == "android.widget.EditText":
+                continue
+            if node.get("clickable") != "true" and node.get("focusable") != "true":
+                continue
+            area = _bounds_area(bounds)
+            if area <= 0 or area > 400_000:
+                continue
+            locator = _node_locator(node, "android.widget.EditText")
+            candidates.append(
+                {
+                    "locator": locator,
+                    "score": 900 - index + min(area // 2000, 180),
+                    "reason": f"{source.split('_')[0]} composer proxy",
+                    "evidence_refs": [
+                        _evidence_ref(
+                            source=source,
+                            step="editing" if source == "editing_xml" else "idle",
+                            artifact=(
+                                "capture_editing.png"
+                                if source == "editing_xml"
+                                else "capture_idle.png"
+                            ),
+                            locator=locator,
+                            bounds=bounds,
+                            label="input-proxy",
+                            text=(node.get("text") or "").strip() or None,
+                        )
+                    ],
+                }
+            )
+
+    _placeholder_candidates(editing_nodes, source="editing_xml")
+    _placeholder_candidates(idle_nodes, source="idle_xml")
+    _composer_proxy_candidates(editing_nodes, source="editing_xml")
+    _composer_proxy_candidates(idle_nodes, source="idle_xml")
+    return _dedupe_candidates(candidates)
 
 
 def _build_send_candidates(editing_nodes: list[dict[str, str]]) -> list[dict]:
@@ -220,8 +317,8 @@ def _build_send_candidates_from_nodes(
     source: str,
 ) -> list[dict]:
     app_package = _app_package(editing_nodes)
-    ranked: list[tuple[tuple[int, int, int], dict]] = []
-    for node in editing_nodes:
+    candidates: list[dict] = []
+    for index, node in enumerate(editing_nodes):
         if node.get("clickable") != "true":
             continue
         package = node.get("package", "").strip()
@@ -235,39 +332,40 @@ def _build_send_candidates_from_nodes(
         width = x2 - x1
         height = y2 - y1
         area = _bounds_area(bounds)
-        if width < 48 or height < 48:
+        if not _composer_region(bounds):
             continue
-        if area > 100_000:
+        if width < 24 or height < 24:
             continue
-        if y1 < 1200:
+        if area > 240_000:
             continue
         locator = _xpath_locator(f'//*[@bounds="{bounds_raw}"]')
-        ranked.append(
-            (
-                (y2, x2, -area),
-                {
-                    "locator": locator,
-                    "score": x2 + y2,
-                    "reason": "rightmost clickable near bottom",
-                    "evidence_refs": [
-                        _evidence_ref(
-                            source=source,
-                            step="connectivity" if source == "runtime_probe_xml" else "editing",
-                            artifact=(
-                                "runtime_probe_editing.png"
-                                if source == "runtime_probe_xml"
-                                else "capture_editing.png"
-                            ),
-                            locator=locator,
-                            bounds=bounds,
-                            label="send-button",
-                        )
-                    ],
-                },
-            )
+        score = y2 + x2 - (area // 5000) - index
+        if x1 > 700:
+            score += 400
+        if area < 20_000:
+            score += 120
+        candidates.append(
+            {
+                "locator": locator,
+                "score": score,
+                "reason": "composer clickable control",
+                "evidence_refs": [
+                    _evidence_ref(
+                        source=source,
+                        step="connectivity" if source == "runtime_probe_xml" else "editing",
+                        artifact=(
+                            "runtime_probe_editing.png"
+                            if source == "runtime_probe_xml"
+                            else "capture_editing.png"
+                        ),
+                        locator=locator,
+                        bounds=bounds,
+                        label="send-button",
+                    )
+                ],
+            }
         )
-    ranked.sort(key=lambda item: item[0], reverse=True)
-    return [candidate for _, candidate in ranked]
+    return _dedupe_candidates(candidates)
 
 
 def _element_depth(
@@ -325,6 +423,54 @@ def _latest_bubble_locator(text_nodes: list[ElementTree.Element]) -> dict:
     if fallback:
         return _class_locator(fallback)
     return _class_locator("android.widget.TextView")
+
+
+def _group_response_blocks(
+    text_nodes: list[ElementTree.Element],
+    parents: dict[ElementTree.Element, ElementTree.Element],
+) -> list[list[ElementTree.Element]]:
+    if not text_nodes:
+        return []
+    ordered = sorted(
+        text_nodes,
+        key=lambda node: (
+            (_element_bounds(node) or (0, 0, 0, 0))[1],
+            (_element_bounds(node) or (0, 0, 0, 0))[0],
+        ),
+    )
+    blocks: list[list[ElementTree.Element]] = []
+    current: list[ElementTree.Element] = []
+    for node in ordered:
+        bounds = _element_bounds(node)
+        if bounds is None:
+            if current:
+                blocks.append(current)
+            current = [node]
+            continue
+        if not current:
+            current = [node]
+            continue
+        previous_bounds = _element_bounds(current[-1])
+        if previous_bounds is None:
+            blocks.append(current)
+            current = [node]
+            continue
+        same_parent = parents.get(current[-1]) is parents.get(node)
+        same_column = abs(bounds[0] - previous_bounds[0]) <= 120
+        close_vertically = bounds[1] - previous_bounds[3] <= 90
+        if same_parent and same_column and close_vertically:
+            current.append(node)
+            continue
+        blocks.append(current)
+        current = [node]
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def _block_text(text_nodes: list[ElementTree.Element]) -> str:
+    parts = [(node.attrib.get("text") or "").strip() for node in text_nodes]
+    return " ".join(part for part in parts if part)
 
 
 def _review_locator_from_node(node: ElementTree.Element) -> dict:
@@ -388,15 +534,16 @@ def _response_candidate(
     container: ElementTree.Element,
     scroll_container: ElementTree.Element | None,
     text_nodes: list[ElementTree.Element],
-    bubble_node: ElementTree.Element,
+    bubble_nodes: list[ElementTree.Element],
 ) -> dict:
     container_bounds = _parse_bounds(container.attrib.get("bounds"))
     total_text_len = sum(len((node.attrib.get("text") or "").strip()) for node in text_nodes)
     repeated_count = len(text_nodes)
     container_bonus = 60 if repeated_count >= 2 else 0
     scroll_bonus = 40 if scroll_container is not None else 0
+    bubble_node = bubble_nodes[-1]
     bubble_bounds = _parse_bounds(bubble_node.attrib.get("bounds"))
-    bubble_text = (bubble_node.attrib.get("text") or "").strip()
+    bubble_text = _block_text(bubble_nodes)
     score = repeated_count * 100 + total_text_len * 5 + _bounds_area(container_bounds) // 1000
     locator = _stable_locator_from_node(scroll_container or container)
     scroll_locator = _stable_locator_from_node(scroll_container or container)
@@ -458,18 +605,18 @@ def _build_response_candidates(response_xml: str) -> list[dict]:
         if not grouped_text_nodes:
             continue
         scroll_container = _nearest_scroll_container(container, parents)
-        for bubble_node in grouped_text_nodes:
+        for bubble_nodes in _group_response_blocks(grouped_text_nodes, parents):
             candidate = _response_candidate(
                 container=container,
                 scroll_container=scroll_container,
                 text_nodes=grouped_text_nodes,
-                bubble_node=bubble_node,
+                bubble_nodes=bubble_nodes,
             )
             ranked.append(
                 (
                     (
                         candidate["score"],
-                        len(grouped_text_nodes),
+                        len(bubble_nodes),
                         _element_depth(container, parents),
                     ),
                     candidate,

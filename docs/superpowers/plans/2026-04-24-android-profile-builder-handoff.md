@@ -31,8 +31,8 @@ Current untagged workspace changes after those commits:
 - Draft generation now uses only the manual `idle` and `editing` captures. The extra `runtime_probe_editing.*` artifact path has been removed.
 - Android profile draft semantics are corrected so `new_session_action` means "start a new conversation", input focusing lives in `input_focus_action`, and send triggering can live in `send_action`.
 - Builder review gating now blocks `Run Connectivity Test` until all generated review items are confirmed, and the UI can show all evidence boxes for a review item at once.
-- Review generation now keeps raw node-level Android candidates instead of collapsing them into a single summarized locator too early. In ambiguous cases, `input_locator`, `input_focus_action`, `send_action`, and `latest_bubble_match` should expose all visible candidate boxes and leave the final judgment to the user.
-- Android response extraction now treats `response_container_locator` as a structural anchor rather than a frozen bounds rectangle. Runtime extraction ranks matching containers, prefers the latest valid bubble inside the best container, and stores `after_result_<n>.xml` plus container-match logs so changing conversation height no longer sends extraction back to old replies or feature chips.
+- Review generation now keeps broader raw Android candidates instead of collapsing them into a single summarized locator too early. `input_locator`, `input_focus_action`, and `send_action` preserve plausible composer controls and let the user decide; `latest_bubble_match` review is only emitted when response-block ambiguity remains after structural ranking.
+- Android response extraction now treats `response_container_locator` as a structural anchor rather than a frozen bounds rectangle. Runtime extraction ranks matching containers, groups multi-`TextView` assistant reply fragments into one response block, prefers the latest valid block inside the best container, and stores `after_result_<n>.xml` plus container-match logs so changing conversation height no longer sends extraction back to old replies or feature chips.
 
 ## How To Resume
 

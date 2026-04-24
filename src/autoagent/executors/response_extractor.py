@@ -125,6 +125,62 @@ def _is_latest_bubble_candidate(node: ET.Element) -> bool:
     return not _looks_like_ui_chrome(node.attrib.get("text", ""))
 
 
+def _group_candidate_blocks(
+    nodes: list[ET.Element],
+    parents: dict[ET.Element, ET.Element],
+) -> list[list[ET.Element]]:
+    if not nodes:
+        return []
+    ordered = sorted(
+        nodes,
+        key=lambda node: (
+            (_node_bounds(node) or (0, 0, 0, 0))[1],
+            (_node_bounds(node) or (0, 0, 0, 0))[0],
+        ),
+    )
+    blocks: list[list[ET.Element]] = []
+    current: list[ET.Element] = []
+    for node in ordered:
+        bounds = _node_bounds(node)
+        if bounds is None:
+            if current:
+                blocks.append(current)
+            current = [node]
+            continue
+        if not current:
+            current = [node]
+            continue
+        prev_bounds = _node_bounds(current[-1])
+        if prev_bounds is None:
+            blocks.append(current)
+            current = [node]
+            continue
+        same_parent = parents.get(current[-1]) is parents.get(node)
+        same_column = abs(bounds[0] - prev_bounds[0]) <= 120
+        close_vertically = bounds[1] - prev_bounds[3] <= 90
+        if same_parent and same_column and close_vertically:
+            current.append(node)
+            continue
+        blocks.append(current)
+        current = [node]
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def _block_text(block: list[ET.Element]) -> str:
+    return " ".join((node.attrib.get("text") or "").strip() for node in block if (node.attrib.get("text") or "").strip())
+
+
+def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int, int]:
+    last = block[-1]
+    bounds = _node_bounds(last)
+    text = _block_text(block)
+    if bounds is None:
+        return (0, index, len(text), len(block))
+    return (1, bounds[3], len(text), index)
+
+
 class UiTreeExtractor:
     def extract_from_xml(
         self,
@@ -134,6 +190,7 @@ class UiTreeExtractor:
         latest_bubble_locator: Locator,
     ) -> ExtractionResult:
         root = ET.fromstring(xml)
+        parents = {child: parent for parent in root.iter() for child in parent}
         containers = _find_all_matches(root, response_container_locator)
         if not containers:
             if _requires_strict_container_match(response_container_locator):
@@ -153,18 +210,20 @@ class UiTreeExtractor:
 
         for container in containers:
             matches = _candidate_nodes(container, latest_bubble_locator)
-            scored_candidates = [
-                (index, node, node.attrib.get("text", "").strip())
-                for index, node in enumerate(matches)
+            candidate_nodes = [
+                node
+                for node in matches
                 if _is_latest_bubble_candidate(node) and not _is_suspect(node.attrib.get("text", ""))
             ]
-            if not scored_candidates:
+            blocks = _group_candidate_blocks(candidate_nodes, parents)
+            if not blocks:
                 continue
-            winner_index, winner_node, winner_text = max(
-                scored_candidates,
-                key=lambda item: _bubble_score(item[1], index=item[0]),
+            winner_index, winner_block = max(
+                enumerate(blocks),
+                key=lambda item: _block_score(item[1], index=item[0]),
             )
-            winner_score = _bubble_score(winner_node, index=winner_index)
+            winner_text = _block_text(winner_block)
+            winner_score = _block_score(winner_block, index=winner_index)
             if best_score is None or winner_score > best_score:
                 best_score = winner_score
                 best_text = winner_text

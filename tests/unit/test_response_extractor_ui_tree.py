@@ -128,3 +128,33 @@ def test_ui_tree_extractor_prefers_latest_visible_assistant_reply_over_bottom_ch
     )
 
     assert result.text == "hello呀，今天心情怎么样？"
+
+
+def test_ui_tree_extractor_aggregates_latest_multi_textview_response_block() -> None:
+    xml = """
+    <hierarchy>
+      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+        <node class="androidx.recyclerview.widget.RecyclerView" bounds="[0,320][1080,1960]" resource-id="com.example:id/chat_list">
+          <node class="android.widget.LinearLayout" bounds="[48,980][1032,1190]">
+            <node class="android.widget.TextView" text="旧回复" bounds="[96,1020][420,1100]" />
+          </node>
+          <node class="android.widget.LinearLayout" bounds="[48,1340][1032,1700]">
+            <node class="android.widget.TextView" text="第一段回复" bounds="[96,1400][620,1480]" />
+            <node class="android.widget.TextView" text="继续说明" bounds="[96,1496][660,1576]" />
+            <node class="android.widget.TextView" text="补充结尾" bounds="[96,1592][620,1672]" />
+          </node>
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    result = UiTreeExtractor().extract_from_xml(
+        xml,
+        response_container_locator=Locator(
+            type="resource_id",
+            value="com.example:id/chat_list",
+        ),
+        latest_bubble_locator=Locator(type="class", value="android.widget.TextView"),
+    )
+
+    assert result.text == "第一段回复 继续说明 补充结尾"
