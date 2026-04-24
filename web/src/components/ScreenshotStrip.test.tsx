@@ -27,6 +27,7 @@ describe('ScreenshotStrip', () => {
         'src',
         'blob:ready',
       )
+      expect(screen.getByText('ready')).toBeInTheDocument()
     })
   })
 })

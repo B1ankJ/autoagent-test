@@ -65,12 +65,20 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
               <Typography.Text type="secondary">敏感截图已隐藏</Typography.Text>
             </div>
           ) : (
-            <Image
+            <Space
               key={shot.name}
-              width={160}
-              src={screenshotUrls[index]?.data}
-              alt={shot.label}
-            />
+              direction="vertical"
+              size={4}
+              style={{ alignItems: 'center', width: 160 }}
+            >
+              <Image width={160} src={screenshotUrls[index]?.data} alt={shot.label} />
+              <Typography.Text
+                style={{ width: '100%', textAlign: 'center' }}
+                ellipsis={{ tooltip: shot.label }}
+              >
+                {shot.label}
+              </Typography.Text>
+            </Space>
           ),
         )}
       </Space>
