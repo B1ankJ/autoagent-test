@@ -69,7 +69,13 @@ class AndroidInput:
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
             previous_ime = await asyncio.to_thread(ensure_adb_keyboard_ready, self.device)
             self._pending_restore_ime = previous_ime
-            await asyncio.to_thread(target.click)
+            try:
+                await asyncio.to_thread(_click_target, target, 1.0)
+            except Exception:
+                # The focus action may already have opened the editor while the
+                # EditText is not visible in UIA XML. In that state the ADB
+                # keyboard broadcast can still insert into the focused field.
+                pass
             await asyncio.to_thread(
                 self.device.shell,
                 [
@@ -85,6 +91,16 @@ class AndroidInput:
             await asyncio.sleep(0.3)
             return
         raise ValueError(f"unsupported input method: {method}")
+
+
+def _click_target(target, timeout: float | None = None) -> None:
+    if timeout is None:
+        target.click()
+        return
+    try:
+        target.click(timeout=timeout)
+    except TypeError:
+        target.click()
 
 
 def _escape_input_text(text: str) -> str:

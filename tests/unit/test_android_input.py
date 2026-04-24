@@ -81,7 +81,7 @@ async def test_set_text_adb_keyboard_switches_and_restores_ime(
         "autoagent.executors.android_input.set_ime",
         lambda _serial, _ime: restored.append((_serial, _ime)),
     )
-    target.click.side_effect = lambda: events.append("click")
+    target.click.side_effect = lambda *_, **__: events.append("click")
     device.shell.side_effect = lambda args: events.append(f"shell:{args[0]}")
 
     async with AndroidInput(device, "adb_keyboard") as ctl:
@@ -150,6 +150,45 @@ async def test_set_text_auto_prefers_adb_keyboard_for_ascii(
         ]
     )
     assert restored == [(device.serial, "com.example/.Ime")]
+
+
+@pytest.mark.asyncio
+async def test_set_text_adb_keyboard_broadcasts_when_refocus_locator_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    device = MagicMock()
+    target = MagicMock()
+    device.return_value = target
+    device.serial = "serial-1"
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: None,
+    )
+    target.click.side_effect = RuntimeError("input locator disappeared after focus")
+
+    async with AndroidInput(device, "adb_keyboard") as ctl:
+        await ctl.set_text(
+            Locator(type="resource_id", value="demo:id/input"),
+            "hello",
+        )
+
+    target.click.assert_called_once()
+    device.shell.assert_called_once_with(
+        [
+            "am",
+            "broadcast",
+            "-a",
+            "ADB_INPUT_B64",
+            "--es",
+            "msg",
+            "aGVsbG8=",
+        ]
+    )
 
 
 @pytest.mark.asyncio
