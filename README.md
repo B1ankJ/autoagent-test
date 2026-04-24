@@ -173,6 +173,18 @@ ruff check .        # lint
 ruff format .       # format
 ```
 
+### Runtime artifact cleanup
+
+Use the repo-local cleanup script to preview or delete old runtime artifacts under any `logs/`
+directory plus `data/profile_builder/`:
+
+```bash
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply
+```
+
+The default mode is dry-run. Only `--apply` performs deletion.
+
 ## Web UI
 
 The web UI lives in `web/` and is built into `src/autoagent/static/` where FastAPI serves it.
