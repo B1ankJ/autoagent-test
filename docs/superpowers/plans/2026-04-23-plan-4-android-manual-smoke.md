@@ -2,6 +2,16 @@
 
 Use this checklist for the final Plan 4 real-device validation round. The goal is to confirm the shipped `gui_android` flow works end to end against a real Android device and a real target app before tagging `android-executor-v0.4.0`.
 
+## Current handoff
+
+Before running this checklist, read:
+
+```text
+docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md
+```
+
+That file records the latest Qwen/Tongyi Profile Builder debugging state, recent ADB Keyboard/input-locator fixes, verification caveats, and current blockers. As of 2026-04-24, final release tagging is still blocked on a fresh real-device retest after `67e07d8 fix(android): broadcast after focused adb input`.
+
 ## Preconditions
 
 - Device is visible in `adb devices -l`

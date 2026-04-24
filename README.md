@@ -4,7 +4,9 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, and `pixel_stable`. Remaining work is final manual verification on a real device + real app, then release tagging.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder MVP. Remaining work is final manual verification on a real device + real app, then release tagging.
+
+Current Android/Profile Builder handoff, including the latest Qwen/Tongyi debugging status and open blockers, is tracked in `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`.
 
 ## Requirements
 
@@ -52,8 +54,9 @@ set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest 
 If you skip this fixture, final Android verification can be done directly on a real device + real
 target app via the Web UI.
 
-The final real-device checklist is tracked in
-`docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
+The current Android/Profile Builder handoff is tracked in
+`docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`. The final real-device
+checklist is tracked in `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
 
 ### Profile Builder (Android MVP)
 
