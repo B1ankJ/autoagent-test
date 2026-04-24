@@ -153,6 +153,32 @@ async def test_set_text_auto_prefers_adb_keyboard_for_ascii(
 
 
 @pytest.mark.asyncio
+async def test_prepare_for_prompt_activates_adb_keyboard_once_and_restore_is_manual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    device = MagicMock()
+    device.serial = "serial-1"
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: calls.append("ensure") or "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: calls.append("restore"),
+    )
+
+    async with AndroidInput(device, "adb_keyboard") as ctl:
+        assert await ctl.prepare_for_prompt("hello") == "adb_keyboard"
+        assert await ctl.prepare_for_prompt("hello") == "adb_keyboard"
+        assert calls == ["ensure"]
+        await ctl.restore_pending_ime()
+
+    assert calls == ["ensure", "restore"]
+
+
+@pytest.mark.asyncio
 async def test_set_text_adb_keyboard_broadcasts_when_refocus_locator_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -136,6 +136,8 @@ class AndroidProfile(BaseModel):
     send_button_locator: Locator
     response_extraction: AndroidResponseExtraction
     new_session_action: list[ActionStep] = Field(default_factory=list)
+    input_focus_action: list[ActionStep] = Field(default_factory=list)
+    send_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
 
 

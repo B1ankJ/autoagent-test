@@ -177,7 +177,7 @@ export interface ActionStepChoice {
   locator?: LocatorChoice
 }
 
-export type NewSessionActionReviewOption = ActionStepChoice[]
+export type ActionStepsReviewOption = ActionStepChoice[]
 
 export interface ReviewEvidenceRef {
   source: string
@@ -194,8 +194,8 @@ export interface ReviewEvidenceRef {
 export interface ReviewItem {
   field: string
   reason: string
-  recommended_option: LocatorChoice | ResponseReviewOption | NewSessionActionReviewOption
-  alternative_candidates: Array<LocatorChoice | ResponseReviewOption | NewSessionActionReviewOption>
+  recommended_option: LocatorChoice | ResponseReviewOption | ActionStepsReviewOption
+  alternative_candidates: Array<LocatorChoice | ResponseReviewOption | ActionStepsReviewOption>
   evidence_refs: ReviewEvidenceRef[]
   alternative_evidence_refs: ReviewEvidenceRef[][]
 }
@@ -256,6 +256,8 @@ export interface ProfileBuilderRuntimeView {
   current_step: string
   step_state: 'idle' | 'running' | 'done' | 'failed'
   last_error: string | null
+  builder_adb_keyboard_active: boolean
+  builder_previous_ime: string | null
   captures: ProfileBuilderRuntimeCapture[]
   connectivity: ProfileBuilderRuntimeConnectivity
   recent_screens: ProfileBuilderRuntimeScreen[]

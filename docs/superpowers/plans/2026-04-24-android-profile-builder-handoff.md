@@ -23,6 +23,15 @@ Recent important commits:
 - `f49e5ef fix(profile-builder): keep review choices editable`
   Review choices remain visible/editable after applying a recommendation, and generated drafts can be saved or overwritten as normal profiles from the builder.
 
+Current untagged workspace changes after those commits:
+
+- Android execution keeps ADB Keyboard active for the whole sample when that input path is selected, instead of switching only around `set_text()`.
+- Profile Builder now enables ADB Keyboard once at `Start Builder Session` time and restores the previous IME after `Generate Draft`.
+- `Capture Editing State` is now manual-only. The user must focus the input first; the backend no longer auto-taps into editing and no longer expects the ADB Keyboard toast to appear inside `capture_editing.png`.
+- Draft generation now uses only the manual `idle` and `editing` captures. The extra `runtime_probe_editing.*` artifact path has been removed.
+- Android profile draft semantics are corrected so `new_session_action` means "start a new conversation", input focusing lives in `input_focus_action`, and send triggering can live in `send_action`.
+- Builder review gating now blocks `Run Connectivity Test` until all generated review items are confirmed, and the UI can show all evidence boxes for a review item at once.
+
 ## How To Resume
 
 Start from the active worktree:
@@ -76,19 +85,29 @@ Fix: `67e07d8` makes the refocus click best-effort and continues the broadcast p
 The generated profile should keep separate responsibilities:
 
 ```yaml
-input_locator:
-  type: xpath
-  value: //*[@class="android.widget.EditText"]
-new_session_action:
+new_session_action: []
+input_focus_action:
   - action: tap_xy
     x: 477
     y: 2094
+send_action:
+  - action: tap_xy
+    x: 964
+    y: 2064
+input_locator:
+  type: xpath
+  value: //*[@class="android.widget.EditText"]
 send_button_locator:
   type: xpath
-  value: //*[@bounds="[909,1291][1020,1402]"]
+  value: //*[@bounds="[909,2009][1020,2120]"]
 ```
 
-The exact coordinates can differ by device, app state, and review choice. The important rule is that `new_session_action` may use an idle-state tap target, while `input_locator` must represent the runtime editing control when available.
+The exact coordinates can differ by device, app state, and review choice. The important rule is:
+
+- `new_session_action` is reserved for real "new chat / reset conversation" steps.
+- `input_focus_action` is the place for tapping or clicking into the input area before text entry.
+- `input_locator` should represent the runtime control used by the input subsystem when possible.
+- `send_action` is preferred for actually triggering send because it can capture either `tap_xy` or `click_locator`; `send_button_locator` remains useful as fallback evidence.
 
 ## Verification Commands
 
@@ -96,24 +115,25 @@ Targeted checks that passed after the latest fixes:
 
 ```bash
 python3.11 -m pytest tests/unit/test_android_input.py -q
-python3.11 -m pytest tests/unit/test_android_executor_unit.py tests/unit/test_android_input.py -q
-python3.11 -m pytest tests/integration/test_profile_builder_endpoints.py -k 'generate_draft' -q
+python3.11 -m pytest tests/unit/test_android_executor_unit.py tests/unit/test_android_input.py tests/unit/test_profile_builder_candidates.py tests/unit/test_profile_builder_capture.py -q
+python3.11 -m pytest tests/unit/test_profile_builder_generator.py tests/unit/test_profiles.py -q
+python3.11 -m pytest tests/integration/test_profile_builder_endpoints.py::test_profile_builder_generate_draft_persists_rule_artifacts tests/integration/test_profile_builder_endpoints.py::test_profile_builder_generate_draft_keeps_manual_editing_send_locator tests/integration/test_profile_builder_endpoints.py::test_profile_builder_review_and_validate_flow tests/integration/test_profile_builder_endpoints.py::test_profile_builder_review_updates_input_focus_action_field tests/integration/test_profile_builder_endpoints.py::test_profile_builder_validate_updates_runtime_and_screens -q
+cd web && pnpm exec vitest run src/pages/Profiles/Builder.test.tsx
+cd web && pnpm exec tsc --noEmit
 ```
 
 Known caveats:
 
-- Full `tests/integration/test_profile_builder_endpoints.py -q` has hung in later tests during recent local runs. Do not claim the full integration file is green until this is reproduced and fixed.
-- `tests/unit/test_profile_builder_candidates.py::test_build_android_candidates_emits_detailed_review_item_for_ambiguous_response_hints` has a current data-contract mismatch around evidence fields (`container_locator` expectation versus current `locator` / `scroll_locator` structure). Treat this as an open cleanup item.
+- Full `tests/integration/test_profile_builder_endpoints.py -q` can still feel slow in this environment; use the targeted command set above for confidence before real-device retest.
 
 ## Current Blockers
 
-1. Fresh real-device retest is still pending after `67e07d8`.
-2. Confirm ADB Keyboard broadcast reaches the device during Chinese input. Watch the device for the ADB Keyboard toast and check executor logs.
-3. If input still fails, inspect the newest `data/profile_builder/<session_id>/connectivity_result.json`, runtime screenshots, and `data/logs/<batch_id>/<sample_id>/executor.log`.
-4. Send-button candidate ranking is improved but still human-review dependent. Keep the review step; do not assume the first recommendation is always correct.
-5. Response extraction review evidence is present, but the UI can still be made clearer for non-developers.
-6. Resolve the `container_locator` review-evidence test mismatch before claiming the backend unit suite is fully green.
-7. Investigate the full profile-builder endpoint suite hang before release tagging.
+1. Fresh real-device retest is still pending after the latest manual-editing capture flow and review-evidence changes.
+2. Confirm session-scoped ADB Keyboard activation behaves correctly on the real device during Chinese input. The IME toast is only expected near `Start Builder Session`; do not require it to appear in `capture_editing.png`.
+3. Confirm builder-captured idle/editing states now match runtime well enough for Qwen/Tongyi on a fresh session with no extra runtime probe.
+4. If connectivity still fails, inspect the newest `data/profile_builder/<session_id>/connectivity_result.json`, manual capture screenshots, and `data/logs/<batch_id>/<sample_id>/executor.log`.
+5. `new_session_action` is still not auto-derived for apps like Qwen that need "open menu -> new chat"; that remains a manual review / draft-edit step.
+6. Response extraction review evidence is present, but the UI can still be made clearer for non-developers.
 
 ## Useful Artifact Paths
 

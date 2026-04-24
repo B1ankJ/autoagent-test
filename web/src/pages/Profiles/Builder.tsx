@@ -42,20 +42,26 @@ import {
 } from '../../types/api'
 
 const CAPTURE_STEPS = [
-  { key: 'idle', title: 'Capture Idle State', description: '停在对话页空闲态后采集。' },
-  { key: 'editing', title: 'Capture Editing State', description: '点开输入框进入编辑态后采集。' },
-  { key: 'response', title: 'Capture Response State', description: '发送一条测试消息并等待回复后采集。' },
+  {
+    key: 'idle',
+    title: 'Capture Idle State',
+    description:
+      '先手动发送一条测试消息并等待回复完成，停在真实对话页空闲态（输入框未聚焦、已有 assistant 气泡）后采集；同时会抓取响应气泡结构。',
+  },
+  {
+    key: 'editing',
+    title: 'Capture Editing State',
+    description:
+      '请先手动点开输入框并确认当前已经处于编辑态，然后再点击 Capture。Builder 只抓取你当前看到的编辑态屏幕，不会自动 tap 输入框，也不会在这个步骤临时切换输入法。ADB Keyboard 只会在 Start Builder Session 时开启一次，系统 toast 不保证会出现在 capture_editing.png 里。',
+  },
 ] as const
 
 function inferScreenStep(path: string): string {
-  if (path.startsWith('capture_idle')) {
+  if (path.startsWith('capture_idle') || path.startsWith('capture_response')) {
     return 'idle'
   }
   if (path.startsWith('capture_editing')) {
     return 'editing'
-  }
-  if (path.startsWith('capture_response')) {
-    return 'response'
   }
   if (path.startsWith('runtime_probe_') || path.startsWith('validate_')) {
     return 'connectivity'
@@ -159,6 +165,12 @@ function normalizeBounds(bounds: ReviewEvidenceRef['bounds']): [number, number, 
   return [Number(bounds[0]), Number(bounds[1]), Number(bounds[2]), Number(bounds[3])]
 }
 
+function collectAllEvidenceRefs(item: ReviewItem): ReviewEvidenceRef[] {
+  return [item.evidence_refs, ...item.alternative_evidence_refs]
+    .flat()
+    .filter((ref): ref is ReviewEvidenceRef => Boolean(ref?.artifact))
+}
+
 export default function Builder() {
   const devices = useDevices()
   const createSession = useCreateProfileBuilderSession()
@@ -183,6 +195,8 @@ export default function Builder() {
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const runtime = useProfileBuilderRuntime(session?.id)
+  const requiredReviewFields = draft ? Array.from(new Set(draft.review_items.map((item) => item.field))) : []
+  const unresolvedReviewFields = requiredReviewFields.filter((field) => !appliedReviewChoices[field])
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(
@@ -321,6 +335,12 @@ export default function Builder() {
   const startSession = async () => {
     if (!selectedDevice || !profileName.trim()) {
       message.warning('请选择设备并填写 profile 名称')
+      return
+    }
+    const confirmed = window.confirm(
+      '开始前请确认：\n1. 目标 App 中已经手动发送过一条测试消息，并停留在真实对话页。\n2. 接下来会保持 ADB Keyboard 开启，直到点击 Generate Draft。',
+    )
+    if (!confirmed) {
       return
     }
     try {
@@ -499,7 +519,7 @@ export default function Builder() {
               Start Builder Session
             </Button>
             <Button
-              disabled={!draft}
+              disabled={!draft || unresolvedReviewFields.length > 0}
               icon={<CheckCircleOutlined />}
               loading={validateDraft.isPending}
               onClick={runConnectivityValidation}
@@ -507,6 +527,15 @@ export default function Builder() {
               Run Connectivity Test
             </Button>
           </Space>
+          {unresolvedReviewFields.length ? (
+            <Alert
+              style={{ marginTop: 12 }}
+              type="warning"
+              showIcon
+              message="请先确认关键 Review Items"
+              description={`未确认字段: ${unresolvedReviewFields.join(', ')}`}
+            />
+          ) : null}
         </Form>
       </Card>
 
@@ -709,6 +738,18 @@ export default function Builder() {
                               disabled={!item.evidence_refs.length}
                             >
                               查看推荐定位
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                focusEvidence(
+                                  collectAllEvidenceRefs(item),
+                                  `${item.field} · 全部证据`,
+                                )
+                              }
+                              disabled={!collectAllEvidenceRefs(item).length}
+                            >
+                              查看全部证据
                             </Button>
                             {item.alternative_candidates.map((candidate, candidateIndex) => (
                               <Space key={candidateIndex} size="small">

@@ -63,7 +63,9 @@ def test_build_android_candidates_prefers_repeated_response_container_hints():
         "type": "class",
         "value": "android.widget.TextView",
     }
-    assert draft.review_items == []
+    assert len(draft.review_items) == 2
+    assert draft.review_items[0]["field"] == "input_locator"
+    assert draft.review_items[1]["field"] == "send_action"
 
 
 def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_response_hints():
@@ -100,8 +102,10 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
     )
 
     assert len(draft.response_candidates) >= 2
-    assert len(draft.review_items) == 1
-    review_item = draft.review_items[0]
+    assert len(draft.review_items) == 3
+    review_item = next(
+        item for item in draft.review_items if item["field"] == "latest_bubble_match"
+    )
     assert review_item["field"] == "latest_bubble_match"
     assert review_item["recommended_option"] == {
         "response_container_locator": draft.response_candidates[0]["response_container_locator"],
@@ -117,9 +121,9 @@ def test_build_android_candidates_emits_detailed_review_item_for_ambiguous_respo
         for candidate in draft.response_candidates[1:]
     ]
     assert review_item["recommended_option"] != review_item["alternative_candidates"][0]
-    assert review_item["evidence_refs"][0]["source"] == "response_xml"
+    assert review_item["evidence_refs"][0]["source"] == "idle_xml"
     assert (
-        review_item["evidence_refs"][0]["container_locator"]
+        review_item["evidence_refs"][0]["locator"]
         == draft.response_candidates[0]["response_container_locator"]
     )
     assert (
@@ -229,105 +233,6 @@ def test_build_android_candidates_ignores_system_ui_send_like_controls():
     )
 
     assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,1291][1020,1402]"]'
-
-
-def test_build_android_candidates_prefers_runtime_probe_send_candidate():
-    idle_xml = """
-    <hierarchy>
-      <node text="发消息或按住说话..." class="android.widget.TextView" />
-    </hierarchy>
-    """
-    editing_xml = """
-    <hierarchy>
-      <node text="发消息..." class="android.widget.EditText" bounds="[36,1164][1032,1284]" />
-      <node
-        class="android.widget.FrameLayout"
-        package="com.aliyun.tongyi"
-        bounds="[909,1291][1020,1402]"
-        clickable="true"
-      />
-    </hierarchy>
-    """
-    runtime_probe_xml = """
-    <hierarchy>
-      <node text="发消息..." class="android.widget.EditText" bounds="[36,1882][1032,2002]" />
-      <node
-        class="android.widget.FrameLayout"
-        package="com.aliyun.tongyi"
-        bounds="[909,2009][1020,2120]"
-        clickable="true"
-      />
-    </hierarchy>
-    """
-    response_xml = """
-    <hierarchy>
-      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">
-        <node class="android.widget.LinearLayout" bounds="[0,1200][1080,1674]">
-          <node text="你好" class="android.widget.TextView" bounds="[0,1536][1080,1674]" />
-        </node>
-      </node>
-    </hierarchy>
-    """
-
-    draft = build_android_candidates(
-        idle_xml=idle_xml,
-        editing_xml=editing_xml,
-        response_xml=response_xml,
-        runtime_probe_xml=runtime_probe_xml,
-    )
-
-    assert draft.send_candidates[0]["locator"]["value"] == '//*[@bounds="[909,2009][1020,2120]"]'
-    assert any(
-        item["field"] == "send_button_locator"
-        and item["recommended_option"]["value"] == '//*[@bounds="[909,2009][1020,2120]"]'
-        for item in draft.review_items
-    )
-
-
-def test_build_android_candidates_prefers_idle_placeholder_when_runtime_probe_has_no_edittext():
-    idle_xml = """
-    <hierarchy>
-      <node
-        text="发消息或按住说话..."
-        class="android.widget.TextView"
-        bounds="[177,2066][777,2123]"
-      />
-    </hierarchy>
-    """
-    editing_xml = """
-    <hierarchy>
-      <node text="你好" class="android.widget.EditText" bounds="[36,1164][1032,1284]" />
-      <node class="android.widget.FrameLayout" bounds="[909,1291][1020,1402]" clickable="true" />
-    </hierarchy>
-    """
-    runtime_probe_xml = """
-    <hierarchy>
-      <node
-        text="发消息或按住说话..."
-        class="android.widget.TextView"
-        bounds="[177,2066][777,2123]"
-      />
-      <node class="android.widget.FrameLayout" bounds="[909,2009][1020,2120]" clickable="true" />
-    </hierarchy>
-    """
-    response_xml = """
-    <hierarchy>
-      <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">
-        <node class="android.widget.LinearLayout" bounds="[0,1200][1080,1674]">
-          <node text="你好" class="android.widget.TextView" bounds="[0,1536][1080,1674]" />
-        </node>
-      </node>
-    </hierarchy>
-    """
-
-    draft = build_android_candidates(
-        idle_xml=idle_xml,
-        editing_xml=editing_xml,
-        response_xml=response_xml,
-        runtime_probe_xml=runtime_probe_xml,
-    )
-
-    assert draft.input_candidates[0]["locator"]["value"] == '//*[contains(@text, "发消息")]'
 
 
 def test_ready_check_text_prefers_input_placeholder_over_chat_content():

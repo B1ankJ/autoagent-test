@@ -61,15 +61,19 @@ checklist is tracked in `docs/superpowers/plans/2026-04-23-plan-4-android-manual
 ### Profile Builder (Android MVP)
 
 Use `Profiles -> Build Profile` in the web UI to generate a draft Android profile from guided
-captures. The builder walks through idle, editing, and response states, proposes candidate
+captures. The builder walks through idle and editing states, proposes candidate
 locators, surfaces `review_items` when confidence is low, and can run a connectivity check against
 the generated draft before you save anything as a normal profile.
 
 Capture expectations:
 
-- `idle`: stop on the target conversation page before the input is focused
-- `editing`: focus the input so the real editing controls are visible
-- `response`: send a short prompt and wait until the answer is visible
+- `idle`: manually send one short test message first, wait until the answer is visible, then stop on the target conversation page before the input is focused
+- `editing`: manually focus the input so the real editing controls are visible, then capture exactly that screen
+
+Builder behavior:
+
+- `Start Builder Session` enables `ADB Keyboard` once for the whole builder session and restores the previous IME after `Generate Draft`
+- `Capture Editing State` does not auto-tap into the input area and does not run an extra runtime probe; the draft is derived only from the manual `idle` and `editing` captures
 
 Builder artifacts are stored under `data/profile_builder/<session_id>/` and include
 `capture_<step>.*`, `candidates.json`, `review_items.json`, `draft_profile.yaml`, and

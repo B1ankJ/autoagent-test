@@ -120,6 +120,7 @@ async def disable_ime_route(serial: str) -> DeviceInfo:
     try:
         # 获取当前IME，如果是ADB Keyboard则切换到其他IME
         from autoagent.devices.adb import get_current_ime
+
         current = get_current_ime(serial)
         if current and "adbkeyboard" in current:
             # 切换到Android默认输入法

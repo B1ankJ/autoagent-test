@@ -120,59 +120,39 @@ def _locator_from_node(node: ElementTree.Element | None) -> dict:
 def _build_input_candidates(
     editing_nodes: list[dict[str, str]],
     idle_nodes: list[dict[str, str]],
-    runtime_probe_nodes: list[dict[str, str]] | None = None,
 ) -> list[dict]:
     candidates: list[dict] = []
-    probe_nodes = runtime_probe_nodes or []
-    if probe_nodes:
-        for node in probe_nodes:
-            if node.get("class") != "android.widget.EditText":
-                continue
-            bounds = _parse_bounds(node.get("bounds"))
-            candidates.append(
-                {
-                    "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                    "score": 10_000 + _bounds_area(bounds),
-                    "reason": "runtime probe EditText",
-                    "evidence_refs": [
-                        _evidence_ref(
-                            source="runtime_probe_xml",
-                            step="connectivity",
-                            artifact="runtime_probe_editing.png",
-                            locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
-                            bounds=bounds,
-                            label="input",
-                        )
-                    ],
-                }
-            )
-        if candidates:
-            return sorted(candidates, key=lambda item: item["score"], reverse=True)
+    seen_locators: set[tuple[str, str]] = set()
 
-    if not probe_nodes:
-        for node in editing_nodes:
-            if node.get("class") != "android.widget.EditText":
-                continue
-            bounds = _parse_bounds(node.get("bounds"))
-            candidates.append(
-                {
-                    "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                    "score": 100 + _bounds_area(bounds),
-                    "reason": "editing EditText",
-                    "evidence_refs": [
-                        _evidence_ref(
-                            source="editing_xml",
-                            step="editing",
-                            artifact="capture_editing.png",
-                            locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
-                            bounds=bounds,
-                            label="input",
-                        )
-                    ],
-                }
-            )
-        if candidates:
-            return sorted(candidates, key=lambda item: item["score"], reverse=True)
+    def _append_candidate(candidate: dict) -> None:
+        locator = candidate["locator"]
+        key = (locator["type"], locator["value"])
+        if key in seen_locators:
+            return
+        seen_locators.add(key)
+        candidates.append(candidate)
+
+    for node in editing_nodes:
+        if node.get("class") != "android.widget.EditText":
+            continue
+        bounds = _parse_bounds(node.get("bounds"))
+        _append_candidate(
+            {
+                "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
+                "score": 100 + _bounds_area(bounds),
+                "reason": "editing EditText",
+                "evidence_refs": [
+                    _evidence_ref(
+                        source="editing_xml",
+                        step="editing",
+                        artifact="capture_editing.png",
+                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
+                        bounds=bounds,
+                        label="input",
+                    )
+                ],
+            }
+        )
 
     for node in idle_nodes:
         text = node.get("text", "").strip()
@@ -182,7 +162,7 @@ def _build_input_candidates(
             continue
         target = "发消息" if "发消息" in text else text
         locator = _xpath_locator(f'//*[contains(@text, "{target}")]')
-        candidates.append(
+        _append_candidate(
             {
                 "locator": locator,
                 "score": 1000 - len(text),
@@ -195,30 +175,6 @@ def _build_input_candidates(
                         locator=locator,
                         bounds=_parse_bounds(node.get("bounds")),
                         label="input-placeholder",
-                    )
-                ],
-            }
-        )
-    if probe_nodes and candidates:
-        return sorted(candidates, key=lambda item: item["score"], reverse=True)
-
-    for node in editing_nodes:
-        if node.get("class") != "android.widget.EditText":
-            continue
-        bounds = _parse_bounds(node.get("bounds"))
-        candidates.append(
-            {
-                "locator": _xpath_locator('//*[@class="android.widget.EditText"]'),
-                "score": 100 + _bounds_area(bounds),
-                "reason": "editing EditText fallback",
-                "evidence_refs": [
-                    _evidence_ref(
-                        source="editing_xml",
-                        step="editing",
-                        artifact="capture_editing.png",
-                        locator=_xpath_locator('//*[@class="android.widget.EditText"]'),
-                        bounds=bounds,
-                        label="input",
                     )
                 ],
             }
@@ -374,9 +330,9 @@ def _response_candidate(
         "reason": "container with repeated visible response text",
         "evidence_refs": [
             _evidence_ref(
-                source="response_xml",
-                step="response",
-                artifact="capture_response.png",
+                source="idle_xml",
+                step="idle",
+                artifact="capture_idle.png",
                 locator=locator,
                 bounds=container_bounds,
                 label="response-container",
@@ -444,12 +400,41 @@ def _review_item(
     }
 
 
+def _action_option_from_locator(locator: dict, *, bounds: list[int] | None = None) -> list[dict]:
+    if bounds and len(bounds) == 4:
+        x1, y1, x2, y2 = bounds
+        return [{"action": "tap_xy", "x": (x1 + x2) // 2, "y": (y1 + y2) // 2}]
+    return [{"action": "click_locator", "locator": locator}]
+
+
+def _click_locator_option(locator: dict) -> list[dict]:
+    return [{"action": "click_locator", "locator": locator}]
+
+
+def _send_review_choices(candidate: dict) -> list[tuple[list[dict], list[dict]]]:
+    locator = candidate["locator"]
+    evidence_refs = candidate.get("evidence_refs", [])
+    bounds = next(
+        (
+            ref["bounds"]
+            for ref in evidence_refs
+            if isinstance(ref, dict) and isinstance(ref.get("bounds"), list)
+        ),
+        None,
+    )
+    options: list[tuple[list[dict], list[dict]]] = []
+    tap_or_click = _action_option_from_locator(locator, bounds=bounds)
+    options.append((tap_or_click, evidence_refs))
+    click_option = _click_locator_option(locator)
+    if click_option != tap_or_click:
+        options.append((click_option, evidence_refs))
+    return options
+
+
 def _build_review_items(
     input_candidates: list[dict],
     send_candidates: list[dict],
     response_candidates: list[dict],
-    *,
-    manual_send_candidates: list[dict] | None = None,
 ) -> list[dict]:
     review_items: list[dict] = []
     if len(input_candidates) > 1:
@@ -465,34 +450,28 @@ def _build_review_items(
                 ],
             )
         )
-    if len(send_candidates) > 1:
+    if send_candidates:
+        recommended_option, recommended_evidence = _send_review_choices(send_candidates[0])[0]
+        alternative_candidates: list[list[dict]] = []
+        alternative_evidence_refs: list[list[dict]] = []
+        for option, evidence in _send_review_choices(send_candidates[0])[1:]:
+            alternative_candidates.append(option)
+            alternative_evidence_refs.append(evidence)
+        for candidate in send_candidates[1:]:
+            for option, evidence in _send_review_choices(candidate):
+                alternative_candidates.append(option)
+                alternative_evidence_refs.append(evidence)
+        reason = "Confirm how the send control should be triggered in runtime editing state."
+        if len(send_candidates) > 1:
+            reason = "Multiple clickable controls looked like send buttons."
         review_items.append(
             _review_item(
-                field="send_button_locator",
-                reason="Multiple clickable controls looked like send buttons.",
-                recommended_option=send_candidates[0]["locator"],
-                alternative_candidates=[candidate["locator"] for candidate in send_candidates[1:]],
-                evidence_refs=send_candidates[0].get("evidence_refs", []),
-                alternative_evidence_refs=[
-                    candidate.get("evidence_refs", []) for candidate in send_candidates[1:]
-                ],
-            )
-        )
-    elif (
-        manual_send_candidates
-        and send_candidates
-        and manual_send_candidates
-        and manual_send_candidates[0]["locator"] != send_candidates[0]["locator"]
-    ):
-        review_items.append(
-            _review_item(
-                field="send_button_locator",
-                reason="Runtime probe send button differs from manual editing capture.",
-                recommended_option=send_candidates[0]["locator"],
-                alternative_candidates=[manual_send_candidates[0]["locator"]],
-                evidence_refs=send_candidates[0].get("evidence_refs", [])
-                + manual_send_candidates[0].get("evidence_refs", []),
-                alternative_evidence_refs=[manual_send_candidates[0].get("evidence_refs", [])],
+                field="send_action",
+                reason=reason,
+                recommended_option=recommended_option,
+                alternative_candidates=alternative_candidates,
+                evidence_refs=recommended_evidence,
+                alternative_evidence_refs=alternative_evidence_refs,
             )
         )
     if len(response_candidates) > 1:
@@ -532,29 +511,20 @@ def build_android_candidates(
     idle_xml: str,
     editing_xml: str,
     response_xml: str,
-    runtime_probe_xml: str | None = None,
 ) -> AndroidCandidateDraft:
     idle_nodes = _node_attrs(idle_xml)
     editing_nodes = _node_attrs(editing_xml)
-    runtime_probe_nodes = _node_attrs(runtime_probe_xml) if runtime_probe_xml else []
 
     input_candidates = _build_input_candidates(
         editing_nodes,
         idle_nodes,
-        runtime_probe_nodes=runtime_probe_nodes if runtime_probe_nodes else None,
     )
-    manual_send_candidates = _build_send_candidates(editing_nodes)
-    send_candidates = (
-        _build_send_candidates_from_nodes(runtime_probe_nodes, source="runtime_probe_xml")
-        if runtime_probe_nodes
-        else manual_send_candidates
-    )
+    send_candidates = _build_send_candidates(editing_nodes)
     response_candidates = _build_response_candidates(response_xml)
     review_items = _build_review_items(
         input_candidates,
         send_candidates,
         response_candidates,
-        manual_send_candidates=manual_send_candidates if runtime_probe_nodes else None,
     )
 
     return AndroidCandidateDraft(

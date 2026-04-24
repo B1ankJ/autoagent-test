@@ -33,6 +33,7 @@ class AndroidInput:
         self.device = device
         self.configured_method = configured_method
         self._pending_restore_ime: str | None = None
+        self._active_method: str | None = None
 
     async def __aenter__(self) -> AndroidInput:
         return self
@@ -45,6 +46,15 @@ class AndroidInput:
         if self._pending_restore_ime:
             await asyncio.to_thread(set_ime, self.device.serial, self._pending_restore_ime)
             self._pending_restore_ime = None
+        self._active_method = None
+
+    async def prepare_for_prompt(self, text: str) -> str:
+        method = await self.preview_method(text)
+        if method == "adb_keyboard" and self._active_method != "adb_keyboard":
+            previous_ime = await asyncio.to_thread(ensure_adb_keyboard_ready, self.device)
+            self._pending_restore_ime = previous_ime
+            self._active_method = "adb_keyboard"
+        return method
 
     async def preview_method(self, text: str) -> str:
         adb_keyboard_available: bool | None = None
@@ -59,7 +69,7 @@ class AndroidInput:
         )
 
     async def set_text(self, locator: Locator, text: str) -> None:
-        method = await self.preview_method(text)
+        method = await self.prepare_for_prompt(text)
         target = resolve_target(self.device, locator)
         if method == "u2_send_keys":
             await asyncio.to_thread(target.click)
@@ -67,8 +77,6 @@ class AndroidInput:
             return
         if method == "adb_keyboard":
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
-            previous_ime = await asyncio.to_thread(ensure_adb_keyboard_ready, self.device)
-            self._pending_restore_ime = previous_ime
             try:
                 await asyncio.to_thread(_click_target, target, 1.0)
             except Exception:

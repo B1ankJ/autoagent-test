@@ -105,14 +105,24 @@ class AndroidExecutor(Executor):
                         timeout_sec=profile.ready_check.timeout_sec,
                     )
                 if not ready:
-                    raise TimeoutError(
-                        f"ready_check text not found: {profile.ready_check.text!r}"
-                    )
+                    raise TimeoutError(f"ready_check text not found: {profile.ready_check.text!r}")
+                resolved_methods = [
+                    await input_ctl.preview_method(prompt) for prompt in sample.prompts
+                ]
+                if "adb_keyboard" in resolved_methods:
+                    await input_ctl.prepare_for_prompt(sample.prompts[0])
                 if profile.new_session_action:
                     sample_log.info("android sample %s running new_session_action", sample.id)
                     await action_runner.run(profile.new_session_action)
                 for idx, prompt in enumerate(sample.prompts, start=1):
-                    resolved_input = await input_ctl.preview_method(prompt)
+                    resolved_input = resolved_methods[idx - 1]
+                    if profile.input_focus_action:
+                        sample_log.info(
+                            "android sample %s prompt %s running input_focus_action",
+                            sample.id,
+                            idx,
+                        )
+                        await action_runner.run(profile.input_focus_action)
                     before_input_path = store.artifact_path(f"before_input_{idx}", "png")
                     before_input = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(before_input_path.write_bytes, before_input)
@@ -138,20 +148,33 @@ class AndroidExecutor(Executor):
                         xml_path.name,
                         screenshot_path.name,
                     )
-                    sample_log.info(
-                        "android sample %s prompt %s send click: locator=%s:%s",
-                        sample.id,
-                        idx,
-                        profile.send_button_locator.type,
-                        profile.send_button_locator.value,
-                    )
-                    await action_runner.run(
-                        [ActionStep(action="click_locator", locator=profile.send_button_locator)]
-                    )
+                    if profile.send_action:
+                        sample_log.info(
+                            "android sample %s prompt %s send action: steps=%s",
+                            sample.id,
+                            idx,
+                            len(profile.send_action),
+                        )
+                        await action_runner.run(profile.send_action)
+                    else:
+                        sample_log.info(
+                            "android sample %s prompt %s send click: locator=%s:%s",
+                            sample.id,
+                            idx,
+                            profile.send_button_locator.type,
+                            profile.send_button_locator.value,
+                        )
+                        await action_runner.run(
+                            [
+                                ActionStep(
+                                    action="click_locator",
+                                    locator=profile.send_button_locator,
+                                )
+                            ]
+                        )
                     after_send_path = store.artifact_path(f"after_send_{idx}", "png")
                     after_send = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(after_send_path.write_bytes, after_send)
-                    await input_ctl.restore_pending_ime()
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
                         sample_log.info(

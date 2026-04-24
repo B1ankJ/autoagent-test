@@ -187,6 +187,8 @@ class ProfileBuilderRuntimeView(BaseModel):
     current_step: str
     step_state: Literal["idle", "running", "done", "failed"]
     last_error: str | None = None
+    builder_adb_keyboard_active: bool = False
+    builder_previous_ime: str | None = None
     captures: list[ProfileBuilderRuntimeCapture] = Field(default_factory=list)
     connectivity: ProfileBuilderRuntimeConnectivity = Field(
         default_factory=ProfileBuilderRuntimeConnectivity

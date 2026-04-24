@@ -15,9 +15,7 @@ from pydantic import ValidationError
 from autoagent.api.tests import execute_sync_test
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
-from autoagent.executors.android_action_runner import AndroidActionRunner
-from autoagent.executors.android_input import AndroidInput
-from autoagent.executors.complete_detector import capture_screenshot_bytes
+from autoagent.executors.android_input import ensure_adb_keyboard_ready
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 from autoagent.executors.profile_builder_capture import CapturedState, capture_android_state
 from autoagent.executors.profile_builder_generator import (
@@ -35,7 +33,7 @@ from autoagent.models.api import (
     Sample,
 )
 from autoagent.profiles.registry import delete_profile, save_profile_yaml
-from autoagent.profiles.schemas import AndroidProfile, parse_profile
+from autoagent.devices.adb import set_ime
 
 router = APIRouter(
     prefix="/profile-builder",
@@ -114,6 +112,8 @@ def _default_runtime(session: ProfileBuilderSessionView) -> ProfileBuilderRuntim
         session_status=session.status,
         current_step="idle",
         step_state="idle",
+        builder_adb_keyboard_active=False,
+        builder_previous_ime=None,
         captures=[
             ProfileBuilderRuntimeCapture(step=step, status="pending") for step in session.steps
         ],
@@ -211,6 +211,46 @@ def _upsert_capture_runtime(
             "recent_screens": prior_screens[-3:],
         }
     )
+
+
+def _builder_runtime_update(
+    runtime: ProfileBuilderRuntimeView,
+    *,
+    active: bool,
+    previous_ime: str | None,
+) -> ProfileBuilderRuntimeView:
+    return runtime.model_copy(
+        update={
+            "builder_adb_keyboard_active": active,
+            "builder_previous_ime": previous_ime,
+        }
+    )
+
+
+async def _activate_builder_adb_keyboard(
+    session: ProfileBuilderSessionView,
+) -> ProfileBuilderRuntimeView:
+    runtime = _get_runtime(session)
+    if runtime.builder_adb_keyboard_active:
+        return runtime
+    device = await asyncio.to_thread(u2.connect, session.device_serial)
+    previous_ime = await asyncio.to_thread(ensure_adb_keyboard_ready, device)
+    next_runtime = _builder_runtime_update(runtime, active=True, previous_ime=previous_ime)
+    _store_runtime(session.id, next_runtime.model_dump(mode="json"))
+    return next_runtime
+
+
+async def _restore_builder_adb_keyboard(
+    session: ProfileBuilderSessionView,
+) -> ProfileBuilderRuntimeView:
+    runtime = _get_runtime(session)
+    if not runtime.builder_adb_keyboard_active:
+        return runtime
+    if runtime.builder_previous_ime:
+        await asyncio.to_thread(set_ime, session.device_serial, runtime.builder_previous_ime)
+    next_runtime = _builder_runtime_update(runtime, active=False, previous_ime=None)
+    _store_runtime(session.id, next_runtime.model_dump(mode="json"))
+    return next_runtime
 
 
 def _sync_artifacts(session: ProfileBuilderSessionView) -> ProfileBuilderSessionView:
@@ -336,54 +376,6 @@ def _write_draft_profile_yaml(session: ProfileBuilderSessionView, draft_profile:
     draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
     _draft_profile_path(session).write_text(draft_profile_yaml, encoding="utf-8")
     return draft_profile_yaml
-
-
-async def _wait_for_ready_text(device, text: str, *, timeout_sec: float) -> bool:
-    deadline = asyncio.get_running_loop().time() + timeout_sec
-    while asyncio.get_running_loop().time() < deadline:
-        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
-        if text in xml:
-            return True
-        await asyncio.sleep(0.2)
-    return False
-
-
-async def _capture_runtime_probe(
-    *,
-    session: ProfileBuilderSessionView,
-    draft_profile: dict,
-    prompt: str = "hello",
-) -> tuple[str, str] | None:
-    profile = parse_profile(draft_profile)
-    if not isinstance(profile, AndroidProfile):
-        return None
-    device = await asyncio.to_thread(u2.connect, session.device_serial)
-    await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
-    ready = await _wait_for_ready_text(
-        device,
-        profile.ready_check.text,
-        timeout_sec=profile.ready_check.timeout_sec,
-    )
-    if not ready:
-        return None
-    session_dir = Path(session.artifact_dir)
-    async with AndroidInput(device, profile.input_method) as input_ctl:
-        action_runner = AndroidActionRunner(
-            device=device,
-            input_controller=input_ctl,
-            action_log=[],
-        )
-        if profile.new_session_action:
-            await action_runner.run(profile.new_session_action)
-        await input_ctl.set_text(profile.input_locator, prompt)
-        xml_path = session_dir / "runtime_probe_editing.xml"
-        screenshot_path = session_dir / "runtime_probe_editing.png"
-        current_xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
-        await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
-        after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
-        await asyncio.to_thread(screenshot_path.write_bytes, after_input)
-        await input_ctl.restore_pending_ime()
-    return (xml_path.name, screenshot_path.name)
 
 
 def _runtime_screens_for_validation(
@@ -526,35 +518,84 @@ def _input_placeholder_tap_action(idle_xml: str) -> dict | None:
     }
 
 
-def _new_session_action_review_item(idle_xml: str) -> dict | None:
+def _input_focus_action_review_item(idle_xml: str, input_candidates: list[dict]) -> dict | None:
     placeholder_locator = _input_placeholder_locator(idle_xml)
     placeholder_tap_action = _input_placeholder_tap_action(idle_xml)
     placeholder_ref = _input_placeholder_ref(idle_xml)
-    if placeholder_locator is None or placeholder_tap_action is None or placeholder_ref is None:
+    options: list[tuple[list[dict], list[dict]]] = []
+    seen: set[str] = set()
+
+    def _append_option(option: list[dict], evidence_refs: list[dict]) -> None:
+        key = json.dumps(option, sort_keys=True, ensure_ascii=False)
+        if key in seen:
+            return
+        seen.add(key)
+        options.append((option, evidence_refs))
+
+    if placeholder_locator is not None and placeholder_tap_action is not None and placeholder_ref is not None:
+        evidence_ref = {
+            "source": "idle_xml",
+            "step": "idle",
+            "artifact": "capture_idle.png",
+            "locator": placeholder_locator,
+            "bounds": (
+                list(placeholder_ref["bounds"]) if placeholder_ref["bounds"] is not None else None
+            ),
+            "label": "entry-action",
+        }
+        _append_option([placeholder_tap_action], [evidence_ref])
+        _append_option([{"action": "click_locator", "locator": placeholder_locator}], [evidence_ref])
+
+    for candidate in input_candidates:
+        evidence_refs = candidate.get("evidence_refs", [])
+        locator = candidate.get("locator")
+        bounds = next(
+            (
+                ref["bounds"]
+                for ref in evidence_refs
+                if isinstance(ref, dict) and isinstance(ref.get("bounds"), list)
+            ),
+            None,
+        )
+        if isinstance(bounds, list) and len(bounds) == 4:
+            x1, y1, x2, y2 = bounds
+            _append_option(
+                [{"action": "tap_xy", "x": (x1 + x2) // 2, "y": (y1 + y2) // 2}],
+                evidence_refs,
+            )
+        if locator is not None:
+            _append_option([{"action": "click_locator", "locator": locator}], evidence_refs)
+
+    if not options:
         return None
-    evidence_ref = {
-        "source": "idle_xml",
-        "step": "idle",
-        "artifact": "capture_idle.png",
-        "locator": placeholder_locator,
-        "bounds": (
-            list(placeholder_ref["bounds"])
-            if placeholder_ref["bounds"] is not None
-            else None
-        ),
-        "label": "entry-action",
-    }
+
+    recommended_option, recommended_evidence = options[0]
+    alternative_candidates = [option for option, _ in options[1:]]
+    alternative_evidence_refs = [evidence for _, evidence in options[1:]]
     return {
-        "field": "new_session_action",
-        "reason": "Multiple entry actions are available for focusing the input area.",
-        "recommended_option": [placeholder_tap_action],
-        "alternative_candidates": [
-            [{"action": "click_locator", "locator": placeholder_locator}],
-        ],
-        "evidence_refs": [evidence_ref],
-        "alternative_evidence_refs": [[evidence_ref]],
+        "field": "input_focus_action",
+        "reason": "Review every viable way to focus the input area before text entry.",
+        "recommended_option": recommended_option,
+        "alternative_candidates": alternative_candidates,
+        "evidence_refs": recommended_evidence,
+        "alternative_evidence_refs": alternative_evidence_refs,
     }
-    return None
+
+
+def _action_option_from_candidate(candidate: dict) -> list[dict]:
+    evidence_refs = candidate.get("evidence_refs", [])
+    bounds = next(
+        (
+            ref["bounds"]
+            for ref in evidence_refs
+            if isinstance(ref, dict) and isinstance(ref.get("bounds"), list)
+        ),
+        None,
+    )
+    if isinstance(bounds, list) and len(bounds) == 4:
+        x1, y1, x2, y2 = bounds
+        return [{"action": "tap_xy", "x": (x1 + x2) // 2, "y": (y1 + y2) // 2}]
+    return [{"action": "click_locator", "locator": candidate["locator"]}]
 
 
 def _draft_profile_from_candidates(
@@ -570,17 +611,17 @@ def _draft_profile_from_candidates(
     if not input_candidates or not send_candidates or not response_candidates:
         raise HTTPException(status_code=422, detail="insufficient candidates to generate draft")
 
-    response_capture = captures["response"]
+    response_capture = captures["idle"]
     first_response = response_candidates[0]
     input_locator = input_candidates[0]["locator"]
     placeholder_locator = _input_placeholder_locator(idle_xml)
     placeholder_tap_action = _input_placeholder_tap_action(idle_xml)
-    new_session_action = []
+    input_focus_action = []
     if placeholder_locator is not None and (
         input_locator.get("type") == "xpath"
         and input_locator.get("value") == '//*[@class="android.widget.EditText"]'
     ):
-        new_session_action = (
+        input_focus_action = (
             [placeholder_tap_action]
             if placeholder_tap_action is not None
             else [{"action": "click_locator", "locator": placeholder_locator}]
@@ -606,7 +647,9 @@ def _draft_profile_from_candidates(
             "scroll_container_locator": first_response["scroll_container_locator"],
             "latest_bubble_match": first_response["latest_bubble_match"],
         },
-        "new_session_action": new_session_action,
+        "new_session_action": [],
+        "input_focus_action": input_focus_action,
+        "send_action": _action_option_from_candidate(send_candidates[0]),
         "complete_detection": {
             "type": "ui_tree_stable",
             "stable_sec": 2,
@@ -628,13 +671,20 @@ async def create_session(payload: ProfileBuilderSessionCreate) -> ProfileBuilder
         device_serial=payload.device_serial,
         name=payload.name,
         status="draft",
-        steps=["idle", "editing", "response"],
+        steps=["idle", "editing"],
         artifact_dir=str(get_settings().data_root / "profile_builder" / session_id),
         artifacts=[],
         captures=[],
     )
     stored = _store_session(session)
     _store_runtime(stored.id, _default_runtime(stored).model_dump(mode="json"))
+    try:
+        await _activate_builder_adb_keyboard(stored)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"profile builder session setup failed: {exc}",
+        ) from exc
     return stored
 
 
@@ -687,7 +737,9 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
                 session=session,
                 step=step,
                 status="failed",
-            ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
+            )
+            .model_copy(update={"last_error": str(exc)})
+            .model_dump(mode="json"),
         )
         raise HTTPException(
             status_code=502,
@@ -714,6 +766,7 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
                 device=device,
                 session_dir=Path(stored_archived.artifact_dir),
                 step=step,
+                enable_adb_keyboard=False,
             )
         except Exception as exc:
             _store_runtime(
@@ -723,7 +776,9 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
                     session=stored_archived,
                     step=step,
                     status="failed",
-                ).model_copy(update={"last_error": str(exc)}).model_dump(mode="json"),
+                )
+                .model_copy(update={"last_error": str(exc)})
+                .model_dump(mode="json"),
             )
             raise HTTPException(
                 status_code=502,
@@ -757,92 +812,72 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
 async def generate_draft(session_id: str) -> dict:
     session = _get_session_or_404(session_id)
     settings = get_settings()
-    captures = _require_complete_captures(session)
-    idle_xml = _read_capture_xml(session, captures["idle"].xml_artifact)
-    editing_xml = _read_capture_xml(session, captures["editing"].xml_artifact)
-    response_xml = _read_capture_xml(session, captures["response"].xml_artifact)
-
-    initial_candidate_draft = build_android_candidates(
-        idle_xml=idle_xml,
-        editing_xml=editing_xml,
-        response_xml=response_xml,
-    )
-    initial_candidates = initial_candidate_draft.asdict()
-    initial_rule_draft = _draft_profile_from_candidates(
-        session=session,
-        captures=captures,
-        candidates=initial_candidates,
-        idle_xml=idle_xml,
-    )
-    runtime_probe_xml: str | None = None
     try:
-        runtime_probe_artifact = await _capture_runtime_probe(
+        captures = _require_complete_captures(session)
+        idle_xml = _read_capture_xml(session, captures["idle"].xml_artifact)
+        editing_xml = _read_capture_xml(session, captures["editing"].xml_artifact)
+
+        candidate_draft = build_android_candidates(
+            idle_xml=idle_xml,
+            editing_xml=editing_xml,
+            response_xml=idle_xml,
+        )
+        candidates = candidate_draft.asdict()
+        rule_draft = _draft_profile_from_candidates(
             session=session,
-            draft_profile=initial_rule_draft,
+            captures=captures,
+            candidates=candidates,
+            idle_xml=idle_xml,
         )
-    except Exception:
-        runtime_probe_artifact = None
-    if runtime_probe_artifact is not None:
-        runtime_probe_xml = _read_capture_xml(session, runtime_probe_artifact[0])
-
-    candidate_draft = build_android_candidates(
-        idle_xml=idle_xml,
-        editing_xml=editing_xml,
-        response_xml=response_xml,
-        runtime_probe_xml=runtime_probe_xml,
-    )
-    candidates = candidate_draft.asdict()
-    rule_draft = _draft_profile_from_candidates(
-        session=session,
-        captures=captures,
-        candidates=candidates,
-        idle_xml=idle_xml,
-    )
-    new_session_action_review_item = _new_session_action_review_item(idle_xml)
-    if (
-        new_session_action_review_item is not None
-        and rule_draft.get("new_session_action")
-        and not any(
-            item.get("field") == "new_session_action"
-            for item in candidates["review_items"]
+        input_focus_action_review_item = _input_focus_action_review_item(
+            idle_xml,
+            candidates["input_candidates"],
         )
-    ):
-        candidates["review_items"].insert(0, new_session_action_review_item)
-    llm_output = await maybe_generate_llm_draft(
-        settings=settings,
-        rule_draft=rule_draft,
-        candidates=candidates,
-        captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
-    )
-    draft_profile = merge_llm_draft(rule_draft, llm_output)
+        if (
+            input_focus_action_review_item is not None
+            and rule_draft.get("input_focus_action")
+            and not any(
+                item.get("field") == "input_focus_action" for item in candidates["review_items"]
+            )
+        ):
+            candidates["review_items"].insert(0, input_focus_action_review_item)
+        llm_output = await maybe_generate_llm_draft(
+            settings=settings,
+            rule_draft=rule_draft,
+            candidates=candidates,
+            captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
+        )
+        draft_profile = merge_llm_draft(rule_draft, llm_output)
 
-    artifact_dir = Path(session.artifact_dir)
-    (artifact_dir / "candidates.json").write_text(
-        json.dumps(
-            {
-                "input_candidates": candidates["input_candidates"],
-                "send_candidates": candidates["send_candidates"],
-                "response_candidates": candidates["response_candidates"],
-            },
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    (artifact_dir / "review_items.json").write_text(
-        json.dumps(candidates["review_items"], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
-    (artifact_dir / "draft_profile.yaml").write_text(draft_profile_yaml, encoding="utf-8")
+        artifact_dir = Path(session.artifact_dir)
+        (artifact_dir / "candidates.json").write_text(
+            json.dumps(
+                {
+                    "input_candidates": candidates["input_candidates"],
+                    "send_candidates": candidates["send_candidates"],
+                    "response_candidates": candidates["response_candidates"],
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (artifact_dir / "review_items.json").write_text(
+            json.dumps(candidates["review_items"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
+        (artifact_dir / "draft_profile.yaml").write_text(draft_profile_yaml, encoding="utf-8")
 
-    updated = _store_session(session.model_copy(update={"status": "ready"}))
-    return {
-        "session": updated.model_dump(mode="json"),
-        "candidates": candidates,
-        "review_items": candidates["review_items"],
-        "draft_profile_yaml": draft_profile_yaml,
-    }
+        updated = _store_session(session.model_copy(update={"status": "ready"}))
+        return {
+            "session": updated.model_dump(mode="json"),
+            "candidates": candidates,
+            "review_items": candidates["review_items"],
+            "draft_profile_yaml": draft_profile_yaml,
+        }
+    finally:
+        await _restore_builder_adb_keyboard(session)
 
 
 @router.post("/sessions/{session_id}/review")
@@ -868,7 +903,8 @@ async def validate_draft(session_id: str) -> dict:
     draft_profile_yaml = _read_draft_profile_yaml(session)
     _store_runtime(
         session.id,
-        _get_runtime(session).model_copy(
+        _get_runtime(session)
+        .model_copy(
             update={
                 "session_status": "validating",
                 "current_step": "connectivity",
@@ -877,7 +913,8 @@ async def validate_draft(session_id: str) -> dict:
                 "connectivity": ProfileBuilderRuntimeConnectivity(status="running"),
                 "recent_screens": [],
             }
-        ).model_dump(mode="json"),
+        )
+        .model_dump(mode="json"),
     )
     temp_profile_name = f"pb_{session.id}"
     save_profile_yaml(temp_profile_name, draft_profile_yaml)
@@ -905,7 +942,8 @@ async def validate_draft(session_id: str) -> dict:
     result_summary = result.responses[0] if result.responses else result.error
     _store_runtime(
         updated_session.id,
-        _get_runtime(updated_session).model_copy(
+        _get_runtime(updated_session)
+        .model_copy(
             update={
                 "session_status": next_status,
                 "current_step": "connectivity",
@@ -919,7 +957,8 @@ async def validate_draft(session_id: str) -> dict:
                 ),
                 "recent_screens": runtime_screens[-3:],
             }
-        ).model_dump(mode="json"),
+        )
+        .model_dump(mode="json"),
     )
     return {
         "session": updated_session.model_dump(mode="json"),

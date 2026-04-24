@@ -49,8 +49,10 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
     )
+
     async def fake_wait_for_ready_text(*_args, **_kwargs):
         return True
+
     monkeypatch.setattr(
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
@@ -128,6 +130,183 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
 
 
 @pytest.mark.asyncio
+async def test_execute_activates_adb_keyboard_before_new_session_action(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+    new_chat_target = MagicMock()
+    events: list[str] = []
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        if kwargs == {"resourceId": "demo:id/newChat"}:
+            return new_chat_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: True,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: events.append("ensure") or "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: events.append("restore"),
+    )
+    new_chat_target.click.side_effect = lambda *_, **__: events.append("new_session")
+    input_target.click.side_effect = RuntimeError("focused by entry action")
+    device.shell.side_effect = lambda args: events.append(args[0])
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[
+            {
+                "action": "click_locator",
+                "locator": {"type": "resource_id", "value": "demo:id/newChat"},
+            }
+        ],
+        input_focus_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hello"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(
+        sample,
+        profile,
+        ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
+    )
+
+    assert out == ["echo: hi"]
+    assert events[:3] == ["ensure", "new_session", "am"]
+    assert events[-1] == "restore"
+
+
+@pytest.mark.asyncio
+async def test_execute_prefers_send_action_over_send_button_locator(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    events: list[tuple[int, int] | str] = []
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"resourceId": "missing:id/send"}:
+            raise AssertionError("send locator should not be resolved when send_action is present")
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    device.click.side_effect = lambda x, y: events.append((x, y))
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="resource_id", value="missing:id/send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        send_action=[{"action": "tap_xy", "x": 909, "y": 2038}],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s-send-action",
+        prompts=["hi"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(
+        sample,
+        profile,
+        ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
+    )
+
+    assert out == ["echo: hi"]
+    assert events == [(909, 2038)]
+
+
+@pytest.mark.asyncio
 async def test_execute_ocr_mode_uses_pixel_stable(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
@@ -175,8 +354,10 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         "autoagent.executors.android_executor.OcrExtractor",
         lambda: FakeOcrExtractor(),
     )
+
     async def fake_wait_for_ready_text(*_args, **_kwargs):
         return True
+
     monkeypatch.setattr(
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
@@ -260,8 +441,10 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
             True,
         ]
     )
+
     async def fake_wait_for_ready_text(*_args, **_kwargs):
         return next(ready_states)
+
     monkeypatch.setattr(
         "autoagent.executors.android_executor._wait_for_ready_text",
         fake_wait_for_ready_text,
