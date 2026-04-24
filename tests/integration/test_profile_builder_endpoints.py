@@ -655,6 +655,65 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     )
 
 
+async def test_profile_builder_generate_draft_falls_back_to_input_locator_focus_when_idle_has_no_prompt(
+    client, monkeypatch
+):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        (
+            '<hierarchy>'
+            '<node text="19:58" class="android.widget.TextView" package="com.android.systemui" />'
+            '<node text="百灵·专属服务顾问" class="android.widget.TextView" package="com.eg.android.AlipayGphone" />'
+            '</hierarchy>'
+        ),
+        (
+            '<hierarchy><node class="android.widget.EditText" package="com.eg.android.AlipayGphone" '
+            'bounds="[92,2029][899,2090]" clickable="true" focusable="true" focused="true" />'
+            '<node text="发送" class="android.widget.Image" package="com.eg.android.AlipayGphone" '
+            'bounds="[915,2013][1009,2106]" clickable="false" /></hierarchy>'
+        ),
+    ]
+    device.app_current.side_effect = [
+        {
+            "package": "com.eg.android.AlipayGphone",
+            "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+        },
+        {
+            "package": "com.eg.android.AlipayGphone",
+            "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+        },
+    ]
+    device.screenshot.side_effect = [b"idle", b"editing"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    for step in ("idle", "editing"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
+            headers=headers,
+        )
+        assert capture.status_code == 200
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        headers=headers,
+    )
+
+    assert draft.status_code == 200
+    body = draft.json()
+    profile_data = yaml.safe_load(body["draft_profile_yaml"])
+    assert profile_data["ready_check"]["text"] == "百灵·专属服务顾问"
+    assert profile_data["input_focus_action"] == [{"action": "tap_xy", "x": 495, "y": 2059}]
+    assert body["review_items"][0]["field"] == "input_focus_action"
+
+
 async def test_profile_builder_generate_draft_keeps_manual_editing_send_locator(
     client, monkeypatch
 ):

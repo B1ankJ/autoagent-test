@@ -435,21 +435,25 @@ def _ready_check_text(idle_xml: str) -> str:
         root = ElementTree.fromstring(idle_xml)
     except ElementTree.ParseError:
         return "发消息"
+    fallback_texts: list[str] = []
     preferred = []
     for node in root.iter():
         text = (node.attrib.get("text") or "").strip()
         if not text:
             continue
+        package = (node.attrib.get("package") or "").strip()
+        if package.startswith("com.android.systemui"):
+            continue
         lowered = text.lower()
         if any(keyword in lowered for keyword in ("发消息", "说话", "输入", "send", "message")):
             preferred.append(text)
+            continue
+        fallback_texts.append(text)
     if preferred:
         best = min(preferred, key=len)
         return "发消息" if "发消息" in best else best
-    for node in root.iter():
-        text = (node.attrib.get("text") or "").strip()
-        if text:
-            return text
+    if fallback_texts:
+        return fallback_texts[0]
     return "发消息"
 
 
@@ -623,6 +627,8 @@ def _draft_profile_from_candidates(
             if placeholder_tap_action is not None
             else [{"action": "click_locator", "locator": placeholder_locator}]
         )
+    elif input_candidates:
+        input_focus_action = _action_option_from_candidate(input_candidates[0])
     return {
         "name": session.name,
         "platform": session.platform,
@@ -832,7 +838,6 @@ async def generate_draft(session_id: str) -> dict:
         )
         if (
             input_focus_action_review_item is not None
-            and rule_draft.get("input_focus_action")
             and not any(
                 item.get("field") == "input_focus_action" for item in candidates["review_items"]
             )
