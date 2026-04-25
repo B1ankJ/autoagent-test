@@ -10,6 +10,10 @@
 
 **Prereq:** Existing Profile Builder flow on branch `plan4-android-executor`, including `use_llm_optimization`, `inject_llm`, Builder review items, and Connectivity Test runtime, is already green.
 
+**Status (2026-04-25):** Tasks 1-5 are complete in code. Backend contract, smart review-decision application, Builder mode selector/gating, and Builder connectivity dual-view are implemented and covered by automated verification. Task 6 is partially complete: docs and automated verification are updated, while targeted real-device smoke for smart draft mode remains pending.
+
+**Completed commits:** `a87e9e0`, `ef2538b`.
+
 ---
 
 ## File Structure
@@ -46,21 +50,21 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `src/autoagent/api/profile_builder.py`
 - Modify: `tests/integration/test_profile_builder_endpoints.py`
 
-- [ ] **Step 1: Add a failing integration test for `draft_mode`**
+- [x] **Step 1: Add a failing integration test for `draft_mode`**
   - Cover `draft_mode="rule"` returning a draft that still requires manual review.
   - Cover `draft_mode="smart"` returning a draft payload that includes auto-applied review metadata.
   - Cover invalid mode rejection.
 
-- [ ] **Step 2: Run the endpoint test and verify it fails**
+- [x] **Step 2: Run the endpoint test and verify it fails**
   - Run: `python3.11 -m pytest .worktrees/plan4-android-executor/tests/integration/test_profile_builder_endpoints.py -q`
   - Expected: request validation or missing-field assertions fail.
 
-- [ ] **Step 3: Replace `use_llm_optimization` with `draft_mode` in the request model**
+- [x] **Step 3: Replace `use_llm_optimization` with `draft_mode` in the request model**
   - Add a `Literal["rule", "smart"]` field to `_GenerateDraftRequest`.
   - Keep `inject_llm` as an independent boolean.
   - Default to `rule` or `smart` explicitly; recommendation: default to `rule` to keep deterministic behavior unless the user intentionally asks for smart generation.
 
-- [ ] **Step 4: Extend the draft response shape**
+- [x] **Step 4: Extend the draft response shape**
   - Add metadata fields returned from `/draft`:
     - `draft_mode`
     - `requires_manual_review`
@@ -68,9 +72,9 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
     - `auto_review_source` (`"manual"` or `"llm"`)
   - Keep existing `review_items` so the UI can still render and edit them.
 
-- [ ] **Step 5: Run the integration test and verify the new contract passes**
+- [x] **Step 5: Run the integration test and verify the new contract passes**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   - `git add src/autoagent/api/profile_builder.py .worktrees/plan4-android-executor/tests/integration/test_profile_builder_endpoints.py`
   - `git commit -m "feat(profile_builder): add explicit rule and smart draft modes"`
 
@@ -82,20 +86,20 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `src/autoagent/executors/profile_builder_generator.py`
 - Modify: `tests/unit/test_profile_builder_generator.py`
 
-- [ ] **Step 1: Add failing unit tests for smart-mode LLM output**
+- [x] **Step 1: Add failing unit tests for smart-mode LLM output**
   - One test for a valid LLM response containing both sparse `draft_overrides` and `review_decisions`.
   - One test proving unknown review fields or invalid option indexes are rejected and fall back safely.
   - One test proving `rule` mode never calls the LLM.
 
-- [ ] **Step 2: Run the unit test and verify it fails**
+- [x] **Step 2: Run the unit test and verify it fails**
 
-- [ ] **Step 3: Extend the LLM JSON schema**
+- [x] **Step 3: Extend the LLM JSON schema**
   - Change the current schema from "draft overrides only" to:
     - `draft_overrides`
     - `review_decisions`
   - `review_decisions` should be grounded in existing `review_items`, preferably by field name plus selected option index.
 
-- [ ] **Step 4: Update the LLM prompt payload**
+- [x] **Step 4: Update the LLM prompt payload**
   - Include:
     - current `rule_draft`
     - top candidate summary
@@ -103,22 +107,22 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
     - explicit instruction that the model must only choose among provided review options
   - Keep output sparse and schema-constrained.
 
-- [ ] **Step 5: Implement safe merge/apply helpers**
+- [x] **Step 5: Implement safe merge/apply helpers**
   - Helper 1: merge `draft_overrides` into `rule_draft`
   - Helper 2: apply `review_decisions` to produce a `resolved_draft`
   - Helper 3: validate that every auto-selected option exists before applying it
   - On any invalid decision, do not silently invent a selector; fall back to the rule draft and preserve the unresolved review item.
 
-- [ ] **Step 6: Return structured smart-mode generation output**
+- [x] **Step 6: Return structured smart-mode generation output**
   - Return:
     - `final_draft`
     - `applied_review_choices`
     - `requires_manual_review`
     - `auto_review_source`
 
-- [ ] **Step 7: Run the generator unit tests and verify they pass**
+- [x] **Step 7: Run the generator unit tests and verify they pass**
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
   - `git add src/autoagent/executors/profile_builder_generator.py .worktrees/plan4-android-executor/tests/unit/test_profile_builder_generator.py`
   - `git commit -m "feat(profile_builder): auto-apply review decisions in smart draft mode"`
 
@@ -130,28 +134,28 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `src/autoagent/api/profile_builder.py`
 - Modify: `tests/integration/test_profile_builder_endpoints.py`
 
-- [ ] **Step 1: Add failing integration tests for connectivity gating**
+- [x] **Step 1: Add failing integration tests for connectivity gating**
   - `rule` mode: connectivity remains blocked until required review items are manually confirmed.
   - `smart` mode: connectivity is allowed immediately when all required review fields were auto-resolved by LLM.
   - `smart` mode fallback: if some review decisions are invalid or missing, `requires_manual_review` remains true and connectivity stays blocked.
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
-- [ ] **Step 3: Encode gating rules in the backend response**
+- [x] **Step 3: Encode gating rules in the backend response**
   - Do not leave this entirely to frontend heuristics.
   - Return enough state for the UI to know whether connectivity can start:
     - `requires_manual_review`
     - `resolved_required_review_fields`
     - `pending_required_review_fields`
 
-- [ ] **Step 4: Ensure saved artifacts reflect smart-mode decisions**
+- [x] **Step 4: Ensure saved artifacts reflect smart-mode decisions**
   - `draft_profile.yaml` should already contain the auto-applied choices.
   - `review_items.json` should keep the original options plus which choice was auto-applied.
   - Add an artifact such as `draft_generation_result.json` if needed for observability.
 
-- [ ] **Step 5: Run integration tests and verify gating behavior passes**
+- [x] **Step 5: Run integration tests and verify gating behavior passes**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   - `git add src/autoagent/api/profile_builder.py .worktrees/plan4-android-executor/tests/integration/test_profile_builder_endpoints.py`
   - `git commit -m "feat(profile_builder): gate connectivity by draft mode and review resolution"`
 
@@ -164,24 +168,24 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `web/src/pages/Profiles/Builder.tsx`
 - Test: `web/src/pages/Profiles/Builder.test.tsx`
 
-- [ ] **Step 1: Add failing frontend tests for mode selection**
+- [x] **Step 1: Add failing frontend tests for mode selection**
   - One test that `Generate Draft` sends `draft_mode: "rule"` and keeps manual review blocking.
   - One test that `Generate Draft` sends `draft_mode: "smart"` and enables connectivity when the backend says review is resolved.
   - One test that `inject_llm` stays independent from draft mode.
 
-- [ ] **Step 2: Run the frontend test and verify it fails**
+- [x] **Step 2: Run the frontend test and verify it fails**
 
-- [ ] **Step 3: Replace `useLlmOptimization` UI with a mode selector**
+- [x] **Step 3: Replace `useLlmOptimization` UI with a mode selector**
   - Recommended copy:
     - `规则 Draft（需人工确认 Review）`
     - `智能 Draft（LLM 自动选择 Review）`
   - Keep `生成时注入 LLM 响应抽取配置` as a separate checkbox.
 
-- [ ] **Step 4: Update request wiring**
+- [x] **Step 4: Update request wiring**
   - `useGenerateProfileBuilderDraft()` should post `draft_mode` and `inject_llm`.
   - Remove the old `use_llm_optimization` parameter from the request body and state.
 
-- [ ] **Step 5: Update Builder page state and review UX**
+- [x] **Step 5: Update Builder page state and review UX**
   - Rule mode:
     - show pending-review state
     - keep `Run Connectivity Test` disabled until manual review is complete
@@ -190,17 +194,17 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
     - leave review controls editable
     - allow direct connectivity when backend says `requires_manual_review=false`
 
-- [ ] **Step 6: Add review provenance cues**
+- [x] **Step 6: Add review provenance cues**
   - Show whether each selected review item came from:
     - `manual`
     - `llm`
     - `default rule recommendation`
   - Keep the UI readable; do not hide the candidate list.
 
-- [ ] **Step 7: Run frontend tests and verify they pass**
+- [x] **Step 7: Run frontend tests and verify they pass**
   - `cd .worktrees/plan4-android-executor/web && pnpm test -- Builder`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
   - `git add web/src/api/profileBuilder.ts web/src/pages/Profiles/Builder.tsx web/src/pages/Profiles/Builder.test.tsx`
   - `git commit -m "feat(web): add rule and smart draft modes to profile builder"`
 
@@ -212,13 +216,13 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `web/src/pages/Profiles/Builder.tsx`
 - Test: `web/src/pages/Profiles/Builder.test.tsx`
 
-- [ ] **Step 1: Add failing UI tests for connectivity result summary**
+- [x] **Step 1: Add failing UI tests for connectivity result summary**
   - Ensure Builder connectivity result no longer only shows `responses[0]`.
   - Ensure smart-mode runs show separate `规则提取` and `LLM 提取`, matching the rest of the product.
 
-- [ ] **Step 2: Run the frontend test and verify it fails**
+- [x] **Step 2: Run the frontend test and verify it fails**
 
-- [ ] **Step 3: Reuse the existing response comparison presentation**
+- [x] **Step 3: Reuse the existing response comparison presentation**
   - Either embed `ResponseComparison` directly or extract a Builder-friendly wrapper.
   - Show:
     - rule extraction result
@@ -226,13 +230,13 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
     - clear disabled/not-enabled state
     - llm error stage when present
 
-- [ ] **Step 4: Update Builder summary copy**
+- [x] **Step 4: Update Builder summary copy**
   - Rule mode: emphasize "connectivity passed after manual review"
   - Smart mode: emphasize "LLM auto-selected review items; you can still revise before saving"
 
-- [ ] **Step 5: Run frontend tests and verify they pass**
+- [x] **Step 5: Run frontend tests and verify they pass**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   - `git add web/src/pages/Profiles/Builder.tsx web/src/pages/Profiles/Builder.test.tsx`
   - `git commit -m "feat(web): clarify builder connectivity results for rule and smart modes"`
 
@@ -245,16 +249,16 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - Modify: `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`
 - Modify: `docs/superpowers/plans/2026-04-25-smart-draft-mode.md`
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
   - In `CLAUDE.md`, explain Builder now has two Draft modes and what each mode guarantees.
   - In the Android smoke checklist, add:
     - rule mode path requiring manual review
     - smart mode path allowing immediate connectivity if LLM resolved all required fields
 
-- [ ] **Step 2: Run backend verification**
+- [x] **Step 2: Run backend verification**
   - `python3.11 -m pytest -q -m "not playwright and not android and not slow"`
 
-- [ ] **Step 3: Run frontend verification**
+- [x] **Step 3: Run frontend verification**
   - `cd .worktrees/plan4-android-executor/web && pnpm test && pnpm lint && pnpm build`
 
 - [ ] **Step 4: Run targeted Builder real-device smoke**

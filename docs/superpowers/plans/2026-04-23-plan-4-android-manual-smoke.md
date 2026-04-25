@@ -249,6 +249,27 @@ Result (2026-04-25):
 - Quick Test and SampleDetail both showed separate `规则提取` and `LLM 提取` outputs for LLM-enabled profiles.
 - Runtime LLM failure remained non-fatal and surfaced through the LLM column as expected.
 
+## Step 11: Smart Draft mode smoke
+
+Use `Profiles -> Build Profile` and run both draft modes against the same app/session captures.
+
+1. Generate a `规则 Draft（需人工确认 Review）`
+2. Confirm `Run Connectivity Test` stays disabled until every required review item is manually applied
+3. Apply at least one recommended review item and confirm the draft YAML changes
+4. Generate a `智能 Draft（LLM 自动选择 Review）`
+5. Confirm the Builder shows auto-applied review state for the surfaced review items
+6. If the backend resolved all required review fields, confirm `Run Connectivity Test` is immediately enabled
+7. Run Connectivity Test and confirm the result card shows both `规则提取` and `LLM 提取`
+8. Manually override one smart-mode review item and confirm the saved YAML reflects the override rather than the original LLM choice
+
+Expected:
+
+- Rule mode remains deterministic and blocks connectivity until manual review is complete
+- Smart mode only unlocks connectivity when the backend reports `requires_manual_review=false`
+- Smart mode keeps review evidence and alternative candidates visible even after auto-selection
+- Connectivity results still display rule/LLM outputs separately after smart draft generation
+- Manual overrides after smart draft generation are persisted into the final YAML
+
 ## Optional fallback: manual YAML profile
 
 Only use this if Builder is blocked and you need to isolate whether the regression is in Builder or
