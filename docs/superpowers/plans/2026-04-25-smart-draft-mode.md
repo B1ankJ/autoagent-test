@@ -10,7 +10,7 @@
 
 **Prereq:** Existing Profile Builder flow on branch `plan4-android-executor`, including `use_llm_optimization`, `inject_llm`, Builder review items, and Connectivity Test runtime, is already green.
 
-**Status (2026-04-25):** Tasks 1-5 are complete in code. Backend contract, smart review-decision application, Builder mode selector/gating, and Builder connectivity dual-view are implemented and covered by automated verification. Task 6 is partially complete: docs and automated verification are updated, while targeted real-device smoke for smart draft mode remains pending.
+**Status (2026-04-25):** Smart Draft mode is complete. Backend contract, smart review-decision application, Builder mode selector/gating, Builder connectivity dual-view, automated verification, and targeted real-device smoke are all complete.
 
 **Completed commits:** `a87e9e0`, `ef2538b`.
 
@@ -261,7 +261,7 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
 - [x] **Step 3: Run frontend verification**
   - `cd .worktrees/plan4-android-executor/web && pnpm test && pnpm lint && pnpm build`
 
-- [ ] **Step 4: Run targeted Builder real-device smoke**
+- [x] **Step 4: Run targeted Builder real-device smoke**
   - Rule mode:
     - Generate Draft
     - verify review is mandatory
@@ -272,7 +272,9 @@ CLAUDE.md                              # MODIFY: note Builder now has rule/smart
     - verify connectivity is immediately available when backend resolved all required fields
     - manually override one review item and confirm regenerated/saved YAML reflects the override
 
-- [ ] **Step 5: Commit docs and verification follow-up**
+Result: completed on a real Android device on 2026-04-25; both rule-mode and smart-mode flows passed with no blocking issues found.
+
+- [x] **Step 5: Commit docs and verification follow-up**
   - `git add CLAUDE.md docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md docs/superpowers/plans/2026-04-25-smart-draft-mode.md`
   - `git commit -m "docs: record smart draft mode behavior and verification"`
 

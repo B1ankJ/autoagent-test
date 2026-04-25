@@ -270,6 +270,14 @@ Expected:
 - Connectivity results still display rule/LLM outputs separately after smart draft generation
 - Manual overrides after smart draft generation are persisted into the final YAML
 
+Result (2026-04-25):
+
+- Passed in real-device validation with both `rule` and `smart` draft modes.
+- Rule mode correctly kept `Run Connectivity Test` disabled until required review items were manually applied.
+- Smart mode showed auto-applied review state and enabled connectivity immediately when review resolution was complete.
+- Connectivity results displayed both `规则提取` and `LLM 提取` after smart draft generation.
+- Manual overrides after smart draft generation were reflected in the final draft YAML as expected.
+
 ## Optional fallback: manual YAML profile
 
 Only use this if Builder is blocked and you need to isolate whether the regression is in Builder or
