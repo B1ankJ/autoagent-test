@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from autoagent.auth.passwords import hash_password
+from autoagent.executors.llm_checker import CheckResult
 from autoagent.storage.database import init_db
 from autoagent.storage.users import upsert_user
 
@@ -48,8 +51,13 @@ async def test_vlm_config_roundtrip(client):
     assert r.json() is None
 
     body = {"base_url": "https://vlm.example.com/v1", "model": "v1", "api_key": "VLM_KEY"}
-    r = await client.put("/api/v1/config/vlm", json=body, headers=h)
+    with patch(
+        "autoagent.api.config.check_llm_api",
+        new=AsyncMock(return_value=CheckResult(ok=True, stage="ok", message="ok", latency_ms=1)),
+    ) as m:
+        r = await client.put("/api/v1/config/vlm", json=body, headers=h)
     assert r.status_code == 200
+    m.assert_awaited_once_with("https://vlm.example.com/v1", "v1", "VLM_KEY")
 
     r = await client.get("/api/v1/config/vlm", headers=h)
     assert r.json()["model"] == "v1"

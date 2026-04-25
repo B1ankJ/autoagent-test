@@ -218,6 +218,26 @@ While one Android batch is running:
 Expected:
 
 - The in-flight sample on that device may fail
+
+## Step 10: LLM response extraction smoke
+
+Use the Config page, Builder, and SampleDetail to validate the new optional LLM comparison path.
+
+1. On `Config`, enter a bad API key and click `测试连通性`
+2. Confirm the page surfaces an auth-stage error and `保存` is rejected for the same bad triple
+3. Replace it with a valid `base_url` / `model` / `api_key` triple, run `测试连通性`, then `保存`
+4. In `Profiles -> Build Profile`, enable `生成时注入 LLM 响应抽取配置` before `Generate Draft`
+5. Save the generated draft as a normal profile and inspect the YAML
+6. Run a quick Android test or one-sample batch with that profile, then open SampleDetail
+7. Break the saved profile's `api_key`, rerun once, and inspect SampleDetail again
+
+Expected:
+
+- Bad credentials show a staged Config-page error such as `认证失败`
+- Valid credentials show a success message and can be saved
+- Builder-generated YAML contains `base_url`, `model`, and `api_key`
+- SampleDetail shows both `规则抽取` and `LLM 抽取` when profile LLM is enabled
+- If runtime LLM fails, the sample still completes and the LLM column shows the stage string via `llm_errors`
 - Other samples should not wedge indefinitely
 - Later scheduling should reflect device availability
 
