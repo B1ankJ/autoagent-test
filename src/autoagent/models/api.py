@@ -38,6 +38,8 @@ class SampleResult(BaseModel):
     status: SampleStatus
     prompts_sent: list[str] = Field(default_factory=list)
     responses: list[str] = Field(default_factory=list)
+    llm_responses: list[str] = Field(default_factory=list)
+    llm_errors: list[str | None] = Field(default_factory=list)
     duration_ms: int | None = None
     attempt_count: int = 0
     mode: Mode
