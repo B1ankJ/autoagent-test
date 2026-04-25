@@ -129,6 +129,9 @@ class AndroidProfile(BaseModel):
     package: str
     activity: str | None = None
     serial: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
     input_method: Literal["auto", "adb_keyboard", "u2_send_keys"] = "auto"
     ready_check: AndroidReadyCheckTree
     recovery_path: list[ActionStep]
@@ -139,6 +142,9 @@ class AndroidProfile(BaseModel):
     input_focus_action: list[ActionStep] = Field(default_factory=list)
     send_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
+
+    def llm_response_enabled(self) -> bool:
+        return bool(self.base_url and self.model and self.api_key)
 
 
 # ---- Union + parser ----
