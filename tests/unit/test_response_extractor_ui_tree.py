@@ -158,3 +158,29 @@ def test_ui_tree_extractor_aggregates_latest_multi_textview_response_block() -> 
     )
 
     assert result.text == "第一段回复 继续说明 补充结尾"
+
+
+def test_ui_tree_extractor_deprioritizes_bottom_suggestion_chip_blocks() -> None:
+    xml = """
+        <hierarchy>
+          <node class="android.widget.FrameLayout" bounds="[0,0][1080,2244]">
+            <node class="androidx.recyclerview.widget.RecyclerView" bounds="[0,300][1080,1233]">
+          <node class="android.widget.TextView" text="关于“当下”的碎片&#10;&#10;窗外的风刚刚停歇，带走了午后最后一丝燥热。在这个快节奏的数字时代，我们往往走得太快，以至于忘记了停下来看看路边的风景。&#10;&#10;未来的无限可能&#10;&#10;当我们谈论未来时，我们实际上是在谈论一种信念。无论是人工智能的迭代更新，还是人类对星辰大海的探索。" bounds="[0,300][1080,1233]" />
+            </node>
+        <node class="android.widget.LinearLayout" bounds="[0,1389][1080,1782]">
+          <node class="android.widget.TextView" text="生成一段未来科技感的文字" bounds="[60,1389][600,1496]" />
+          <node class="android.widget.TextView" text="写一段关于友情的回忆" bounds="[60,1532][522,1639]" />
+          <node class="android.widget.TextView" text="写一段关于旅行的文字" bounds="[60,1675][522,1782]" />
+        </node>
+      </node>
+    </hierarchy>
+    """
+
+    result = UiTreeExtractor().extract_from_xml(
+        xml,
+        response_container_locator=Locator(type="class", value="android.widget.FrameLayout"),
+        latest_bubble_locator=Locator(type="class", value="android.widget.TextView"),
+    )
+
+    assert "关于“当下”的碎片" in result.text
+    assert "未来的无限可能" in result.text

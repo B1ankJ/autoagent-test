@@ -172,6 +172,25 @@ def _block_text(block: list[ET.Element]) -> str:
     return " ".join((node.attrib.get("text") or "").strip() for node in block if (node.attrib.get("text") or "").strip())
 
 
+def _looks_like_suggestion_chip_block(block: list[ET.Element]) -> bool:
+    texts = [(node.attrib.get("text") or "").strip() for node in block]
+    texts = [text for text in texts if text]
+    if len(texts) < 3:
+        return False
+    if any(len(text) > 24 for text in texts):
+        return False
+    total_len = sum(len(text) for text in texts)
+    if total_len > 80:
+        return False
+    heights = []
+    for node in block:
+        bounds = _node_bounds(node)
+        if bounds is None:
+            return False
+        heights.append(bounds[3] - bounds[1])
+    return all(height <= 140 for height in heights)
+
+
 def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int, int]:
     last = block[-1]
     bounds = _node_bounds(last)
@@ -218,6 +237,12 @@ class UiTreeExtractor:
             blocks = _group_candidate_blocks(candidate_nodes, parents)
             if not blocks:
                 continue
+            if any(len(_block_text(block)) >= 40 for block in blocks):
+                non_chip_blocks = [
+                    block for block in blocks if not _looks_like_suggestion_chip_block(block)
+                ]
+                if non_chip_blocks:
+                    blocks = non_chip_blocks
             winner_index, winner_block = max(
                 enumerate(blocks),
                 key=lambda item: _block_score(item[1], index=item[0]),
