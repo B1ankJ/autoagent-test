@@ -1,7 +1,9 @@
 import { Alert, Button, Input, Modal, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useRunSync } from '../../api/tests'
+import { ResponseComparison } from '../../components/ResponseComparison'
 import { ExecutionMode } from '../../types/api'
+import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 interface Props {
   open: boolean
@@ -28,6 +30,7 @@ export function ConnectivityTestModal({ open, profileName, mode, onClose }: Prop
       timeoutMs: requestTimeoutMs,
     })
   }
+  const llmEnabled = hasLLMExtractionData(run.data?.llm_responses, run.data?.llm_errors)
 
   return (
     <Modal
@@ -48,11 +51,18 @@ export function ConnectivityTestModal({ open, profileName, mode, onClose }: Prop
         </Button>
         {run.data ? (
           run.data.status === 'done' ? (
-            <Alert
-              type="success"
-              message="成功"
-              description={<Typography.Paragraph>{run.data.responses[0]}</Typography.Paragraph>}
-            />
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Alert type="success" message="成功" />
+              <Typography.Text type="secondary">
+                duration: {run.data.duration_ms ?? '-'} ms
+              </Typography.Text>
+              <ResponseComparison
+                ruleResponse={run.data.responses[0]}
+                llmResponse={run.data.llm_responses?.[0]}
+                llmError={run.data.llm_errors?.[0]}
+                llmEnabled={llmEnabled}
+              />
+            </Space>
           ) : (
             <Alert type="error" message="失败" description={run.data.error ?? '未知错误'} />
           )

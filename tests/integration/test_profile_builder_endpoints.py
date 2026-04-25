@@ -223,6 +223,56 @@ async def test_profile_builder_generate_draft_inject_llm_writes_triple_into_yaml
     assert "api_key: k" in draft_yaml
 
 
+async def test_profile_builder_generate_draft_skips_llm_optimization_when_disabled(
+    client, monkeypatch
+):
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
+        headers=headers,
+    )
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        (
+            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
+            'bounds="[177,2066][777,2123]" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" '
+            'package="com.aliyun.tongyi" bounds="[36,1882][1032,2002]" />'
+            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
+            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
+        ),
+    ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle", b"editing"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    for step in ("idle", "editing"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
+            headers=headers,
+        )
+        assert capture.status_code == 200
+
+    llm_mock = AsyncMock(return_value={"package": "override.should.not.apply"})
+    monkeypatch.setattr("autoagent.api.profile_builder.maybe_generate_llm_draft", llm_mock)
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"use_llm_optimization": False},
+        headers=headers,
+    )
+    assert draft.status_code == 200, draft.text
+    assert llm_mock.await_count == 0
+
+
 async def test_profile_builder_generate_draft_inject_llm_rejects_without_global_config(
     client, monkeypatch
 ):

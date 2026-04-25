@@ -5,6 +5,7 @@ import { useBatchStream } from '../../hooks/useBatchStream'
 import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
+import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 function formatLocator(locator: unknown): string {
   if (!locator || typeof locator !== 'object') return '-'
@@ -63,7 +64,7 @@ export function SampleDetail() {
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
   const summary = metadataSummary(sample?.metadata)
-  const llmEnabled = !!(sample?.llm_responses || sample?.llm_errors)
+  const llmEnabled = hasLLMExtractionData(sample?.llm_responses, sample?.llm_errors)
 
   if (!data) {
     return <div>加载中...</div>

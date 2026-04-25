@@ -190,6 +190,7 @@ export default function Builder() {
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
   const [profileName, setProfileName] = useState('qwen_android')
+  const [useLlmOptimization, setUseLlmOptimization] = useState(true)
   const [injectLlm, setInjectLlm] = useState(false)
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
@@ -368,6 +369,8 @@ export default function Builder() {
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices({})
+      setUseLlmOptimization(true)
+      setInjectLlm(false)
       message.success('Builder session 已创建')
     } catch (error) {
       message.error((error as Error).message)
@@ -396,7 +399,11 @@ export default function Builder() {
       return
     }
     try {
-      const nextDraft = await generateDraft.mutateAsync({ sessionId: session.id, injectLlm })
+      const nextDraft = await generateDraft.mutateAsync({
+        sessionId: session.id,
+        useLlmOptimization,
+        injectLlm,
+      })
       setSession(nextDraft.session)
       setDraft(nextDraft)
       setConnectivitySummary(null)
@@ -603,6 +610,18 @@ export default function Builder() {
           Generate Draft
         </Button>
         <div style={{ marginTop: 12 }}>
+          <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
+            <Checkbox
+              checked={useLlmOptimization}
+              disabled={!vlmReady}
+              onChange={(event) => setUseLlmOptimization(event.target.checked)}
+              aria-label="生成 Draft 时使用 LLM 优化"
+            >
+              生成 Draft 时使用 LLM 优化
+            </Checkbox>
+          </Tooltip>
+        </div>
+        <div style={{ marginTop: 8 }}>
           <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
             <Checkbox
               checked={injectLlm}

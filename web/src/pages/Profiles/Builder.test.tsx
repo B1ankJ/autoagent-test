@@ -97,7 +97,7 @@ describe('Builder', () => {
     useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: 'k' } }))
   })
 
-  it('passes injectLlm=true when enabled', async () => {
+  it('passes llm draft options when enabled', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
@@ -151,15 +151,20 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText('Pixel 8'))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByLabelText('生成 Draft 时使用 LLM 优化'))
     await userEvent.click(await screen.findByLabelText('生成时注入 LLM 响应抽取配置'))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     await waitFor(() => {
-      expect(generateDraftMock).toHaveBeenCalledWith({ sessionId: 'pb_1', injectLlm: true })
+      expect(generateDraftMock).toHaveBeenCalledWith({
+        sessionId: 'pb_1',
+        useLlmOptimization: false,
+        injectLlm: true,
+      })
     })
   })
 
-  it('disables inject_llm toggle when global VLM config is incomplete', async () => {
+  it('disables llm draft toggles when global VLM config is incomplete', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: null } }))
     createSessionMock.mockResolvedValue({
@@ -200,6 +205,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await waitFor(() => {
+      expect(screen.getByLabelText('生成 Draft 时使用 LLM 优化')).toBeDisabled()
       expect(screen.getByLabelText('生成时注入 LLM 响应抽取配置')).toBeDisabled()
     })
   })
@@ -383,7 +389,11 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Run Connectivity Test/ }))
 
     await waitFor(() => {
-      expect(generateDraftMock).toHaveBeenCalledWith({ sessionId: 'pb_1', injectLlm: false })
+      expect(generateDraftMock).toHaveBeenCalledWith({
+        sessionId: 'pb_1',
+        useLlmOptimization: true,
+        injectLlm: false,
+      })
     })
     expect(applyReviewMock).toHaveBeenCalled()
     expect(saveProfileMock).toHaveBeenCalledWith({

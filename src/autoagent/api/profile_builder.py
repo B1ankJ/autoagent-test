@@ -48,6 +48,7 @@ _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 class _GenerateDraftRequest(BaseModel):
+    use_llm_optimization: bool = True
     inject_llm: bool = False
 
 
@@ -856,11 +857,15 @@ async def generate_draft(
             candidates["review_items"].insert(0, input_focus_action_review_item)
         raw_vlm = await get_config("vlm")
         vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else VLMConfig()
-        llm_output = await maybe_generate_llm_draft(
-            vlm=vlm,
-            rule_draft=rule_draft,
-            candidates=candidates,
-            captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
+        llm_output = (
+            await maybe_generate_llm_draft(
+                vlm=vlm,
+                rule_draft=rule_draft,
+                candidates=candidates,
+                captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
+            )
+            if body.use_llm_optimization
+            else None
         )
         draft_profile = merge_llm_draft(rule_draft, llm_output)
         if body.inject_llm:

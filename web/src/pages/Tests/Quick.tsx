@@ -17,6 +17,7 @@ import { ResponseComparison } from '../../components/ResponseComparison'
 import { useProfiles } from '../../api/profiles'
 import { useAsyncResult, useRunAsync } from '../../api/tests'
 import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
+import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 interface FormValues {
   id?: string
@@ -86,7 +87,7 @@ export function TestsQuick() {
     asyncResult.data?.status === 'cancelled'
       ? asyncResult.data
       : undefined)
-  const llmEnabled = !!(currentResult?.llm_responses || currentResult?.llm_errors)
+  const llmEnabled = hasLLMExtractionData(currentResult?.llm_responses, currentResult?.llm_errors)
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
