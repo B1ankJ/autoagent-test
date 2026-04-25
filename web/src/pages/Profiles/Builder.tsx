@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   List,
+  Radio,
   Row,
   Select,
   Space,
@@ -35,14 +36,17 @@ import {
   useProfileBuilderRuntime,
 } from '../../api/profileBuilderRuntime'
 import { useDevices } from '../../api/devices'
+import { ResponseComparison } from '../../components/ResponseComparison'
 import {
   Device,
   ProfileBuilderDraftResponse,
   ReviewEvidenceRef,
+  SingleTestSyncResponse,
   ProfileBuilderRuntimeView,
   ProfileBuilderSessionView,
   ReviewItem,
 } from '../../types/api'
+import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 const CAPTURE_STEPS = [
   {
@@ -164,6 +168,23 @@ function toReviewPayload(
   }
 }
 
+function reviewOptionByIndex(item: ReviewItem, index: number): ReviewItem['recommended_option'] | null {
+  const options = [item.recommended_option, ...item.alternative_candidates]
+  return options[index] ?? null
+}
+
+function appliedChoiceLabelsFromDraft(
+  nextDraft: ProfileBuilderDraftResponse,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(nextDraft.applied_review_choices).flatMap(([field, index]) => {
+      const item = nextDraft.review_items.find((candidate) => candidate.field === field)
+      const option = item ? reviewOptionByIndex(item, index) : null
+      return option ? [[field, reviewOptionText(option)]] : []
+    }),
+  )
+}
+
 function normalizeBounds(bounds: ReviewEvidenceRef['bounds']): [number, number, number, number] | null {
   if (!bounds || bounds.length !== 4) {
     return null
@@ -190,11 +211,11 @@ export default function Builder() {
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
   const [profileName, setProfileName] = useState('qwen_android')
-  const [useLlmOptimization, setUseLlmOptimization] = useState(true)
+  const [draftMode, setDraftMode] = useState<'rule' | 'smart'>('smart')
   const [injectLlm, setInjectLlm] = useState(false)
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
-  const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
+  const [connectivityResult, setConnectivityResult] = useState<SingleTestSyncResponse | null>(null)
   const [currentScreenUrl, setCurrentScreenUrl] = useState<string | null>(null)
   const [selectedScreenPath, setSelectedScreenPath] = useState<string | null>(null)
   const [selectedStageKey, setSelectedStageKey] = useState<string | null>(null)
@@ -205,7 +226,7 @@ export default function Builder() {
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const runtime = useProfileBuilderRuntime(session?.id)
   const requiredReviewFields = draft ? Array.from(new Set(draft.review_items.map((item) => item.field))) : []
-  const unresolvedReviewFields = requiredReviewFields.filter((field) => !appliedReviewChoices[field])
+  const unresolvedReviewFields = draft?.pending_review_fields ?? requiredReviewFields.filter((field) => !appliedReviewChoices[field])
   const vlmReady = !!(vlm?.base_url && vlm?.model && vlm?.api_key)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
@@ -361,7 +382,7 @@ export default function Builder() {
       })
       setSession(nextSession)
       setDraft(null)
-      setConnectivitySummary(null)
+      setConnectivityResult(null)
       setCurrentScreenUrl(null)
       setSelectedScreenPath(null)
       setSelectedStageKey(null)
@@ -369,7 +390,7 @@ export default function Builder() {
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices({})
-      setUseLlmOptimization(true)
+      setDraftMode(vlmReady ? 'smart' : 'rule')
       setInjectLlm(false)
       message.success('Builder session 已创建')
     } catch (error) {
@@ -385,7 +406,7 @@ export default function Builder() {
       const nextSession = await captureStep.mutateAsync({ sessionId: session.id, step })
       setSession(nextSession)
       setDraft(null)
-      setConnectivitySummary(null)
+      setConnectivityResult(null)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       message.success(`${step} capture 已保存`)
@@ -401,15 +422,15 @@ export default function Builder() {
     try {
       const nextDraft = await generateDraft.mutateAsync({
         sessionId: session.id,
-        useLlmOptimization,
+        draftMode,
         injectLlm,
       })
       setSession(nextDraft.session)
       setDraft(nextDraft)
-      setConnectivitySummary(null)
+      setConnectivityResult(null)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
-      setAppliedReviewChoices({})
+      setAppliedReviewChoices(appliedChoiceLabelsFromDraft(nextDraft))
       message.success('Draft profile 已生成')
     } catch (error) {
       message.error((error as Error).message)
@@ -433,6 +454,8 @@ export default function Builder() {
         ...draft,
         session: updated.session,
         draft_profile_yaml: updated.draft_profile_yaml,
+        pending_review_fields: draft.pending_review_fields.filter((field) => field !== item.field),
+        requires_manual_review: draft.pending_review_fields.filter((field) => field !== item.field).length > 0,
       })
       setAppliedReviewChoices((previous) => ({
         ...previous,
@@ -456,11 +479,7 @@ export default function Builder() {
         session: validated.session,
         draft_profile_yaml: validated.draft_profile_yaml,
       })
-      setConnectivitySummary(
-        validated.connectivity_result.status === 'done'
-          ? validated.connectivity_result.responses[0] ?? 'done'
-          : validated.connectivity_result.error ?? validated.connectivity_result.status,
-      )
+      setConnectivityResult(validated.connectivity_result)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       message.success('Connectivity test 已完成')
@@ -535,7 +554,7 @@ export default function Builder() {
               Start Builder Session
             </Button>
             <Button
-              disabled={!draft || unresolvedReviewFields.length > 0}
+              disabled={!draft || draft.requires_manual_review}
               icon={<CheckCircleOutlined />}
               loading={validateDraft.isPending}
               onClick={runConnectivityValidation}
@@ -543,7 +562,7 @@ export default function Builder() {
               Run Connectivity Test
             </Button>
           </Space>
-          {unresolvedReviewFields.length ? (
+          {draft?.requires_manual_review && unresolvedReviewFields.length ? (
             <Alert
               style={{ marginTop: 12 }}
               type="warning"
@@ -610,16 +629,28 @@ export default function Builder() {
           Generate Draft
         </Button>
         <div style={{ marginTop: 12 }}>
-          <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
-            <Checkbox
-              checked={useLlmOptimization}
-              disabled={!vlmReady}
-              onChange={(event) => setUseLlmOptimization(event.target.checked)}
-              aria-label="生成 Draft 时使用 LLM 优化"
+          <Typography.Text strong>Draft Mode</Typography.Text>
+          <div style={{ marginTop: 8 }}>
+            <Radio.Group
+              value={draftMode}
+              onChange={(event) => setDraftMode(event.target.value)}
             >
-              生成 Draft 时使用 LLM 优化
-            </Checkbox>
-          </Tooltip>
+              <Space direction="vertical">
+                <Radio value="rule" aria-label="规则 Draft（需人工确认 Review）">
+                  规则 Draft（需人工确认 Review）
+                </Radio>
+                <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
+                  <Radio
+                    value="smart"
+                    disabled={!vlmReady}
+                    aria-label="智能 Draft（LLM 自动选择 Review）"
+                  >
+                    智能 Draft（LLM 自动选择 Review）
+                  </Radio>
+                </Tooltip>
+              </Space>
+            </Radio.Group>
+          </div>
         </div>
         <div style={{ marginTop: 8 }}>
           <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
@@ -762,6 +793,13 @@ export default function Builder() {
                                 </Typography.Text>
                               }
                             />
+                          ) : draft?.draft_mode === 'smart' ? (
+                            <Alert
+                              type="info"
+                              showIcon
+                              message="智能 Draft 默认选择"
+                              description="该项由 smart mode 自动预选，你仍然可以手动改写。"
+                            />
                           ) : null}
                           <Space wrap>
                             <Button
@@ -823,8 +861,27 @@ export default function Builder() {
               )}
             </Card>
             <Card title="Connectivity Result" style={{ marginTop: 16 }}>
-              {connectivitySummary ? (
-                <Alert type="success" message="Connectivity Test Result" description={connectivitySummary} />
+              {connectivityResult ? (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Alert
+                    type={connectivityResult.status === 'done' ? 'success' : 'warning'}
+                    message="Connectivity Test Result"
+                    description={
+                      connectivityResult.status === 'done'
+                        ? '已完成连通性验证，可直接对比规则提取与 LLM 提取结果。'
+                        : connectivityResult.error ?? connectivityResult.status
+                    }
+                  />
+                  <ResponseComparison
+                    ruleResponse={connectivityResult.responses[0]}
+                    llmResponse={connectivityResult.llm_responses?.[0] ?? null}
+                    llmError={connectivityResult.llm_errors?.[0] ?? null}
+                    llmEnabled={hasLLMExtractionData(
+                      connectivityResult.llm_responses,
+                      connectivityResult.llm_errors,
+                    )}
+                  />
+                </Space>
               ) : (
                 <Empty description="尚未运行连通性测试" />
               )}

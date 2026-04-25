@@ -97,7 +97,7 @@ describe('Builder', () => {
     useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: 'k' } }))
   })
 
-  it('passes llm draft options when enabled', async () => {
+  it('passes rule draft mode and inject toggle independently', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
@@ -144,6 +144,11 @@ describe('Builder', () => {
       candidates: { input_candidates: [], send_candidates: [], response_candidates: [], review_items: [] },
       review_items: [],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: [],
+      auto_review_source: 'manual',
     })
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
@@ -151,20 +156,20 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText('Pixel 8'))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
-    await userEvent.click(await screen.findByLabelText('生成 Draft 时使用 LLM 优化'))
+    await userEvent.click(await screen.findByLabelText('规则 Draft（需人工确认 Review）'))
     await userEvent.click(await screen.findByLabelText('生成时注入 LLM 响应抽取配置'))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     await waitFor(() => {
       expect(generateDraftMock).toHaveBeenCalledWith({
         sessionId: 'pb_1',
-        useLlmOptimization: false,
+        draftMode: 'rule',
         injectLlm: true,
       })
     })
   })
 
-  it('disables llm draft toggles when global VLM config is incomplete', async () => {
+  it('disables smart draft and llm injection when global VLM config is incomplete', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: null } }))
     createSessionMock.mockResolvedValue({
@@ -205,8 +210,91 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await waitFor(() => {
-      expect(screen.getByLabelText('生成 Draft 时使用 LLM 优化')).toBeDisabled()
+      expect(screen.getByLabelText('智能 Draft（LLM 自动选择 Review）')).toBeDisabled()
       expect(screen.getByLabelText('生成时注入 LLM 响应抽取配置')).toBeDisabled()
+    })
+  })
+
+  it('allows connectivity immediately for smart drafts resolved by backend', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'draft',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: [],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+      ],
+    })
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml'],
+        captures: [],
+      },
+      candidates: { input_candidates: [], send_candidates: [], response_candidates: [], review_items: [] },
+      review_items: [
+        {
+          field: 'send_action',
+          reason: 'Confirm how the send control should be triggered in runtime editing state.',
+          recommended_option: [{ action: 'tap_xy', x: 964, y: 2064 }],
+          alternative_candidates: [],
+          evidence_refs: [],
+          alternative_evidence_refs: [],
+        },
+      ],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'smart',
+      requires_manual_review: false,
+      applied_review_choices: { send_action: 0 },
+      pending_review_fields: [],
+      auto_review_source: 'llm',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByLabelText('智能 Draft（LLM 自动选择 Review）'))
+    await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+
+    await waitFor(() => {
+      expect(generateDraftMock).toHaveBeenCalledWith({
+        sessionId: 'pb_1',
+        draftMode: 'smart',
+        injectLlm: false,
+      })
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Run Connectivity Test/ })).toBeEnabled()
     })
   })
 
@@ -336,6 +424,11 @@ describe('Builder', () => {
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['send_action'],
+      auto_review_source: 'manual',
     })
     applyReviewMock.mockResolvedValue({
       session: {
@@ -368,6 +461,8 @@ describe('Builder', () => {
         id: 'conn-1',
         status: 'done',
         responses: ['pong'],
+        llm_responses: ['llm pong'],
+        llm_errors: [null],
       },
     })
 
@@ -391,7 +486,7 @@ describe('Builder', () => {
     await waitFor(() => {
       expect(generateDraftMock).toHaveBeenCalledWith({
         sessionId: 'pb_1',
-        useLlmOptimization: true,
+        draftMode: 'smart',
         injectLlm: false,
       })
     })
@@ -406,6 +501,7 @@ describe('Builder', () => {
     expect(screen.getByDisplayValue(/name: qwen_android/)).toBeInTheDocument()
     expect(screen.getByText('Connectivity Test Result')).toBeInTheDocument()
     expect(screen.getByText('pong')).toBeInTheDocument()
+    expect(screen.getByText('llm pong')).toBeInTheDocument()
   })
 
   it('loads manual editing evidence screenshots from review items', async () => {
@@ -518,6 +614,11 @@ describe('Builder', () => {
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['send_action'],
+      auto_review_source: 'manual',
     })
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
@@ -633,6 +734,11 @@ describe('Builder', () => {
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['input_focus_action'],
+      auto_review_source: 'manual',
     })
     applyReviewMock.mockResolvedValue({
       session: {
@@ -761,6 +867,11 @@ describe('Builder', () => {
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['input_locator'],
+      auto_review_source: 'manual',
     })
     applyReviewMock.mockResolvedValue({
       session: {
@@ -890,6 +1001,11 @@ describe('Builder', () => {
         },
       ],
       draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['input_locator'],
+      auto_review_source: 'manual',
     })
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })

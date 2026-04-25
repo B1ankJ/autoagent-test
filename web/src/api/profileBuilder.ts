@@ -29,12 +29,12 @@ export function useCaptureProfileBuilderStep() {
 
 export function useGenerateProfileBuilderDraft() {
   return useMutation({
-    mutationFn: async (args: { sessionId: string; useLlmOptimization?: boolean; injectLlm?: boolean }) =>
+    mutationFn: async (args: { sessionId: string; draftMode: 'rule' | 'smart'; injectLlm?: boolean }) =>
       (
         await client.post<ProfileBuilderDraftResponse>(
           `/profile-builder/sessions/${args.sessionId}/draft`,
           {
-            use_llm_optimization: args.useLlmOptimization ?? true,
+            draft_mode: args.draftMode,
             inject_llm: !!args.injectLlm,
           },
         )

@@ -275,6 +275,11 @@ export interface ProfileBuilderDraftResponse {
   candidates: ProfileBuilderCandidates
   review_items: ReviewItem[]
   draft_profile_yaml: string
+  draft_mode: 'rule' | 'smart'
+  requires_manual_review: boolean
+  applied_review_choices: Record<string, number>
+  pending_review_fields: string[]
+  auto_review_source: 'manual' | 'llm'
 }
 
 export interface ProfileBuilderReviewResponse {
