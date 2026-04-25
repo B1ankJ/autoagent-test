@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import traceback
@@ -25,6 +26,15 @@ from autoagent.models.api import Sample
 from autoagent.profiles.schemas import ActionStep, AndroidProfile
 
 log = logging.getLogger(__name__)
+
+
+def _clip_log_text(value: str | None, max_chars: int = 240) -> str | None:
+    if value is None:
+        return None
+    compact = value.replace("\n", "\\n")
+    if len(compact) <= max_chars:
+        return compact
+    return f"{compact[:max_chars]}..."
 
 
 class _SampleLogger:
@@ -294,6 +304,36 @@ class AndroidExecutor(Executor):
                             base_url=profile.base_url,
                             model=profile.model,
                             api_key=profile.api_key,
+                        )
+                        llm_debug_path = store.artifact_path(f"llm_extract_{idx}", "json")
+                        llm_debug_payload = {
+                            "prompt": prompt,
+                            "xml_artifact": after_result_xml_path.name if xml is not None else None,
+                            "status_code": llm_res.status_code,
+                            "latency_ms": llm_res.latency_ms,
+                            "error": llm_res.error,
+                            "text": llm_res.text,
+                            "truncated_input": llm_res.truncated_input,
+                            "raw_message_content": llm_res.raw_message_content,
+                            "raw_response_text": llm_res.raw_response_text,
+                        }
+                        await asyncio.to_thread(
+                            llm_debug_path.write_text,
+                            json.dumps(llm_debug_payload, ensure_ascii=False, indent=2),
+                            "utf-8",
+                        )
+                        sample_log.info(
+                            (
+                                "android sample %s prompt %s llm extraction: "
+                                "status=%s error=%s latency_ms=%s text=%r raw=%s"
+                            ),
+                            sample.id,
+                            idx,
+                            llm_res.status_code,
+                            llm_res.error,
+                            llm_res.latency_ms,
+                            llm_res.text,
+                            _clip_log_text(llm_res.raw_message_content),
                         )
                         ctx.llm_responses.append(llm_res.text)
                         ctx.llm_errors.append(llm_res.error)

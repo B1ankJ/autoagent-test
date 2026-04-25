@@ -32,6 +32,9 @@ async def test_extract_success(monkeypatch):
     assert r.text == "你好，我是助手。"
     assert r.error is None
     assert r.latency_ms >= 0
+    assert r.status_code == 200
+    assert r.raw_message_content == '{"response": "你好，我是助手。"}'
+    assert '"choices"' in (r.raw_response_text or "")
 
 
 @pytest.mark.asyncio
@@ -52,6 +55,7 @@ async def test_extract_empty_response_is_not_error(monkeypatch):
     )
     assert r.text == ""
     assert r.error is None
+    assert r.raw_message_content == '{"response": ""}'
 
 
 @pytest.mark.asyncio
@@ -70,6 +74,7 @@ async def test_extract_response_shape_failure(monkeypatch):
     )
     assert r.text == ""
     assert r.error == "response_shape"
+    assert r.raw_message_content == "not-json"
 
 
 @pytest.mark.asyncio
@@ -88,6 +93,8 @@ async def test_extract_auth_failure(monkeypatch):
     )
     assert r.text == ""
     assert r.error == "auth"
+    assert r.status_code == 401
+    assert '"bad key"' in (r.raw_response_text or "")
 
 
 @pytest.mark.asyncio
@@ -114,4 +121,5 @@ async def test_extract_truncates_oversized_xml(monkeypatch):
     )
     assert r.text == "ok"
     assert r.error == "truncated"
+    assert r.truncated_input is True
     assert captured["len"] < 300_000 + 5000  # truncated, not full huge

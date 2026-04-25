@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import json
 
 from autoagent.executors.android_executor import AndroidExecutor
 from autoagent.executors.base import ExecutorContext
@@ -663,8 +664,20 @@ async def test_execute_calls_llm_per_round_when_profile_enables_it(monkeypatch, 
 
     fake_extract = AsyncMock(
         side_effect=[
-            LLMExtractionResult(text="LLM_A", error=None, latency_ms=10),
-            LLMExtractionResult(text="", error="auth", latency_ms=5),
+            LLMExtractionResult(
+                text="LLM_A",
+                error=None,
+                latency_ms=10,
+                status_code=200,
+                raw_message_content='{"response":"LLM_A"}',
+            ),
+            LLMExtractionResult(
+                text="",
+                error="auth",
+                latency_ms=5,
+                status_code=401,
+                raw_message_content='{"response":""}',
+            ),
         ]
     )
     monkeypatch.setattr("autoagent.executors.android_executor.extract_response_via_llm", fake_extract)
@@ -675,6 +688,18 @@ async def test_execute_calls_llm_per_round_when_profile_enables_it(monkeypatch, 
     assert fake_extract.await_count == 2
     assert ctx.llm_responses == ["LLM_A", ""]
     assert ctx.llm_errors == [None, "auth"]
+    llm_debug = json.loads(
+        (tmp_path / "ad_hoc" / "s1" / "llm_extract_1.json").read_text(encoding="utf-8")
+    )
+    assert llm_debug["text"] == "LLM_A"
+    assert llm_debug["status_code"] == 200
+    assert llm_debug["raw_message_content"] == '{"response":"LLM_A"}'
+    llm_debug_2 = json.loads(
+        (tmp_path / "ad_hoc" / "s1" / "llm_extract_2.json").read_text(encoding="utf-8")
+    )
+    assert llm_debug_2["error"] == "auth"
+    log_text = (tmp_path / "ad_hoc" / "s1" / "executor.log").read_text(encoding="utf-8")
+    assert "prompt 1 llm extraction: status=200 error=None" in log_text
 
 
 @pytest.mark.asyncio
