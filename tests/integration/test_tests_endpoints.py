@@ -51,6 +51,8 @@ async def test_sync_test_runs_to_done(client, httpx_mock: HTTPXMock, monkeypatch
     body = r.json()
     assert body["status"] == "done"
     assert body["responses"] == ["hi!"]
+    assert body["llm_responses"] == []
+    assert body["llm_errors"] == []
 
 
 async def test_async_test_lifecycle(client, httpx_mock: HTTPXMock):

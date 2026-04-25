@@ -42,6 +42,8 @@ class Sample(Base):
     )  # queued|running|done|failed|timeout|extraction_failed|cancelled
     prompts_sent_json = Column(Text, nullable=True)
     responses_json = Column(Text, nullable=True)
+    llm_responses_json = Column(Text, nullable=True)
+    llm_errors_json = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     attempt_count = Column(Integer, nullable=False, default=0)
     mode = Column(String, nullable=False)
