@@ -44,7 +44,10 @@ class AndroidActionRunner:
     def _annotate_entry(self, entry: dict[str, Any], step: ActionStep) -> None:
         locator = getattr(step, "locator", None)
         if locator is not None:
-            entry["locator"] = locator.model_dump(mode="json")
+            if hasattr(locator, "model_dump"):
+                entry["locator"] = locator.model_dump(mode="json")
+            else:
+                entry["locator"] = dict(locator)
         if step.action == "tap_xy":
             entry["x"] = step.x
             entry["y"] = step.y
