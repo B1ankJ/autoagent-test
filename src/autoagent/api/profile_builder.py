@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from autoagent.api.tests import execute_sync_test
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
+from autoagent.devices.adb import set_ime
 from autoagent.executors.android_input import ensure_adb_keyboard_ready
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 from autoagent.executors.profile_builder_capture import CapturedState, capture_android_state
@@ -31,9 +32,10 @@ from autoagent.models.api import (
     ProfileBuilderSessionCreate,
     ProfileBuilderSessionView,
     Sample,
+    VLMConfig,
 )
 from autoagent.profiles.registry import delete_profile, save_profile_yaml
-from autoagent.devices.adb import set_ime
+from autoagent.storage.configs import get_config
 
 router = APIRouter(
     prefix="/profile-builder",
@@ -536,7 +538,11 @@ def _input_focus_action_review_item(idle_xml: str, input_candidates: list[dict])
         seen.add(key)
         options.append((option, evidence_refs))
 
-    if placeholder_locator is not None and placeholder_tap_action is not None and placeholder_ref is not None:
+    if (
+        placeholder_locator is not None
+        and placeholder_tap_action is not None
+        and placeholder_ref is not None
+    ):
         evidence_ref = {
             "source": "idle_xml",
             "step": "idle",
@@ -548,7 +554,9 @@ def _input_focus_action_review_item(idle_xml: str, input_candidates: list[dict])
             "label": "entry-action",
         }
         _append_option([placeholder_tap_action], [evidence_ref])
-        _append_option([{"action": "click_locator", "locator": placeholder_locator}], [evidence_ref])
+        _append_option(
+            [{"action": "click_locator", "locator": placeholder_locator}], [evidence_ref]
+        )
 
     for candidate in input_candidates:
         evidence_refs = candidate.get("evidence_refs", [])
@@ -814,7 +822,6 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
 @router.post("/sessions/{session_id}/draft")
 async def generate_draft(session_id: str) -> dict:
     session = _get_session_or_404(session_id)
-    settings = get_settings()
     try:
         captures = _require_complete_captures(session)
         idle_xml = _read_capture_xml(session, captures["idle"].xml_artifact)
@@ -836,15 +843,14 @@ async def generate_draft(session_id: str) -> dict:
             idle_xml,
             candidates["input_candidates"],
         )
-        if (
-            input_focus_action_review_item is not None
-            and not any(
-                item.get("field") == "input_focus_action" for item in candidates["review_items"]
-            )
+        if input_focus_action_review_item is not None and not any(
+            item.get("field") == "input_focus_action" for item in candidates["review_items"]
         ):
             candidates["review_items"].insert(0, input_focus_action_review_item)
+        raw_vlm = await get_config("vlm")
+        vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else VLMConfig()
         llm_output = await maybe_generate_llm_draft(
-            settings=settings,
+            vlm=vlm,
             rule_draft=rule_draft,
             candidates=candidates,
             captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},

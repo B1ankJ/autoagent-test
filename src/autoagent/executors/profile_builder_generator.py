@@ -7,7 +7,9 @@ from typing import Any
 
 import httpx
 
-from autoagent.config.settings import Settings, get_settings
+from autoagent.models.api import VLMConfig
+
+LLM_DRAFT_TIMEOUT_SEC = 30.0
 
 _LOCATOR_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -68,12 +70,8 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _has_llm_config(settings: Settings) -> bool:
-    return bool(
-        settings.profile_builder_llm_base_url
-        and settings.profile_builder_llm_model
-        and settings.profile_builder_llm_api_key
-    )
+def _has_llm_config(vlm: VLMConfig) -> bool:
+    return bool(vlm.base_url and vlm.model and vlm.api_key)
 
 
 def _merge_values(base: Any, override: Any) -> Any:
@@ -84,7 +82,7 @@ def _merge_values(base: Any, override: Any) -> Any:
         for key, value in override.items():
             if key in merged:
                 merged[key] = _merge_values(merged[key], value)
-            else:
+            elif value not in (None, "", [], {}):
                 merged[key] = deepcopy(value)
         return merged
     return deepcopy(override)
@@ -110,7 +108,7 @@ def _candidate_summary(candidates: Mapping[str, Any]) -> dict[str, Any]:
 
 def _request_payload(
     *,
-    settings: Settings,
+    vlm: VLMConfig,
     rule_draft: Mapping[str, Any],
     candidates: Mapping[str, Any],
     captures: Mapping[str, Any],
@@ -127,7 +125,7 @@ def _request_payload(
         "captures": captures,
     }
     return {
-        "model": settings.profile_builder_llm_model,
+        "model": vlm.model,
         "temperature": 0,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -157,19 +155,19 @@ def _content_to_text(content: Any) -> str:
 
 async def _request_llm_draft(
     *,
-    settings: Settings,
+    vlm: VLMConfig,
     rule_draft: Mapping[str, Any],
     candidates: Mapping[str, Any],
     captures: Mapping[str, Any],
 ) -> dict[str, Any]:
-    url = settings.profile_builder_llm_base_url.rstrip("/") + "/chat/completions"
+    url = vlm.base_url.rstrip("/") + "/chat/completions"  # type: ignore[union-attr]
     headers = {
-        "Authorization": f"Bearer {settings.profile_builder_llm_api_key}",
+        "Authorization": f"Bearer {vlm.api_key}",
         "Content-Type": "application/json",
     }
-    timeout = httpx.Timeout(settings.profile_builder_llm_timeout_sec)
+    timeout = httpx.Timeout(LLM_DRAFT_TIMEOUT_SEC)
     payload = _request_payload(
-        settings=settings,
+        vlm=vlm,
         rule_draft=rule_draft,
         candidates=candidates,
         captures=captures,
@@ -196,14 +194,13 @@ async def maybe_generate_llm_draft(
     rule_draft: Mapping[str, Any],
     candidates: Mapping[str, Any],
     captures: Mapping[str, Any],
-    settings: Settings | None = None,
+    vlm: VLMConfig | None = None,
 ) -> dict[str, Any] | None:
-    resolved_settings = settings or get_settings()
-    if not _has_llm_config(resolved_settings):
+    if vlm is None or not _has_llm_config(vlm):
         return None
     try:
         return await _request_llm_draft(
-            settings=resolved_settings,
+            vlm=vlm,
             rule_draft=rule_draft,
             candidates=candidates,
             captures=captures,
