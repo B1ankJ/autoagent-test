@@ -60,6 +60,46 @@ async def _h(client):
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
+async def _create_builder_session_with_captures(client, monkeypatch, *, name: str = "qwen") -> tuple[dict, dict]:
+    headers = await _h(client)
+    create = await client.post(
+        "/api/v1/profile-builder/sessions",
+        json={"platform": "android", "device_serial": "serial-1", "name": name},
+        headers=headers,
+    )
+    assert create.status_code == 201
+    session = create.json()
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        (
+            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
+            'bounds="[177,2066][777,2123]" /></hierarchy>'
+        ),
+        (
+            '<hierarchy><node text="你好" class="android.widget.EditText" '
+            'package="com.aliyun.tongyi" bounds="[36,1882][1032,2002]" />'
+            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
+            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
+        ),
+    ]
+    device.app_current.side_effect = [
+        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
+        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
+    ]
+    device.screenshot.side_effect = [b"idle", b"editing"]
+    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
+
+    for step in ("idle", "editing"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
+            headers=headers,
+        )
+        assert capture.status_code == 200
+
+    return headers, session
+
+
 async def test_profile_builder_requires_auth(client):
     create = await client.post(
         "/api/v1/profile-builder/sessions",
@@ -165,40 +205,7 @@ async def test_profile_builder_session_enables_adb_keyboard_until_draft_finishes
 async def test_profile_builder_generate_draft_inject_llm_writes_triple_into_yaml(
     client, monkeypatch
 ):
-    headers = await _h(client)
-    create = await client.post(
-        "/api/v1/profile-builder/sessions",
-        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
-        headers=headers,
-    )
-    session = create.json()
-
-    device = MagicMock()
-    device.dump_hierarchy.side_effect = [
-        (
-            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
-        ),
-        (
-            '<hierarchy><node text="你好" class="android.widget.EditText" '
-            'package="com.aliyun.tongyi" bounds="[36,1882][1032,2002]" />'
-            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
-            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
-        ),
-    ]
-    device.app_current.side_effect = [
-        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
-        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
-    ]
-    device.screenshot.side_effect = [b"idle", b"editing"]
-    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
-
-    for step in ("idle", "editing"):
-        capture = await client.post(
-            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
-            headers=headers,
-        )
-        assert capture.status_code == 200
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
 
     with patch(
         "autoagent.api.config.check_llm_api",
@@ -226,40 +233,7 @@ async def test_profile_builder_generate_draft_inject_llm_writes_triple_into_yaml
 async def test_profile_builder_generate_draft_skips_llm_optimization_when_disabled(
     client, monkeypatch
 ):
-    headers = await _h(client)
-    create = await client.post(
-        "/api/v1/profile-builder/sessions",
-        json={"platform": "android", "device_serial": "serial-1", "name": "qwen"},
-        headers=headers,
-    )
-    session = create.json()
-
-    device = MagicMock()
-    device.dump_hierarchy.side_effect = [
-        (
-            '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
-        ),
-        (
-            '<hierarchy><node text="你好" class="android.widget.EditText" '
-            'package="com.aliyun.tongyi" bounds="[36,1882][1032,2002]" />'
-            '<node class="android.widget.FrameLayout" package="com.aliyun.tongyi" '
-            'bounds="[909,2009][1020,2120]" clickable="true" /></hierarchy>'
-        ),
-    ]
-    device.app_current.side_effect = [
-        {"package": "com.aliyun.tongyi", "activity": ".IdleActivity"},
-        {"package": "com.aliyun.tongyi", "activity": ".EditingActivity"},
-    ]
-    device.screenshot.side_effect = [b"idle", b"editing"]
-    monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", lambda serial: device)
-
-    for step in ("idle", "editing"):
-        capture = await client.post(
-            f"/api/v1/profile-builder/sessions/{session['id']}/capture/{step}",
-            headers=headers,
-        )
-        assert capture.status_code == 200
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
 
     llm_mock = AsyncMock(return_value={"package": "override.should.not.apply"})
     monkeypatch.setattr("autoagent.api.profile_builder.maybe_generate_llm_draft", llm_mock)
@@ -271,6 +245,71 @@ async def test_profile_builder_generate_draft_skips_llm_optimization_when_disabl
     )
     assert draft.status_code == 200, draft.text
     assert llm_mock.await_count == 0
+
+
+async def test_profile_builder_generate_rule_draft_requires_manual_review(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    llm_mock = AsyncMock(return_value={"package": "override.should.not.apply"})
+    monkeypatch.setattr("autoagent.api.profile_builder.maybe_generate_llm_draft", llm_mock)
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"draft_mode": "rule"},
+        headers=headers,
+    )
+    assert draft.status_code == 200, draft.text
+    body = draft.json()
+    assert body["draft_mode"] == "rule"
+    assert body["requires_manual_review"] is True
+    assert body["auto_review_source"] == "manual"
+    assert body["applied_review_choices"] == {}
+    assert body["pending_review_fields"]
+    assert llm_mock.await_count == 0
+
+
+async def test_profile_builder_generate_smart_draft_marks_auto_review_state(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    llm_mock = AsyncMock(
+        return_value={
+            "draft_overrides": {"package": "override.should.apply"},
+            "review_decisions": {"input_locator": 0},
+        }
+    )
+    monkeypatch.setattr("autoagent.api.profile_builder.maybe_generate_llm_draft", llm_mock)
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"draft_mode": "smart"},
+        headers=headers,
+    )
+    assert draft.status_code == 200, draft.text
+    body = draft.json()
+    assert body["draft_mode"] == "smart"
+    assert body["requires_manual_review"] is False
+    assert body["auto_review_source"] == "llm"
+    assert body["applied_review_choices"]
+    assert body["pending_review_fields"] == []
+    assert yaml.safe_load(body["draft_profile_yaml"])["package"] == "override.should.apply"
+    assert llm_mock.await_count == 1
+
+
+async def test_profile_builder_generate_draft_rejects_invalid_mode(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"draft_mode": "bad-mode"},
+        headers=headers,
+    )
+    assert draft.status_code == 422
 
 
 async def test_profile_builder_generate_draft_inject_llm_rejects_without_global_config(

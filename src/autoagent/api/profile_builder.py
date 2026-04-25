@@ -3,6 +3,7 @@ import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 from xml.etree import ElementTree
 
@@ -22,6 +23,7 @@ from autoagent.executors.profile_builder_capture import CapturedState, capture_a
 from autoagent.executors.profile_builder_generator import (
     maybe_generate_llm_draft,
     merge_llm_draft,
+    resolve_smart_draft,
 )
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
@@ -48,8 +50,14 @@ _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 class _GenerateDraftRequest(BaseModel):
-    use_llm_optimization: bool = True
+    draft_mode: Literal["rule", "smart"] = "rule"
+    use_llm_optimization: bool | None = None
     inject_llm: bool = False
+
+    def resolved_draft_mode(self) -> Literal["rule", "smart"]:
+        if self.use_llm_optimization is not None:
+            return "smart" if self.use_llm_optimization else "rule"
+        return self.draft_mode
 
 
 def reset_sessions_for_tests() -> None:
@@ -830,6 +838,7 @@ async def generate_draft(
     body: _GenerateDraftRequest = Body(default_factory=_GenerateDraftRequest),
 ) -> dict:
     session = _get_session_or_404(session_id)
+    draft_mode = body.resolved_draft_mode()
     try:
         captures = _require_complete_captures(session)
         idle_xml = _read_capture_xml(session, captures["idle"].xml_artifact)
@@ -864,10 +873,21 @@ async def generate_draft(
                 candidates=candidates,
                 captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
             )
-            if body.use_llm_optimization
+            if draft_mode == "smart"
             else None
         )
-        draft_profile = merge_llm_draft(rule_draft, llm_output)
+        smart_draft = (
+            resolve_smart_draft(
+                rule_draft=rule_draft,
+                review_items=candidates["review_items"],
+                llm_output=llm_output,
+            )
+            if draft_mode == "smart"
+            else None
+        )
+        draft_profile = (
+            smart_draft["draft"] if smart_draft is not None else merge_llm_draft(rule_draft, llm_output)
+        )
         if body.inject_llm:
             if not (vlm.base_url and vlm.model and vlm.api_key):
                 raise HTTPException(status_code=400, detail={"error": "llm_config_incomplete"})
@@ -909,6 +929,21 @@ async def generate_draft(
             "candidates": candidates,
             "review_items": candidates["review_items"],
             "draft_profile_yaml": draft_profile_yaml,
+            "draft_mode": draft_mode,
+            "requires_manual_review": (
+                smart_draft["requires_manual_review"] if smart_draft is not None else True
+            ),
+            "applied_review_choices": (
+                smart_draft["applied_review_choices"] if smart_draft is not None else {}
+            ),
+            "pending_review_fields": (
+                smart_draft["pending_review_fields"]
+                if smart_draft is not None
+                else [item["field"] for item in candidates["review_items"] if item.get("field")]
+            ),
+            "auto_review_source": (
+                smart_draft["auto_review_source"] if smart_draft is not None else "manual"
+            ),
         }
     finally:
         await _restore_builder_adb_keyboard(session)

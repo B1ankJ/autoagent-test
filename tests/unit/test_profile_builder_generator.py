@@ -2,9 +2,11 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from autoagent.executors.profile_builder_generator import (
+    apply_review_decisions,
     _has_llm_config,
     maybe_generate_llm_draft,
     merge_llm_draft,
+    resolve_smart_draft,
 )
 from autoagent.models.api import VLMConfig
 
@@ -42,6 +44,92 @@ def test_merge_llm_draft_prefers_rule_candidates_when_llm_field_is_missing():
 
     assert merged["input_locator"]["value"] == '//*[@class="android.widget.EditText"]'
     assert merged["send_button_locator"]["value"] == '//*[@bounds="[909,2009][1020,2120]"]'
+
+
+def test_apply_review_decisions_updates_draft_from_review_items():
+    draft = {
+        "input_locator": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'},
+        "send_action": [{"action": "tap_xy", "x": 10, "y": 20}],
+    }
+    review_items = [
+        {
+            "field": "input_locator",
+            "recommended_option": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'},
+            "alternative_candidates": [
+                {"type": "xpath", "value": '//*[@bounds="[3,3][4,4]"]'},
+            ],
+        },
+        {
+            "field": "send_action",
+            "recommended_option": [{"action": "tap_xy", "x": 10, "y": 20}],
+            "alternative_candidates": [
+                [{"action": "tap_xy", "x": 30, "y": 40}],
+            ],
+        },
+    ]
+
+    resolved, applied, pending = apply_review_decisions(
+        draft,
+        review_items,
+        {"input_locator": 1, "send_action": 0},
+    )
+
+    assert resolved["input_locator"]["value"] == '//*[@bounds="[3,3][4,4]"]'
+    assert resolved["send_action"] == [{"action": "tap_xy", "x": 10, "y": 20}]
+    assert applied == {"input_locator": 1, "send_action": 0}
+    assert pending == []
+
+
+def test_apply_review_decisions_leaves_invalid_choices_pending():
+    draft = {"input_locator": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'}}
+    review_items = [
+        {
+            "field": "input_locator",
+            "recommended_option": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'},
+            "alternative_candidates": [],
+        }
+    ]
+
+    resolved, applied, pending = apply_review_decisions(
+        draft,
+        review_items,
+        {"input_locator": 5},
+    )
+
+    assert resolved == draft
+    assert applied == {}
+    assert pending == ["input_locator"]
+
+
+def test_resolve_smart_draft_merges_overrides_and_review_decisions():
+    rule_draft = {
+        "package": "com.aliyun.tongyi",
+        "input_locator": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'},
+    }
+    review_items = [
+        {
+            "field": "input_locator",
+            "recommended_option": {"type": "xpath", "value": '//*[@bounds="[1,1][2,2]"]'},
+            "alternative_candidates": [
+                {"type": "xpath", "value": '//*[@bounds="[3,3][4,4]"]'},
+            ],
+        }
+    ]
+
+    result = resolve_smart_draft(
+        rule_draft=rule_draft,
+        review_items=review_items,
+        llm_output={
+            "draft_overrides": {"package": "override.pkg"},
+            "review_decisions": {"input_locator": 1},
+        },
+    )
+
+    assert result["draft"]["package"] == "override.pkg"
+    assert result["draft"]["input_locator"]["value"] == '//*[@bounds="[3,3][4,4]"]'
+    assert result["applied_review_choices"] == {"input_locator": 1}
+    assert result["requires_manual_review"] is False
+    assert result["auto_review_source"] == "llm"
 
 
 @pytest.mark.asyncio
@@ -111,8 +199,11 @@ async def test_maybe_generate_llm_draft_parses_json_response(httpx_mock: HTTPXMo
     )
 
     assert result == {
-        "send_button_locator": {
-            "type": "xpath",
-            "value": '//*[@bounds="[909,2009][1020,2120]"]',
-        }
+        "draft_overrides": {
+            "send_button_locator": {
+                "type": "xpath",
+                "value": '//*[@bounds="[909,2009][1020,2120]"]',
+            }
+        },
+        "review_decisions": {},
     }
