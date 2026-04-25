@@ -47,7 +47,7 @@ async def test_vlm_config_roundtrip(client):
     assert r.status_code == 200
     assert r.json() is None
 
-    body = {"base_url": "https://vlm.example.com/v1", "model": "v1", "api_key_env": "VLM_KEY"}
+    body = {"base_url": "https://vlm.example.com/v1", "model": "v1", "api_key": "VLM_KEY"}
     r = await client.put("/api/v1/config/vlm", json=body, headers=h)
     assert r.status_code == 200
 

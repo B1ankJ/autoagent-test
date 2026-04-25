@@ -35,7 +35,7 @@ async def test_profiles_crud(client):
             "api": {
                 "base_url": "https://api.openai.com/v1",
                 "model": "gpt-4o",
-                "api_key_env": "OPENAI_KEY",
+                "api_key": "OPENAI_KEY",
             },
         }
     )

@@ -131,7 +131,7 @@ export interface ScreenshotInfo {
 export interface VLMConfig {
   base_url: string
   model: string
-  api_key_env: string
+  api_key: string | null
   extra_headers?: Record<string, string>
 }
 

@@ -14,7 +14,7 @@ def _make_profile(**kwargs) -> ApiProfile:
         "api": {
             "base_url": "https://api.example.com/v1",
             "model": "gpt-4o",
-            "api_key_env": "OPENAI_TEST_KEY",
+            "api_key": "sk-test",
         },
     }
     base.update(kwargs)
@@ -39,8 +39,7 @@ def _mock_chat_response(mock: HTTPXMock, content: str) -> None:
     )
 
 
-async def test_single_turn(monkeypatch, httpx_mock: HTTPXMock):
-    monkeypatch.setenv("OPENAI_TEST_KEY", "sk-test")
+async def test_single_turn(httpx_mock: HTTPXMock):
     _mock_chat_response(httpx_mock, "hello there")
     sample = Sample(id="t1", prompts=["hi"], mode="api", target_profile="openai_gpt4")
     profile = _make_profile()
@@ -48,8 +47,7 @@ async def test_single_turn(monkeypatch, httpx_mock: HTTPXMock):
     assert result == ["hello there"]
 
 
-async def test_multi_turn_history(monkeypatch, httpx_mock: HTTPXMock):
-    monkeypatch.setenv("OPENAI_TEST_KEY", "sk-test")
+async def test_multi_turn_history(httpx_mock: HTTPXMock):
     _mock_chat_response(httpx_mock, "r1")
     _mock_chat_response(httpx_mock, "r2")
     sample = Sample(id="t1", prompts=["p1", "p2"], mode="api", target_profile="openai_gpt4")
@@ -65,8 +63,7 @@ async def test_multi_turn_history(monkeypatch, httpx_mock: HTTPXMock):
     assert len(body2["messages"]) >= 3  # user, assistant, user
 
 
-async def test_multi_turn_single_resets_history(monkeypatch, httpx_mock: HTTPXMock):
-    monkeypatch.setenv("OPENAI_TEST_KEY", "sk-test")
+async def test_multi_turn_single_resets_history(httpx_mock: HTTPXMock):
     _mock_chat_response(httpx_mock, "a")
     _mock_chat_response(httpx_mock, "b")
     sample = Sample(id="t1", prompts=["p1", "p2"], mode="api", target_profile="openai_gpt4")
@@ -79,8 +76,18 @@ async def test_multi_turn_single_resets_history(monkeypatch, httpx_mock: HTTPXMo
     assert len(body2["messages"]) == 1
 
 
-async def test_missing_api_key_env_raises(monkeypatch):
-    monkeypatch.delenv("OPENAI_TEST_KEY", raising=False)
+async def test_missing_api_key_raises():
     sample = Sample(id="t1", prompts=["hi"], mode="api", target_profile="openai_gpt4")
-    with pytest.raises(RuntimeError, match="env var OPENAI_TEST_KEY"):
-        await ApiExecutor().execute(sample, _make_profile(), ExecutorContext())
+    profile_no_key = ApiProfile.model_validate(
+        {
+            "name": "openai_gpt4",
+            "platform": "api",
+            "api": {
+                "base_url": "https://api.example.com/v1",
+                "model": "gpt-4o",
+                "api_key": "",
+            },
+        }
+    )
+    with pytest.raises(RuntimeError, match="api_key is not set"):
+        await ApiExecutor().execute(sample, profile_no_key, ExecutorContext())

@@ -20,7 +20,7 @@ def test_parse_api_profile():
             "api": {
                 "base_url": "https://api.openai.com/v1",
                 "model": "gpt-4o",
-                "api_key_env": "OPENAI_KEY",
+                "api_key": "OPENAI_KEY",
             },
         }
     )
@@ -79,7 +79,7 @@ def _api_yaml(name="openai_gpt4") -> str:
         {
             "name": name,
             "platform": "api",
-            "api": {"base_url": "https://x", "model": "m", "api_key_env": "K"},
+            "api": {"base_url": "https://x", "model": "m", "api_key": "K"},
         }
     )
 

@@ -25,7 +25,7 @@ def _profile() -> ApiProfile:
     return ApiProfile(
         name="fast",
         platform="api",
-        api=ApiConfig(base_url="http://x", model="m", api_key_env="NOTHING"),
+        api=ApiConfig(base_url="http://x", model="m", api_key="sk-test"),
     )
 
 

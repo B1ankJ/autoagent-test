@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Mode = Literal["api", "gui_pc_web", "gui_android"]
 SampleStatus = Literal[
@@ -120,9 +120,10 @@ class DeviceLabelUpdate(BaseModel):
 
 
 class VLMConfig(BaseModel):
-    base_url: str
-    model: str
-    api_key_env: str = "VLM_API_KEY"
+    model_config = ConfigDict(extra="forbid")
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
     extra_headers: dict[str, str] = Field(default_factory=dict)
 
 

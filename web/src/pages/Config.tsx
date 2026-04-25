@@ -47,8 +47,8 @@ export function ConfigPage() {
           <Form.Item name="model" label="Model" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="api_key_env" label="API Key Env Var" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item name="api_key" label="API Key">
+            <Input.Password />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={saveVlm.isPending}>
             保存

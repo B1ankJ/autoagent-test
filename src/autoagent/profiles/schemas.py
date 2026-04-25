@@ -50,7 +50,7 @@ CompleteDetection = Annotated[
 class ApiConfig(BaseModel):
     base_url: str
     model: str
-    api_key_env: str
+    api_key: str
     extra_headers: dict[str, str] = Field(default_factory=dict)
     temperature: float | None = None
     max_tokens: int | None = None

@@ -25,7 +25,7 @@ async def client(monkeypatch):
                 "api": {
                     "base_url": "https://api.example.com/v1",
                     "model": "m",
-                    "api_key_env": "OPENAI_TEST_KEY",
+                    "api_key": "OPENAI_TEST_KEY",
                 },
             }
         ),

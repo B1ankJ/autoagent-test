@@ -4,9 +4,9 @@ from autoagent.storage.database import init_db
 
 async def test_config_roundtrip():
     await init_db()
-    await put_config("vlm", {"base_url": "http://x", "model": "m", "api_key_env": "K"})
+    await put_config("vlm", {"base_url": "http://x", "model": "m", "api_key": "K"})
     v = await get_config("vlm")
-    assert v == {"base_url": "http://x", "model": "m", "api_key_env": "K"}
+    assert v == {"base_url": "http://x", "model": "m", "api_key": "K"}
 
 
 async def test_get_missing_returns_none():
