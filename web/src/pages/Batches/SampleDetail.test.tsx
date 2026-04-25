@@ -28,6 +28,14 @@ vi.mock('../../api/batches', async () => {
 })
 
 describe('SampleDetail', () => {
+  async function ensureRoundExpanded(label: RegExp) {
+    const toggle = screen.getByText(label)
+    const panelHeader = toggle.closest('.ant-collapse-header')
+    if (panelHeader?.getAttribute('aria-expanded') === 'false') {
+      await userEvent.click(toggle)
+    }
+  }
+
   it('shows screenshot links for the selected sample', async () => {
     useBatchStream.mockReturnValue({
       data: {
@@ -226,17 +234,58 @@ describe('SampleDetail', () => {
       { initialPath: '/batches/b4/samples/s4' },
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /第 1 轮/i }))
+    await ensureRoundExpanded(/第 1 轮/i)
     await waitFor(() => {
-      expect(screen.getByText(/规则抽取/)).toBeInTheDocument()
-      expect(screen.getByText(/LLM 抽取/)).toBeInTheDocument()
+      expect(screen.getByText('r1')).toBeInTheDocument()
       expect(screen.getByText('lr1')).toBeInTheDocument()
     })
 
-    await userEvent.click(screen.getByRole('button', { name: /第 2 轮/i }))
+    await ensureRoundExpanded(/第 2 轮/i)
     await waitFor(() => {
       expect(screen.getByText('r2')).toBeInTheDocument()
-      expect(screen.getByText(/LLM 错误: auth/)).toBeInTheDocument()
+      expect(screen.getByText(/LLM 提取失败/)).toBeInTheDocument()
+      expect(screen.getByText(/错误阶段: auth/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows an explicit llm-disabled hint when no llm extraction data exists', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b5',
+        name: 'Batch 5',
+        mode: 'gui_android',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 6,
+        samples: [
+          {
+            id: 's5',
+            prompts_sent: ['hi'],
+            mode: 'gui_android',
+            target_profile: 'qwen_android',
+            status: 'done',
+            responses: ['rule only'],
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([])
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b5/samples/s5' },
+    )
+
+    await ensureRoundExpanded(/第 1 轮/i)
+    await waitFor(() => {
+      expect(screen.getByText('rule only')).toBeInTheDocument()
+      expect(screen.getByText('未启用 LLM 提取')).toBeInTheDocument()
     })
   })
 })

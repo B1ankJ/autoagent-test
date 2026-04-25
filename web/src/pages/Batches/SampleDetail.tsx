@@ -2,6 +2,7 @@ import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from '
 import { useNavigate, useParams } from 'react-router-dom'
 import { downloadSampleActions } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
+import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
 
@@ -62,7 +63,7 @@ export function SampleDetail() {
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
   const summary = metadataSummary(sample?.metadata)
-  const hasLLMResponses = !!sample?.llm_responses?.length
+  const llmEnabled = !!(sample?.llm_responses || sample?.llm_errors)
 
   if (!data) {
     return <div>加载中...</div>
@@ -117,8 +118,10 @@ export function SampleDetail() {
 
       <Card title="Prompts + Responses">
         <Collapse
+          defaultActiveKey={promptRounds.map((_, index) => String(index))}
           items={promptRounds.map((prompt, index) => ({
             key: String(index),
+            forceRender: true,
             label: `第 ${index + 1} 轮`,
             children: (
               <Space direction="vertical" style={{ width: '100%' }}>
@@ -128,27 +131,12 @@ export function SampleDetail() {
                 <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
                   {prompt}
                 </Typography.Paragraph>
-                <div>
-                  <strong>规则抽取:</strong>
-                </div>
-                <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-                  {sample.responses?.[index] ?? '(无响应)'}
-                </Typography.Paragraph>
-                {hasLLMResponses ? (
-                  <>
-                    <div>
-                      <strong>LLM 抽取:</strong>
-                    </div>
-                    <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>
-                      {sample.llm_responses?.[index] || '(空)'}
-                    </Typography.Paragraph>
-                    {sample.llm_errors?.[index] ? (
-                      <Typography.Text type="secondary">
-                        {`LLM 错误: ${sample.llm_errors[index]}`}
-                      </Typography.Text>
-                    ) : null}
-                  </>
-                ) : null}
+                <ResponseComparison
+                  ruleResponse={sample.responses?.[index]}
+                  llmResponse={sample.llm_responses?.[index]}
+                  llmError={sample.llm_errors?.[index]}
+                  llmEnabled={llmEnabled}
+                />
               </Space>
             ),
           }))}

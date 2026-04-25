@@ -112,6 +112,8 @@ export interface SingleTestSyncResponse {
   id: string
   status: SampleStatus
   responses: string[]
+  llm_responses?: string[]
+  llm_errors?: Array<string | null>
   duration_ms?: number
   error?: string
 }

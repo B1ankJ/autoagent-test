@@ -13,6 +13,7 @@ import {
 } from 'antd'
 import { useState } from 'react'
 import { client } from '../../api/client'
+import { ResponseComparison } from '../../components/ResponseComparison'
 import { useProfiles } from '../../api/profiles'
 import { useAsyncResult, useRunAsync } from '../../api/tests'
 import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
@@ -85,6 +86,7 @@ export function TestsQuick() {
     asyncResult.data?.status === 'cancelled'
       ? asyncResult.data
       : undefined)
+  const llmEnabled = !!(currentResult?.llm_responses || currentResult?.llm_errors)
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -141,13 +143,18 @@ export function TestsQuick() {
             <Typography.Paragraph type="danger">{currentResult.error}</Typography.Paragraph>
           ) : null}
           <Collapse
+            defaultActiveKey={(currentResult.responses ?? []).map((_, index) => String(index))}
             items={(currentResult.responses ?? []).map((response, index) => ({
               key: String(index),
+              forceRender: true,
               label: `第 ${index + 1} 轮响应`,
               children: (
-                <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-                  {response}
-                </Typography.Paragraph>
+                <ResponseComparison
+                  ruleResponse={response}
+                  llmResponse={currentResult.llm_responses?.[index]}
+                  llmError={currentResult.llm_errors?.[index]}
+                  llmEnabled={llmEnabled}
+                />
               ),
             }))}
           />
