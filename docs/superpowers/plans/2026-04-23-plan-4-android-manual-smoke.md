@@ -241,6 +241,14 @@ Expected:
 - Other samples should not wedge indefinitely
 - Later scheduling should reflect device availability
 
+Result (2026-04-25):
+
+- Passed on a real Android device with no blocking issues.
+- Config-page connectivity test correctly rejected bad credentials and accepted a valid triple.
+- Builder-generated profile YAML included `base_url`, `model`, and `api_key` when LLM injection was enabled.
+- Quick Test and SampleDetail both showed separate `规则提取` and `LLM 提取` outputs for LLM-enabled profiles.
+- Runtime LLM failure remained non-fatal and surfaced through the LLM column as expected.
+
 ## Optional fallback: manual YAML profile
 
 Only use this if Builder is blocked and you need to isolate whether the regression is in Builder or

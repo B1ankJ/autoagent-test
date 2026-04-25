@@ -14,6 +14,10 @@
 
 **Delivery:** ship at tag `llm-response-extraction-v0.5.0` after manual smoke succeeds.
 
+**Status (2026-04-25):** All implementation, documentation, automated verification, and real-device manual smoke tasks are complete. Release tag `llm-response-extraction-v0.5.0` is created locally for this completion point.
+
+**Completed commits:** `3859c0f`, `d51e10d`, `c8ed00c`, `0a253fa`, `1e2c452`, `4fa16ab`, `0f38bee`, `cdc95a0`, `1b0412b`, `beeee2a`, `df63543`, `dd683a6`, `6f85025`, `22a9aae`, `bfb33bb`, `d688bd3`, `a5ef728`.
+
 ---
 
 ## File Structure
@@ -2031,7 +2035,7 @@ git commit -m "feat(web): SampleDetail two-column rule vs LLM response view"
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`
 
-- [ ] **Step 1: Update CLAUDE.md**
+- [x] **Step 1: Update CLAUDE.md**
 
 Under "Conventions", remove any mentions of `PROFILE_BUILDER_LLM_*` env vars. Add:
 
@@ -2051,7 +2055,7 @@ Under "Development status", flip Plan 4 status note to include this feature, e.g
 
 (Only add this line after the smoke steps in Step 2 are green and tag is pushed.)
 
-- [ ] **Step 2: Extend the Android manual smoke plan**
+- [x] **Step 2: Extend the Android manual smoke plan**
 
 Append to `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`:
 
@@ -2066,7 +2070,7 @@ Append to `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`:
 6. Graceful failure: edit the YAML to change `api_key` to garbage; rerun. Sample status is still `done`; `llm_responses[i]=""`, `llm_errors[i]="auth"`; SampleDetail shows an auth error under the LLM column.
 ```
 
-- [ ] **Step 3: Run full suite outside sandbox (Playwright + Android markers skipped for CI subset)**
+- [x] **Step 3: Run full suite outside sandbox (Playwright + Android markers skipped for CI subset)**
 
 ```
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
@@ -2074,11 +2078,18 @@ cd web && pnpm test && pnpm lint && pnpm build
 ```
 Expected: all green.
 
-- [ ] **Step 4: Execute the smoke steps above on a real Android device**
+Verified on branch `plan4-android-executor`:
+
+- `python3.11 -m pytest -q -m "not playwright and not android and not slow"` → pass
+- `cd web && pnpm test && pnpm lint && pnpm build` → pass
+
+- [x] **Step 4: Execute the smoke steps above on a real Android device**
 
 Record outcomes in the smoke doc under a new "Result" block, matching the style of prior smoke runs.
 
-- [ ] **Step 5: Commit docs + tag release**
+Result: completed on a real Android device on 2026-04-25; smoke passed with no blocking issues found.
+
+- [x] **Step 5: Commit docs + tag release**
 
 ```
 git add CLAUDE.md docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md
