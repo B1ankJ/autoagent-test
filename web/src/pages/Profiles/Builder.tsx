@@ -4,6 +4,7 @@ import {
   App,
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Empty,
   Form,
@@ -14,11 +15,13 @@ import {
   Space,
   Steps,
   Tag,
+  Tooltip,
   Typography,
   Col,
 } from 'antd'
 import { useEffect, useState } from 'react'
 
+import { useVLM } from '../../api/config'
 import {
   useApplyProfileBuilderReview,
   useCaptureProfileBuilderStep,
@@ -182,10 +185,12 @@ export default function Builder() {
   const applyReview = useApplyProfileBuilderReview()
   const validateDraft = useValidateProfileBuilderDraft()
   const saveProfile = useSaveProfile()
+  const { data: vlm } = useVLM()
   const { message } = App.useApp()
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
   const [profileName, setProfileName] = useState('qwen_android')
+  const [injectLlm, setInjectLlm] = useState(false)
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
   const [connectivitySummary, setConnectivitySummary] = useState<string | null>(null)
@@ -200,6 +205,7 @@ export default function Builder() {
   const runtime = useProfileBuilderRuntime(session?.id)
   const requiredReviewFields = draft ? Array.from(new Set(draft.review_items.map((item) => item.field))) : []
   const unresolvedReviewFields = requiredReviewFields.filter((field) => !appliedReviewChoices[field])
+  const vlmReady = !!(vlm?.base_url && vlm?.model && vlm?.api_key)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
   const completedSteps = new Set(
@@ -285,7 +291,7 @@ export default function Builder() {
       setSelectedScreenPath(latestScreen.path)
       setSelectedStageKey(latestScreen.step)
     }
-  }, [followLatestScreen, latestScreen?.path, latestScreen?.step, selectedScreenPath, selectedStageKey])
+  }, [followLatestScreen, latestScreen, selectedScreenPath, selectedStageKey])
 
   useEffect(() => {
     setImageNaturalSize(null)
@@ -390,7 +396,7 @@ export default function Builder() {
       return
     }
     try {
-      const nextDraft = await generateDraft.mutateAsync(session.id)
+      const nextDraft = await generateDraft.mutateAsync({ sessionId: session.id, injectLlm })
       setSession(nextDraft.session)
       setDraft(nextDraft)
       setConnectivitySummary(null)
@@ -596,6 +602,18 @@ export default function Builder() {
         >
           Generate Draft
         </Button>
+        <div style={{ marginTop: 12 }}>
+          <Tooltip title={vlmReady ? '' : '先在 Config 页面配置完整 VLM 凭据'}>
+            <Checkbox
+              checked={injectLlm}
+              disabled={!vlmReady}
+              onChange={(event) => setInjectLlm(event.target.checked)}
+              aria-label="生成时注入 LLM 响应抽取配置"
+            >
+              生成时注入 LLM 响应抽取配置
+            </Checkbox>
+          </Tooltip>
+        </div>
       </Card>
 
       {session ? (

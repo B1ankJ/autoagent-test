@@ -62,6 +62,7 @@ export function SampleDetail() {
   const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
   const summary = metadataSummary(sample?.metadata)
+  const hasLLMResponses = !!sample?.llm_responses?.length
 
   if (!data) {
     return <div>加载中...</div>
@@ -128,11 +129,26 @@ export function SampleDetail() {
                   {prompt}
                 </Typography.Paragraph>
                 <div>
-                  <strong>Response:</strong>
+                  <strong>规则抽取:</strong>
                 </div>
                 <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
                   {sample.responses?.[index] ?? '(无响应)'}
                 </Typography.Paragraph>
+                {hasLLMResponses ? (
+                  <>
+                    <div>
+                      <strong>LLM 抽取:</strong>
+                    </div>
+                    <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>
+                      {sample.llm_responses?.[index] || '(空)'}
+                    </Typography.Paragraph>
+                    {sample.llm_errors?.[index] ? (
+                      <Typography.Text type="secondary">
+                        {`LLM 错误: ${sample.llm_errors[index]}`}
+                      </Typography.Text>
+                    ) : null}
+                  </>
+                ) : null}
               </Space>
             ),
           }))}

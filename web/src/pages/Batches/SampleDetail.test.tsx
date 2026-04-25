@@ -189,4 +189,54 @@ describe('SampleDetail', () => {
       expect(screen.getByText('echo: hello')).toBeInTheDocument()
     })
   })
+
+  it('renders rule and llm responses side by side when llm output exists', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b4',
+        name: 'Batch 4',
+        mode: 'gui_android',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 5,
+        samples: [
+          {
+            id: 's4',
+            prompts_sent: ['hi', 'hello'],
+            mode: 'gui_android',
+            target_profile: 'qwen_android',
+            status: 'done',
+            responses: ['r1', 'r2'],
+            llm_responses: ['lr1', ''],
+            llm_errors: [null, 'auth'],
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([])
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b4/samples/s4' },
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /第 1 轮/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/规则抽取/)).toBeInTheDocument()
+      expect(screen.getByText(/LLM 抽取/)).toBeInTheDocument()
+      expect(screen.getByText('lr1')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /第 2 轮/i }))
+    await waitFor(() => {
+      expect(screen.getByText('r2')).toBeInTheDocument()
+      expect(screen.getByText(/LLM 错误: auth/)).toBeInTheDocument()
+    })
+  })
 })

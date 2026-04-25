@@ -13,6 +13,7 @@ const {
   validateDraftMock,
   saveProfileMock,
   fetchArtifactBlobUrlMock,
+  useVlmMock,
 } = vi.hoisted(() => ({
   createSessionMock: vi.fn(),
   captureStepMock: vi.fn(),
@@ -21,6 +22,9 @@ const {
   validateDraftMock: vi.fn(),
   saveProfileMock: vi.fn(async () => ({ name: 'qwen_android' })),
   fetchArtifactBlobUrlMock: vi.fn(async (_sessionId: string, name: string) => `blob:${name}`),
+  useVlmMock: vi.fn<[], { data: { base_url: string; model: string; api_key: string | null } }>(
+    () => ({ data: { base_url: 'u', model: 'm', api_key: 'k' } }),
+  ),
 }))
 let runtimeMockData: unknown = null
 
@@ -81,11 +85,123 @@ vi.mock('../../api/profiles', () => ({
   }),
 }))
 
+vi.mock('../../api/config', () => ({
+  useVLM: () => useVlmMock(),
+}))
+
 describe('Builder', () => {
   afterEach(() => {
     vi.clearAllMocks()
     fetchArtifactBlobUrlMock.mockImplementation(async (_sessionId: string, name: string) => `blob:${name}`)
     runtimeMockData = null
+    useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: 'k' } }))
+  })
+
+  it('passes injectLlm=true when enabled', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'draft',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: [],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+      ],
+    })
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml'],
+        captures: [],
+      },
+      candidates: { input_candidates: [], send_candidates: [], response_candidates: [], review_items: [] },
+      review_items: [],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByLabelText('生成时注入 LLM 响应抽取配置'))
+    await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+
+    await waitFor(() => {
+      expect(generateDraftMock).toHaveBeenCalledWith({ sessionId: 'pb_1', injectLlm: true })
+    })
+  })
+
+  it('disables inject_llm toggle when global VLM config is incomplete', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: null } }))
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'draft',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: [],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('生成时注入 LLM 响应抽取配置')).toBeDisabled()
+    })
   })
 
   it('renders guided builder steps', async () => {
@@ -267,7 +383,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Run Connectivity Test/ }))
 
     await waitFor(() => {
-      expect(generateDraftMock).toHaveBeenCalledWith('pb_1')
+      expect(generateDraftMock).toHaveBeenCalledWith({ sessionId: 'pb_1', injectLlm: false })
     })
     expect(applyReviewMock).toHaveBeenCalled()
     expect(saveProfileMock).toHaveBeenCalledWith({

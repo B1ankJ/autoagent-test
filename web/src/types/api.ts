@@ -37,6 +37,8 @@ export interface Sample {
   logs_dir?: string
   attempt_count?: number
   prompts_sent?: string[]
+  llm_responses?: string[]
+  llm_errors?: Array<string | null>
   started_at?: string
   ended_at?: string
   device_serial?: string | null

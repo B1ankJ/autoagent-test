@@ -2,6 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { GlobalDefaults, VLMConfig } from '../types/api'
 import { client } from './client'
 
+export interface LLMCheckResult {
+  ok: boolean
+  stage: 'connect' | 'auth' | 'model_not_found' | 'response_shape' | 'ok'
+  message: string
+  latency_ms: number
+}
+
 export function useVLM() {
   return useQuery({
     queryKey: ['config', 'vlm'],
@@ -15,6 +22,13 @@ export function useSaveVLM() {
   return useMutation({
     mutationFn: async (body: VLMConfig) => (await client.put('/config/vlm', body)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'vlm'] }),
+  })
+}
+
+export function useTestLLM() {
+  return useMutation({
+    mutationFn: async (body: { base_url: string; model: string; api_key: string }) =>
+      (await client.post<LLMCheckResult>('/config/vlm/test', body)).data,
   })
 }
 

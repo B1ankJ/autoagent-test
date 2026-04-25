@@ -29,10 +29,11 @@ export function useCaptureProfileBuilderStep() {
 
 export function useGenerateProfileBuilderDraft() {
   return useMutation({
-    mutationFn: async (sessionId: string) =>
+    mutationFn: async (args: { sessionId: string; injectLlm?: boolean }) =>
       (
         await client.post<ProfileBuilderDraftResponse>(
-          `/profile-builder/sessions/${sessionId}/draft`,
+          `/profile-builder/sessions/${args.sessionId}/draft`,
+          { inject_llm: !!args.injectLlm },
         )
       ).data,
   })
