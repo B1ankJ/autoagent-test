@@ -19,6 +19,7 @@ from autoagent.executors.complete_detector import (
     wait_for_ui_tree_stable,
 )
 from autoagent.executors.response_extractor import OcrExtractor, UiTreeExtractor
+from autoagent.executors.response_llm_extractor import extract_response_via_llm
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import ActionStep, AndroidProfile
@@ -286,6 +287,16 @@ class AndroidExecutor(Executor):
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=after_result_path, label=f"after_result_{idx}")
                     )
+                    if profile.llm_response_enabled():
+                        llm_res = await extract_response_via_llm(
+                            prompt=prompt,
+                            xml=xml or "",
+                            base_url=profile.base_url,
+                            model=profile.model,
+                            api_key=profile.api_key,
+                        )
+                        ctx.llm_responses.append(llm_res.text)
+                        ctx.llm_errors.append(llm_res.error)
         except Exception:
             error_path = store.artifact_path("on_error", "png")
             try:

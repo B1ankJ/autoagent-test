@@ -1,9 +1,10 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from autoagent.executors.android_executor import AndroidExecutor
 from autoagent.executors.base import ExecutorContext
+from autoagent.executors.response_llm_extractor import LLMExtractionResult
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import (
     AndroidProfile,
@@ -506,6 +507,174 @@ async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
     recovery_target.click.assert_called_once()
     input_target.click.assert_called_once()
     device.shell.assert_called_once_with(["input", "text", "hi"])
+
+
+@pytest.mark.asyncio
+async def test_execute_skips_llm_when_profile_does_not_enable_it(monkeypatch, tmp_path) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hi"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+    ctx = ExecutorContext(device_serial="emulator-5554", verbose_logs=True)
+
+    fake_extract = AsyncMock()
+    monkeypatch.setattr("autoagent.executors.android_executor.extract_response_via_llm", fake_extract)
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(sample, profile, ctx)
+
+    assert out == ["echo: hi"]
+    fake_extract.assert_not_awaited()
+    assert ctx.llm_responses == []
+    assert ctx.llm_errors == []
+
+
+@pytest.mark.asyncio
+async def test_execute_calls_llm_per_round_when_profile_enables_it(monkeypatch, tmp_path) -> None:
+    device = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+    xmls = iter(
+        [
+            '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>',
+            '<hierarchy><node class="android.widget.TextView" text="echo: bb"/></hierarchy>',
+        ]
+    )
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return next(xmls)
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        base_url="u",
+        model="m",
+        api_key="k",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hi", "bb"],
+        mode="gui_android",
+        target_profile="fake_android",
+        retry=0,
+    )
+    ctx = ExecutorContext(device_serial="emulator-5554", verbose_logs=True)
+
+    fake_extract = AsyncMock(
+        side_effect=[
+            LLMExtractionResult(text="LLM_A", error=None, latency_ms=10),
+            LLMExtractionResult(text="", error="auth", latency_ms=5),
+        ]
+    )
+    monkeypatch.setattr("autoagent.executors.android_executor.extract_response_via_llm", fake_extract)
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(sample, profile, ctx)
+
+    assert out == ["echo: hi", "echo: bb"]
+    assert fake_extract.await_count == 2
+    assert ctx.llm_responses == ["LLM_A", ""]
+    assert ctx.llm_errors == [None, "auth"]
 
 
 @pytest.mark.asyncio

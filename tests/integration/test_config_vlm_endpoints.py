@@ -73,3 +73,36 @@ async def test_post_vlm_test_requires_triple(client):
         headers=h,
     )
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_put_vlm_rejects_bad_connectivity(client):
+    h = await _h(client)
+    fake = CheckResult(ok=False, stage="auth", message="bad key", latency_ms=9)
+    with patch(
+        "autoagent.api.config.check_llm_api",
+        new=AsyncMock(return_value=fake),
+    ) as m:
+        r = await client.put(
+            "/api/v1/config/vlm",
+            json={"base_url": "u", "model": "m", "api_key": "bad"},
+            headers=h,
+        )
+    assert r.status_code == 400
+    assert r.json()["detail"]["stage"] == "auth"
+    assert r.json()["detail"]["message"] == "bad key"
+    m.assert_awaited_once_with("u", "m", "bad")
+
+
+@pytest.mark.asyncio
+async def test_put_vlm_allows_empty_triple_without_connectivity_check(client):
+    h = await _h(client)
+    with patch("autoagent.api.config.check_llm_api", new=AsyncMock()) as m:
+        r = await client.put(
+            "/api/v1/config/vlm",
+            json={"base_url": None, "model": None, "api_key": None},
+            headers=h,
+        )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"base_url": None, "model": None, "api_key": None, "extra_headers": {}}
+    m.assert_not_called()

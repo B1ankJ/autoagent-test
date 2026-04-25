@@ -8,9 +8,9 @@ from xml.etree import ElementTree
 
 import uiautomator2 as u2
 import yaml
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from autoagent.api.tests import execute_sync_test
 from autoagent.auth.deps import require_user
@@ -45,6 +45,10 @@ router = APIRouter(
 
 _SESSIONS: dict[str, ProfileBuilderSessionView] = {}
 _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+class _GenerateDraftRequest(BaseModel):
+    inject_llm: bool = False
 
 
 def reset_sessions_for_tests() -> None:
@@ -820,7 +824,10 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
 
 
 @router.post("/sessions/{session_id}/draft")
-async def generate_draft(session_id: str) -> dict:
+async def generate_draft(
+    session_id: str,
+    body: _GenerateDraftRequest = Body(default_factory=_GenerateDraftRequest),
+) -> dict:
     session = _get_session_or_404(session_id)
     try:
         captures = _require_complete_captures(session)
@@ -856,6 +863,20 @@ async def generate_draft(session_id: str) -> dict:
             captures={step: capture.model_dump(mode="json") for step, capture in captures.items()},
         )
         draft_profile = merge_llm_draft(rule_draft, llm_output)
+        if body.inject_llm:
+            if not (vlm.base_url and vlm.model and vlm.api_key):
+                raise HTTPException(status_code=400, detail={"error": "llm_config_incomplete"})
+            items = list(draft_profile.items())
+            insert_after = next(
+                (idx + 1 for idx, (key, _) in enumerate(items) if key == "serial"),
+                len(items),
+            )
+            draft_profile = dict(
+                items[:insert_after]
+                + [("base_url", vlm.base_url), ("model", vlm.model), ("api_key", vlm.api_key)]
+                + items[insert_after:]
+                + []
+            )
 
         artifact_dir = Path(session.artifact_dir)
         (artifact_dir / "candidates.json").write_text(

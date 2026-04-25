@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
@@ -32,6 +32,16 @@ async def get_vlm() -> VLMConfig | None:
 
 @router.put("/vlm", response_model=VLMConfig)
 async def put_vlm(body: VLMConfig) -> VLMConfig:
+    triple = [body.base_url, body.model, body.api_key]
+    if any(value is not None for value in triple):
+        if not all(value is not None for value in triple):
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "vlm_config_incomplete"},
+            )
+        check = await check_llm_api(body.base_url, body.model, body.api_key)
+        if not check.ok:
+            raise HTTPException(status_code=400, detail=asdict(check))
     await put_config("vlm", body.model_dump())
     return body
 
