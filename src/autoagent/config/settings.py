@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     data_root: Path = Path("./data")
     logs_root: Path = Path("./logs")
     adb_keyboard_apk_path: Path = Path(__file__).parent.parent / "fixtures" / "ADBKeyboard.apk"
-    profile_builder_llm_base_url: str | None = None
-    profile_builder_llm_model: str | None = None
-    profile_builder_llm_api_key: str | None = None
-    profile_builder_llm_timeout_sec: float = 30.0
 
     default_api_timeout_sec: int = 60
     default_gui_timeout_sec: int = 180
