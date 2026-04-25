@@ -21,6 +21,8 @@ class ExecutorContext:
     action_replay_path: Path | None = None
     screenshot_index: list[Any] = field(default_factory=list)
     device_serial: str | None = None
+    llm_responses: list[str] = field(default_factory=list)
+    llm_errors: list[str | None] = field(default_factory=list)
 
 
 def _merge_ctx_metadata(sample: Sample, ctx: ExecutorContext) -> dict[str, Any]:
@@ -100,6 +102,8 @@ class Executor(ABC):
             status=status if status == "done" else ("timeout" if status == "timeout" else "failed"),
             prompts_sent=list(sample.prompts),
             responses=responses,
+            llm_responses=list(ctx.llm_responses),
+            llm_errors=list(ctx.llm_errors),
             duration_ms=int((time.monotonic() - t0) * 1000),
             attempt_count=attempts,
             mode=sample.mode,
