@@ -1,4 +1,6 @@
+import asyncio
 import json
+import threading
 from pathlib import Path
 
 from autoagent.executors import profile_builder_new_session
@@ -338,6 +340,69 @@ async def test_capture_new_session_step_recapture_archives_previous_artifacts(
     assert archived_png[0].name in body["session"]["artifacts"]
 
 
+async def test_capture_new_session_step_recapture_archives_same_second_without_collision(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    capture_round = {"value": 0}
+
+    class _FixedDateTime:
+        @staticmethod
+        def now(_tz=None):
+            class _FixedMoment:
+                @staticmethod
+                def strftime(_fmt):
+                    return "20260426123456"
+
+            return _FixedMoment()
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        capture_round["value"] += 1
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text(f"<hierarchy round='{capture_round['value']}'/>", encoding="utf-8")
+        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode("utf-8"))
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.datetime", _FixedDateTime)
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        lambda **_kwargs: {"x": 111, "y": 222, "reason": "plus button"},
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    for _ in range(3):
+        response = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+    archived_xml = sorted(artifact_dir.glob("capture_new_session_step_0_*.xml"))
+    archived_png = sorted(artifact_dir.glob("capture_new_session_step_0_*.png"))
+    assert len(archived_xml) == 2
+    assert len(archived_png) == 2
+    assert sorted(path.read_text(encoding="utf-8") for path in archived_xml) == [
+        "<hierarchy round='1'/>",
+        "<hierarchy round='2'/>",
+    ]
+    assert sorted(path.read_bytes() for path in archived_png) == [b"png-1", b"png-2"]
+
+
 async def test_capture_new_session_step_recapture_failure_preserves_previous_artifacts(
     client, monkeypatch
 ):
@@ -408,6 +473,83 @@ async def test_capture_new_session_step_recapture_failure_preserves_previous_art
     assert xml_download.text == "<hierarchy round='1'/>"
     assert png_download.content == b"png-1"
 
+
+async def test_capture_new_session_step_stays_consistent_during_overlapping_config_change(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    recommend_started = threading.Event()
+    allow_recommend = threading.Event()
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    def _recommend(**_kwargs):
+        recommend_started.set()
+        allow_recommend.wait()
+        return {"x": 111, "y": 222, "reason": "plus button"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        _recommend,
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    capture_task = asyncio.create_task(
+        client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+            headers=headers,
+        )
+    )
+    await asyncio.to_thread(recommend_started.wait)
+
+    reconfig_task = asyncio.create_task(
+        client.put(
+            f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+            json={"strategy": "disabled", "step_count": 0},
+            headers=headers,
+        )
+    )
+
+    await asyncio.sleep(0)
+    allow_recommend.set()
+
+    capture_response = await capture_task
+    reconfig_response = await reconfig_task
+
+    assert capture_response.status_code == 200, capture_response.text
+    assert reconfig_response.status_code == 200, reconfig_response.text
+    capture_body = capture_response.json()
+    assert capture_body["new_session_strategy"] == "guided_tap_sequence"
+    assert capture_body["new_session_steps"][0]["recommended_tap"]["status"] == "ready"
+    assert capture_body["new_session_steps"][0]["xml_artifact"] == "new_session_step_0.xml"
+    assert (artifact_dir / "new_session_step_0.xml").exists()
+    assert (artifact_dir / "new_session_step_0.png").exists()
+
+    final_response = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}",
+        headers=headers,
+    )
+    assert final_response.status_code == 200, final_response.text
+    assert "new_session_step_0.xml" in final_response.json()["artifacts"]
 
 async def test_capture_new_session_step_malformed_recommendation_degrades_to_failed(
     client, monkeypatch

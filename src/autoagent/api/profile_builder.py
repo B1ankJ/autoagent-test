@@ -505,8 +505,9 @@ def _archive_capture_artifacts(
 ) -> ProfileBuilderCaptureArtifact:
     session_dir = Path(session.artifact_dir)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    archived_xml = f"capture_{capture.step}_{timestamp}.xml"
-    archived_png = f"capture_{capture.step}_{timestamp}.png"
+    archive_token = f"{timestamp}_{uuid4().hex[:8]}"
+    archived_xml = f"capture_{capture.step}_{archive_token}.xml"
+    archived_png = f"capture_{capture.step}_{archive_token}.png"
     xml_path = session_dir / capture.xml_artifact
     png_path = session_dir / capture.screenshot_artifact
     if xml_path.exists():
@@ -527,6 +528,7 @@ def _stage_new_session_step_artifacts_for_recapture(
     step_state: dict,
 ) -> list[tuple[Path, Path, Path]]:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    archive_token = f"{timestamp}_{uuid4().hex[:8]}"
     session_dir = Path(session.artifact_dir)
     step_index = step_state["step_index"]
     staged: list[tuple[Path, Path, Path]] = []
@@ -541,13 +543,13 @@ def _stage_new_session_step_artifacts_for_recapture(
         artifact_path = session_dir / artifact_name
         if not artifact_path.exists():
             continue
-        staged_path = session_dir / f"{artifact_name}.{timestamp}.recapture.tmp"
+        staged_path = session_dir / f"{artifact_name}.{archive_token}.recapture.tmp"
         artifact_path.replace(staged_path)
         staged.append(
             (
                 artifact_path,
                 staged_path,
-                session_dir / f"capture_new_session_step_{step_index}_{timestamp}{suffix}",
+                session_dir / f"capture_new_session_step_{step_index}_{archive_token}{suffix}",
             )
         )
     return staged
@@ -1125,42 +1127,40 @@ async def capture_new_session_step(
 
         step_count = len(state["steps"])
         stored_session = _store_session(session)
-
-    step = {
-        "step_index": step_index,
-        "xml_artifact": captured.xml_path.name,
-        "screenshot_artifact": captured.screenshot_path.name,
-        "recommended_tap": {"point": None, "reason": None, "status": "idle"},
-        "confirmed_tap": None,
-        "source": None,
-    }
-
-    xml_text = captured.xml_path.read_text(encoding="utf-8")
-    raw_vlm = await get_config("vlm")
-    vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
-    recommendation_failed = False
-    try:
-        recommendation = await asyncio.to_thread(
-            profile_builder_new_session.recommend_tap_point,
-            screenshot_path=captured.screenshot_path,
-            xml_text=xml_text,
-            step_index=step_index,
-            step_count=step_count,
-            vlm=vlm,
-        )
-    except profile_builder_new_session.RecommendationProviderError:
-        recommendation_failed = True
-    else:
-        step["recommended_tap"] = {
-            "point": {"x": recommendation["x"], "y": recommendation["y"]},
-            "reason": recommendation["reason"],
-            "status": "ready",
+        step = {
+            "step_index": step_index,
+            "xml_artifact": captured.xml_path.name,
+            "screenshot_artifact": captured.screenshot_path.name,
+            "recommended_tap": {"point": None, "reason": None, "status": "idle"},
+            "confirmed_tap": None,
+            "source": None,
         }
 
-    if recommendation_failed:
-        step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
+        xml_text = captured.xml_path.read_text(encoding="utf-8")
+        raw_vlm = await get_config("vlm")
+        vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
+        recommendation_failed = False
+        try:
+            recommendation = await asyncio.to_thread(
+                profile_builder_new_session.recommend_tap_point,
+                screenshot_path=captured.screenshot_path,
+                xml_text=xml_text,
+                step_index=step_index,
+                step_count=step_count,
+                vlm=vlm,
+            )
+        except profile_builder_new_session.RecommendationProviderError:
+            recommendation_failed = True
+        else:
+            step["recommended_tap"] = {
+                "point": {"x": recommendation["x"], "y": recommendation["y"]},
+                "reason": recommendation["reason"],
+                "status": "ready",
+            }
 
-    async with _get_session_lock(session_id):
+        if recommendation_failed:
+            step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
+
         session = _get_session_or_404(session_id)
         state = _require_guided_new_session_step(session, step_index)
         steps = [dict(item) for item in state["steps"]]
