@@ -25,7 +25,7 @@ class Sample(BaseModel):
     prompts: list[str] = Field(min_length=1)
     mode: Mode
     target_profile: str
-    new_session: bool = True
+    new_session: bool = False
     timeout_sec: int | None = None
     retry: int = 2
     dry_run: bool = False

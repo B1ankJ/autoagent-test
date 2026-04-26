@@ -122,7 +122,7 @@ class AndroidExecutor(Executor):
                 ]
                 if "adb_keyboard" in resolved_methods:
                     await input_ctl.prepare_for_prompt(sample.prompts[0])
-                if profile.new_session_action:
+                if sample.new_session and profile.new_session_action:
                     sample_log.info("android sample %s running new_session_action", sample.id)
                     await action_runner.run(profile.new_session_action)
                 for idx, prompt in enumerate(sample.prompts, start=1):

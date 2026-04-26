@@ -24,7 +24,7 @@ def load_csv(text: str) -> list[Sample]:
                 "prompts": prompts,
                 "mode": row["mode"],
                 "target_profile": row["target_profile"],
-                "new_session": _parse_bool(row.get("new_session", "true")),
+                "new_session": _parse_bool(row.get("new_session", "false")),
                 "metadata": md,
             }
         )

@@ -6,7 +6,7 @@ from autoagent.models.api import BatchCreateJSON, BatchSummary, Sample, SampleRe
 
 def test_sample_defaults():
     s = Sample(id="t1", prompts=["hi"], mode="api", target_profile="p")
-    assert s.new_session is True
+    assert s.new_session is False
     assert s.retry == 2
     assert s.dry_run is False
     assert s.metadata == {}

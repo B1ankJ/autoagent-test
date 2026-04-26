@@ -69,6 +69,7 @@ async def test_tests_sync_routes_to_web_executor(client: AsyncClient) -> None:
         "prompts": ["hi"],
         "mode": "gui_pc_web",
         "target_profile": "fake_site",
+        "new_session": True,
         "retry": 0,
         "timeout_sec": 60,
     }
