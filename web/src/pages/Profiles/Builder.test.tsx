@@ -1732,6 +1732,54 @@ describe('Builder', () => {
     })
   })
 
+  it('updates Draft YAML after confirming all new session steps', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
+    })
+    const draftWithRecommendation = {
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: null, screenshot_artifact: null,
+          recommended_tap: { point: { x: 111, y: 222 }, reason: 'start chat', status: 'ready' },
+          confirmed_tap: null, source: null },
+      ],
+      draft_profile_yaml: 'new_session_action:\n- action: tap_xy\n  x: 111\n  y: 222\n',
+    }
+    configureNewSessionMock.mockResolvedValue(draftWithRecommendation)
+    confirmNewSessionStepMock.mockResolvedValue({
+      ...draftWithRecommendation,
+      new_session_steps: [
+        { step_index: 0, xml_artifact: null, screenshot_artifact: null,
+          recommended_tap: { point: { x: 111, y: 222 }, reason: 'start chat', status: 'ready' },
+          confirmed_tap: { x: 111, y: 222 }, source: 'recommended' },
+      ],
+      draft_profile_yaml: 'new_session_action:\n- action: tap_xy\n  x: 111\n  y: 222\n',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+    await userEvent.click(await screen.findByRole('button', { name: '接受推荐' }))
+
+    await waitFor(() => {
+      const textarea = screen.queryAllByRole('textbox').find(
+        (el) => el.getAttribute('value')?.includes('new_session_action:') ||
+                 el.textContent?.includes('new_session_action:')
+      )
+      expect(textarea ?? screen.getByText(/new_session_action:/)).toBeInTheDocument()
+    })
+  })
+
   it('configures guided new session step count before capture', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({

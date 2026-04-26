@@ -726,3 +726,33 @@ async def test_confirm_new_session_step_rejects_fake_recommended_choice(client, 
 
     assert response.status_code == 422, response.text
     assert response.json()["detail"] == "recommended tap is not available for this step"
+
+
+async def test_confirmed_steps_are_returned_in_order_in_draft_yaml(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 2},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    step0 = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/confirm",
+        json={"x": 100, "y": 200, "source": "manual"},
+        headers=headers,
+    )
+    assert step0.status_code == 200, step0.text
+
+    step1 = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/1/confirm",
+        json={"x": 200, "y": 300, "source": "manual"},
+        headers=headers,
+    )
+    assert step1.status_code == 200, step1.text
+    body = step1.json()
+
+    yaml_text = body["draft_profile_yaml"]
+    assert yaml_text.count("action: tap_xy") == 2
+    assert yaml_text.index("x: 100") < yaml_text.index("x: 200")
