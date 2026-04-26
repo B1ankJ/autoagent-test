@@ -30,6 +30,7 @@ from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderDraftResponse,
     ProfileBuilderNewSessionConfigRequest,
+    ProfileBuilderNewSessionConfirmRequest,
     ProfileBuilderNewSessionStep,
     ProfileBuilderRuntimeCapture,
     ProfileBuilderRuntimeConnectivity,
@@ -1178,6 +1179,42 @@ async def capture_new_session_step(
         )
     return _draft_response_payload(
         session=stored_session,
+        draft_profile_yaml=draft_profile_yaml,
+        state=state,
+    )
+
+
+@router.put(
+    "/sessions/{session_id}/new-session/step/{step_index}/confirm",
+    response_model=ProfileBuilderDraftResponse,
+)
+async def confirm_new_session_step(
+    session_id: str,
+    step_index: int,
+    body: ProfileBuilderNewSessionConfirmRequest,
+) -> ProfileBuilderDraftResponse:
+    async with _get_session_lock(session_id):
+        session = _get_session_or_404(session_id)
+        state = _require_guided_new_session_step(session, step_index)
+        steps = [dict(item) for item in state["steps"]]
+        updated_step = dict(steps[step_index])
+        updated_step["confirmed_tap"] = {"x": body.x, "y": body.y}
+        updated_step["source"] = body.source
+        steps[step_index] = ProfileBuilderNewSessionStep.model_validate(updated_step).model_dump(
+            mode="json"
+        )
+        state = _store_new_session_state(
+            session.id,
+            {"strategy": state["strategy"], "steps": steps},
+        )
+        draft_profile = _draft_profile_for_state(session, state)
+        draft_profile_yaml = (
+            _write_draft_profile_yaml(session, draft_profile)
+            if _draft_profile_path(session).exists()
+            else _dump_draft_profile_yaml(draft_profile)
+        )
+    return _draft_response_payload(
+        session=session,
         draft_profile_yaml=draft_profile_yaml,
         state=state,
     )

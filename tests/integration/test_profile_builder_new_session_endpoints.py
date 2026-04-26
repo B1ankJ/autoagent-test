@@ -605,3 +605,73 @@ async def test_capture_new_session_step_malformed_recommendation_degrades_to_fai
         "reason": None,
         "status": "failed",
     }
+
+
+async def test_confirm_new_session_step_writes_tap_xy_into_draft_yaml(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 2},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/1/confirm",
+        json={"x": 321, "y": 654, "source": "manual"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["new_session_strategy"] == "guided_tap_sequence"
+    assert body["new_session_steps"][1]["confirmed_tap"] == {"x": 321, "y": 654}
+    assert body["new_session_steps"][1]["source"] == "manual"
+    assert "new_session_action:" in body["draft_profile_yaml"]
+    assert "- action: tap_xy" in body["draft_profile_yaml"]
+    assert "x: 321" in body["draft_profile_yaml"]
+    assert "y: 654" in body["draft_profile_yaml"]
+
+
+async def test_disable_new_session_strategy_clears_yaml_sequence(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    draft_path = artifact_dir / "draft_profile.yaml"
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    confirmed = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/confirm",
+        json={"x": 11, "y": 22, "source": "recommended"},
+        headers=headers,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert "x: 11" in confirmed.json()["draft_profile_yaml"]
+
+    generated = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"draft_mode": "rule", "inject_llm": False},
+        headers=headers,
+    )
+    assert generated.status_code == 200, generated.text
+    assert draft_path.exists()
+
+    disabled = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "disabled", "step_count": 0},
+        headers=headers,
+    )
+
+    assert disabled.status_code == 200, disabled.text
+    body = disabled.json()
+    assert body["new_session_strategy"] == "disabled"
+    assert body["new_session_steps"] == []
+    assert "new_session_action: []" in body["draft_profile_yaml"]
+    assert "x: 11" not in body["draft_profile_yaml"]
+    assert "new_session_action: []" in draft_path.read_text(encoding="utf-8")
