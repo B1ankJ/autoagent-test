@@ -224,10 +224,15 @@ def _get_new_session_state(session: ProfileBuilderSessionView) -> dict:
         [dict(step) for step in raw_steps if isinstance(step, dict)],
         step_count,
     )
-    validated_steps = [
-        ProfileBuilderNewSessionStep.model_validate(step).model_dump(mode="json")
-        for step in normalized_steps
-    ]
+    try:
+        validated_steps = [
+            ProfileBuilderNewSessionStep.model_validate(step).model_dump(mode="json")
+            for step in normalized_steps
+        ]
+    except ValidationError:
+        normalized = _default_new_session_state()
+        _store_new_session_state(session.id, normalized)
+        return normalized
     normalized = {
         "strategy": strategy,
         "steps": validated_steps if strategy == "guided_tap_sequence" else [],
@@ -534,6 +539,10 @@ def _write_draft_profile_yaml(session: ProfileBuilderSessionView, draft_profile:
     draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
     _draft_profile_path(session).write_text(draft_profile_yaml, encoding="utf-8")
     return draft_profile_yaml
+
+
+def _dump_draft_profile_yaml(draft_profile: dict) -> str:
+    return yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
 
 
 def _runtime_screens_for_validation(
@@ -980,18 +989,23 @@ async def configure_new_session(
     session_id: str,
     body: ProfileBuilderNewSessionConfigRequest,
 ) -> ProfileBuilderDraftResponse:
-    session = _get_session_or_404(session_id)
-    steps = (
-        _resize_new_session_steps(_get_new_session_state(session)["steps"], body.step_count)
-        if body.strategy == "guided_tap_sequence"
-        else []
-    )
-    state = _store_new_session_state(
-        session.id,
-        {"strategy": body.strategy, "steps": steps},
-    )
-    draft_profile = _draft_profile_for_state(session, state)
-    draft_profile_yaml = _write_draft_profile_yaml(session, draft_profile)
+    async with _get_session_lock(session_id):
+        session = _get_session_or_404(session_id)
+        steps = (
+            _resize_new_session_steps(_get_new_session_state(session)["steps"], body.step_count)
+            if body.strategy == "guided_tap_sequence"
+            else []
+        )
+        state = _store_new_session_state(
+            session.id,
+            {"strategy": body.strategy, "steps": steps},
+        )
+        draft_profile = _draft_profile_for_state(session, state)
+        draft_profile_yaml = (
+            _write_draft_profile_yaml(session, draft_profile)
+            if _draft_profile_path(session).exists()
+            else _dump_draft_profile_yaml(draft_profile)
+        )
     return _draft_response_payload(
         session=session,
         draft_profile_yaml=draft_profile_yaml,
@@ -1089,7 +1103,7 @@ async def generate_draft(
             json.dumps(candidates["review_items"], indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        draft_profile_yaml = yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
+        draft_profile_yaml = _dump_draft_profile_yaml(draft_profile)
         (artifact_dir / "draft_profile.yaml").write_text(draft_profile_yaml, encoding="utf-8")
 
         updated = _store_session(session.model_copy(update={"status": "ready"}))
