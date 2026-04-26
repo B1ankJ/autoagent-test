@@ -522,13 +522,14 @@ def _archive_capture_artifacts(
     )
 
 
-def _archive_new_session_step_artifacts(
+def _stage_new_session_step_artifacts_for_recapture(
     session: ProfileBuilderSessionView,
     step_state: dict,
-) -> None:
+) -> list[tuple[Path, Path, Path]]:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     session_dir = Path(session.artifact_dir)
     step_index = step_state["step_index"]
+    staged: list[tuple[Path, Path, Path]] = []
     artifacts = (
         ("xml_artifact", ".xml"),
         ("screenshot_artifact", ".png"),
@@ -540,8 +541,33 @@ def _archive_new_session_step_artifacts(
         artifact_path = session_dir / artifact_name
         if not artifact_path.exists():
             continue
-        archived_name = f"capture_new_session_step_{step_index}_{timestamp}{suffix}"
-        artifact_path.replace(session_dir / archived_name)
+        staged_path = session_dir / f"{artifact_name}.{timestamp}.recapture.tmp"
+        artifact_path.replace(staged_path)
+        staged.append(
+            (
+                artifact_path,
+                staged_path,
+                session_dir / f"capture_new_session_step_{step_index}_{timestamp}{suffix}",
+            )
+        )
+    return staged
+
+
+def _restore_staged_new_session_step_artifacts(
+    staged_artifacts: list[tuple[Path, Path, Path]]
+) -> None:
+    for original_path, staged_path, _archive_path in staged_artifacts:
+        if not staged_path.exists():
+            continue
+        staged_path.replace(original_path)
+
+
+def _finalize_staged_new_session_step_artifacts(
+    staged_artifacts: list[tuple[Path, Path, Path]]
+) -> None:
+    for _original_path, staged_path, archive_path in staged_artifacts:
+        if staged_path.exists():
+            staged_path.replace(archive_path)
 
 
 def _require_complete_captures(
@@ -1078,7 +1104,9 @@ async def capture_new_session_step(
         session = _get_session_or_404(session_id)
         state = _require_guided_new_session_step(session, step_index)
         step_name = f"new_session_step_{step_index}"
-        _archive_new_session_step_artifacts(session, state["steps"][step_index])
+        staged_artifacts = _stage_new_session_step_artifacts_for_recapture(
+            session, state["steps"][step_index]
+        )
 
         try:
             captured = await capture_android_state(
@@ -1088,10 +1116,12 @@ async def capture_new_session_step(
                 enable_adb_keyboard=False,
             )
         except Exception as exc:
+            _restore_staged_new_session_step_artifacts(staged_artifacts)
             raise HTTPException(
                 status_code=502,
                 detail=f"profile builder capture failed: {exc}",
             ) from exc
+        _finalize_staged_new_session_step_artifacts(staged_artifacts)
 
         step_count = len(state["steps"])
         stored_session = _store_session(session)

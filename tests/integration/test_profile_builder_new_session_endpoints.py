@@ -336,3 +336,130 @@ async def test_capture_new_session_step_recapture_archives_previous_artifacts(
     assert archived_png[0].read_bytes() == b"png-1"
     assert archived_xml[0].name in body["session"]["artifacts"]
     assert archived_png[0].name in body["session"]["artifacts"]
+
+
+async def test_capture_new_session_step_recapture_failure_preserves_previous_artifacts(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    state_path = artifact_dir / "new_session_state.json"
+    capture_round = {"value": 0}
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        capture_round["value"] += 1
+        if capture_round["value"] == 2:
+            raise RuntimeError("capture broke")
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy round='1'/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png-1")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        lambda **_kwargs: {"x": 111, "y": 222, "reason": "plus button"},
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    first = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+    first_step = first.json()["new_session_steps"][0]
+
+    second = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert second.status_code == 502, second.text
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    step = state["steps"][0]
+    assert step["xml_artifact"] == first_step["xml_artifact"]
+    assert step["screenshot_artifact"] == first_step["screenshot_artifact"]
+    assert (artifact_dir / step["xml_artifact"]).read_text(encoding="utf-8") == "<hierarchy round='1'/>"
+    assert (artifact_dir / step["screenshot_artifact"]).read_bytes() == b"png-1"
+
+    xml_download = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}/artifacts/{step['xml_artifact']}",
+        headers=headers,
+    )
+    png_download = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}/artifacts/{step['screenshot_artifact']}",
+        headers=headers,
+    )
+    assert xml_download.status_code == 200, xml_download.text
+    assert png_download.status_code == 200
+    assert xml_download.text == "<hierarchy round='1'/>"
+    assert png_download.content == b"png-1"
+
+
+async def test_capture_new_session_step_malformed_recommendation_degrades_to_failed(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    class _MalformedResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": [{"type": "text", "text": "not json"}]}}]}
+
+    async def _get_config(_key):
+        return {"base_url": "http://vlm.test", "model": "demo", "api_key": "secret"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    monkeypatch.setattr("autoagent.api.profile_builder.get_config", _get_config)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.httpx.post",
+        lambda *args, **kwargs: _MalformedResponse(),
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    step = response.json()["new_session_steps"][0]
+    assert step["recommended_tap"] == {
+        "point": None,
+        "reason": None,
+        "status": "failed",
+    }

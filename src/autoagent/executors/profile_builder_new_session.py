@@ -128,19 +128,20 @@ def recommend_tap_point(
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise RecommendationProviderError(str(exc)) from exc
-    data = response.json()
     try:
+        data = response.json()
         content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise ValueError(f"unexpected new-session recommendation shape: {data}") from exc
-
-    parsed = json.loads(_content_to_text(content))
-    if not isinstance(parsed, dict):
-        raise ValueError("new-session recommendation must decode to an object")
-    if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
-        raise ValueError("new-session recommendation requires integer x/y")
-    if not isinstance(parsed.get("reason"), str) or not parsed["reason"].strip():
-        raise ValueError("new-session recommendation requires reason")
+        parsed = json.loads(_content_to_text(content))
+        if not isinstance(parsed, dict):
+            raise ValueError("new-session recommendation must decode to an object")
+        if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
+            raise ValueError("new-session recommendation requires integer x/y")
+        if not isinstance(parsed.get("reason"), str) or not parsed["reason"].strip():
+            raise ValueError("new-session recommendation requires reason")
+    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RecommendationProviderError(
+            f"malformed new-session recommendation response: {exc}"
+        ) from exc
     return {
         "x": parsed["x"],
         "y": parsed["y"],
