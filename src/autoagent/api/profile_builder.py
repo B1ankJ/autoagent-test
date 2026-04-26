@@ -18,6 +18,7 @@ from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.devices.adb import set_ime
 from autoagent.executors.android_input import ensure_adb_keyboard_ready
+from autoagent.executors import profile_builder_new_session
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 from autoagent.executors.profile_builder_capture import CapturedState, capture_android_state
 from autoagent.executors.profile_builder_generator import (
@@ -265,6 +266,18 @@ def _new_session_action_from_state(state: dict) -> list[dict]:
             }
         )
     return action
+
+
+def _require_guided_new_session_step(
+    session: ProfileBuilderSessionView,
+    step_index: int,
+) -> dict:
+    state = _get_new_session_state(session)
+    if state["strategy"] != "guided_tap_sequence":
+        raise HTTPException(status_code=422, detail="new-session guided flow is not configured")
+    if step_index < 0 or step_index >= len(state["steps"]):
+        raise HTTPException(status_code=422, detail=f"unknown new-session step index: {step_index}")
+    return state
 
 
 def _draft_profile_preview(session: ProfileBuilderSessionView) -> dict:
@@ -1017,6 +1030,87 @@ async def configure_new_session(
         )
     return _draft_response_payload(
         session=session,
+        draft_profile_yaml=draft_profile_yaml,
+        state=state,
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/new-session/step/{step_index}/capture",
+    response_model=ProfileBuilderDraftResponse,
+)
+async def capture_new_session_step(
+    session_id: str,
+    step_index: int,
+) -> ProfileBuilderDraftResponse:
+    session = _get_session_or_404(session_id)
+    try:
+        device = await asyncio.to_thread(u2.connect, session.device_serial)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"profile builder capture connect failed: {exc}",
+        ) from exc
+
+    async with _get_session_lock(session_id):
+        session = _get_session_or_404(session_id)
+        state = _require_guided_new_session_step(session, step_index)
+        step_name = f"new_session_step_{step_index}"
+
+        try:
+            captured = await capture_android_state(
+                device=device,
+                session_dir=Path(session.artifact_dir),
+                step=step_name,
+                enable_adb_keyboard=False,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"profile builder capture failed: {exc}",
+            ) from exc
+
+        step = dict(state["steps"][step_index])
+        step["xml_artifact"] = captured.xml_path.name
+        step["screenshot_artifact"] = captured.screenshot_path.name
+        step["confirmed_tap"] = None
+        step["source"] = None
+
+        xml_text = captured.xml_path.read_text(encoding="utf-8")
+        raw_vlm = await get_config("vlm")
+        vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
+        try:
+            recommendation = profile_builder_new_session.recommend_tap_point(
+                screenshot_path=captured.screenshot_path,
+                xml_text=xml_text,
+                step_index=step_index,
+                step_count=len(state["steps"]),
+                vlm=vlm,
+            )
+        except Exception:
+            step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
+        else:
+            step["recommended_tap"] = {
+                "point": {"x": recommendation["x"], "y": recommendation["y"]},
+                "reason": recommendation["reason"],
+                "status": "ready",
+            }
+
+        steps = [dict(item) for item in state["steps"]]
+        steps[step_index] = ProfileBuilderNewSessionStep.model_validate(step).model_dump(mode="json")
+        state = _store_new_session_state(
+            session.id,
+            {"strategy": state["strategy"], "steps": steps},
+        )
+        stored_session = _store_session(session)
+        draft_profile = _draft_profile_for_state(stored_session, state)
+        draft_profile_yaml = (
+            _write_draft_profile_yaml(stored_session, draft_profile)
+            if _draft_profile_path(stored_session).exists()
+            else _dump_draft_profile_yaml(draft_profile)
+        )
+    return _draft_response_payload(
+        session=stored_session,
         draft_profile_yaml=draft_profile_yaml,
         state=state,
     )
