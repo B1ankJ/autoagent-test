@@ -220,10 +220,26 @@ class ProfileBuilderNewSessionStep(BaseModel):
     confirmed_tap: ProfileBuilderTapPoint | None = None
     source: Literal["recommended", "manual"] | None = None
 
+    @model_validator(mode="after")
+    def _confirmed_tap_and_source_match(self) -> "ProfileBuilderNewSessionStep":
+        if self.source is not None and self.confirmed_tap is None:
+            raise ValueError("source requires confirmed_tap")
+        if self.confirmed_tap is not None and self.source is None:
+            raise ValueError("confirmed_tap requires source")
+        return self
+
 
 class ProfileBuilderNewSessionConfigRequest(BaseModel):
     strategy: Literal["disabled", "guided_tap_sequence"]
     step_count: int = Field(default=0, ge=0, le=3)
+
+    @model_validator(mode="after")
+    def _strategy_matches_step_count(self) -> "ProfileBuilderNewSessionConfigRequest":
+        if self.strategy == "disabled" and self.step_count != 0:
+            raise ValueError("disabled strategy requires step_count=0")
+        if self.strategy == "guided_tap_sequence" and self.step_count <= 0:
+            raise ValueError("guided_tap_sequence requires step_count>0")
+        return self
 
 
 class ProfileBuilderNewSessionConfirmRequest(BaseModel):
