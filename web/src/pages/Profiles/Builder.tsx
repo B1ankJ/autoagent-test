@@ -26,7 +26,7 @@ import {
   Typography,
   Col,
 } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useVLM } from '../../api/config'
 import {
@@ -204,6 +204,10 @@ function collectAllEvidenceRefs(item: ReviewItem): ReviewEvidenceRef[] {
     .filter((ref): ref is ReviewEvidenceRef => Boolean(ref?.artifact))
 }
 
+function reviewItemKey(item: ReviewItem, index: number): string {
+  return `${item.field}-${index}`
+}
+
 export default function Builder() {
   const devices = useDevices()
   const createSession = useCreateProfileBuilderSession()
@@ -231,9 +235,23 @@ export default function Builder() {
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
+  const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
+  const [showUnresolvedOnly, setShowUnresolvedOnly] = useState(false)
   const runtime = useProfileBuilderRuntime(session?.id)
+  const reviewEntries = useMemo(
+    () => draft?.review_items.map((item, index) => ({ item, index, key: reviewItemKey(item, index) })) ?? [],
+    [draft],
+  )
   const requiredReviewFields = draft ? Array.from(new Set(draft.review_items.map((item) => item.field))) : []
   const unresolvedReviewFields = draft?.pending_review_fields ?? requiredReviewFields.filter((field) => !appliedReviewChoices[field])
+  const unresolvedFieldSet = useMemo(() => new Set(unresolvedReviewFields), [unresolvedReviewFields])
+  const filteredReviewEntries = reviewEntries.filter(
+    ({ item }) => !showUnresolvedOnly || unresolvedFieldSet.has(item.field),
+  )
+  const activeReviewEntry =
+    filteredReviewEntries.find((entry) => entry.key === activeReviewKey) ??
+    reviewEntries.find((entry) => entry.key === activeReviewKey) ??
+    null
   const vlmReady = !!(vlm?.base_url && vlm?.model && vlm?.api_key)
 
   const onlineAndroidDevices = (devices.data ?? []).filter((device) => device.online && device.enabled)
@@ -281,6 +299,16 @@ export default function Builder() {
     ...(runtimeData?.recent_screens ?? []),
     ...(runtimeData?.connectivity.screens ?? []),
   ].filter((screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index)
+  const relatedEvidenceRefs = activeReviewEntry ? collectAllEvidenceRefs(activeReviewEntry.item) : []
+  const relatedEvidenceScreens = relatedEvidenceRefs
+    .map((ref) => ({
+      step: ref.step,
+      label: ref.label ?? screenLabelFromPath(ref.artifact),
+      path: ref.artifact,
+      taken_at:
+        availableScreens.find((screen) => screen.path === ref.artifact)?.taken_at ?? new Date(0).toISOString(),
+    }))
+    .filter((screen, index, all) => all.findIndex((candidate) => candidate.path === screen.path) === index)
   const latestScreen = availableScreens[availableScreens.length - 1] ?? null
   const latestScreenForStage = (step: string | null) =>
     step != null ? availableScreens.filter((screen) => screen.step === step).slice(-1)[0] ?? null : null
@@ -398,6 +426,8 @@ export default function Builder() {
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices({})
       setExpandedReviewItems({})
+      setActiveReviewKey(null)
+      setShowUnresolvedOnly(false)
       setDraftMode(vlmReady ? 'smart' : 'rule')
       setInjectLlm(false)
       message.success('Builder session 已创建')
@@ -440,6 +470,7 @@ export default function Builder() {
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices(appliedChoiceLabelsFromDraft(nextDraft))
       setExpandedReviewItems({})
+      setShowUnresolvedOnly(false)
       message.success('Draft profile 已生成')
     } catch (error) {
       message.error((error as Error).message)
@@ -536,6 +567,56 @@ export default function Builder() {
       [key]: !previous[key],
     }))
   }
+
+  const focusReviewItem = (item: ReviewItem, key: string, expand = false) => {
+    setActiveReviewKey(key)
+    if (expand) {
+      setExpandedReviewItems((previous) => ({ ...previous, [key]: true }))
+    }
+    if (!collectAllEvidenceRefs(item).length) {
+      setSelectedEvidenceRefs([])
+      setSelectedEvidenceLabel(null)
+      return
+    }
+    const recommendedRefs = item.evidence_refs.length ? item.evidence_refs : collectAllEvidenceRefs(item)
+    const target = recommendedRefs[0]
+    setFollowLatestScreen(false)
+    setSelectedStageKey(target.step)
+    setSelectedScreenPath(target.artifact)
+    setSelectedEvidenceRefs(recommendedRefs)
+    setSelectedEvidenceLabel(`${item.field} · 推荐定位`)
+  }
+
+  useEffect(() => {
+    if (!reviewEntries.length) {
+      setActiveReviewKey(null)
+      return
+    }
+    const activeStillExists = activeReviewKey && reviewEntries.some((entry) => entry.key === activeReviewKey)
+    if (activeStillExists) {
+      return
+    }
+    const nextActive =
+      reviewEntries.find(({ item }) => unresolvedFieldSet.has(item.field))?.key ?? reviewEntries[0]?.key ?? null
+    setActiveReviewKey(nextActive)
+  }, [activeReviewKey, reviewEntries, unresolvedFieldSet])
+
+  useEffect(() => {
+    if (!activeReviewEntry) {
+      return
+    }
+    const refs = collectAllEvidenceRefs(activeReviewEntry.item)
+    if (refs.length) {
+      const recommendedRefs =
+        activeReviewEntry.item.evidence_refs.length ? activeReviewEntry.item.evidence_refs : refs
+      const target = recommendedRefs[0]
+      setFollowLatestScreen(false)
+      setSelectedStageKey(target.step)
+      setSelectedScreenPath(target.artifact)
+      setSelectedEvidenceRefs(recommendedRefs)
+      setSelectedEvidenceLabel(`${activeReviewEntry.item.field} · 推荐定位`)
+    }
+  }, [activeReviewEntry])
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -787,24 +868,69 @@ export default function Builder() {
                 <Empty description="先完成 capture 并生成 draft" />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }}>
-                  {draft.review_items.map((item, index) => (
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+                    <Space wrap>
+                      <Checkbox
+                        checked={showUnresolvedOnly}
+                        onChange={(event) => setShowUnresolvedOnly(event.target.checked)}
+                        aria-label="仅看未完成"
+                      >
+                        仅看未完成
+                      </Checkbox>
+                      <Button
+                        size="small"
+                        onClick={() => setExpandedReviewItems({})}
+                        disabled={!Object.values(expandedReviewItems).some(Boolean)}
+                      >
+                        全部收起
+                      </Button>
+                    </Space>
+                    <Typography.Text type="secondary">
+                      {unresolvedReviewFields.length} / {reviewEntries.length} 未完成
+                    </Typography.Text>
+                  </Space>
+                  {!filteredReviewEntries.length ? (
+                    <Empty description="当前筛选下没有待处理 Review Items" />
+                  ) : null}
+                  {filteredReviewEntries.map(({ item, key }) => (
                     (() => {
-                      const reviewKey = `${item.field}-${index}`
-                      const expanded = !!expandedReviewItems[reviewKey]
+                      const expanded = !!expandedReviewItems[key]
+                      const isActive = activeReviewKey === key
+                      const isApplied = !!appliedReviewChoices[item.field]
+                      const isUnresolved = unresolvedFieldSet.has(item.field)
                       return (
                     <Alert
-                      key={reviewKey}
-                      type="warning"
+                      key={key}
+                      type={isUnresolved ? 'warning' : 'success'}
                       showIcon
                       message={`${item.field}: ${item.reason}`}
+                      style={{
+                        cursor: 'pointer',
+                        borderColor: isActive ? '#1677ff' : undefined,
+                        boxShadow: isActive ? '0 0 0 1px rgba(22, 119, 255, 0.18)' : undefined,
+                      }}
+                      onClick={() => focusReviewItem(item, key)}
                       action={
-                        <Button
-                          size="small"
-                          onClick={() => toggleReviewItem(reviewKey)}
-                          icon={expanded ? <UpOutlined /> : <DownOutlined />}
-                        >
-                          {expanded ? '收起详情' : '展开详情'}
-                        </Button>
+                        <Space size="small" wrap>
+                          <Tag color={isApplied ? 'green' : draft?.draft_mode === 'smart' ? 'blue' : 'gold'}>
+                            {isApplied
+                              ? '已应用'
+                              : draft?.draft_mode === 'smart'
+                                ? '智能预选'
+                                : '待确认'}
+                          </Tag>
+                          <Button
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              focusReviewItem(item, key)
+                              toggleReviewItem(key)
+                            }}
+                            icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                          >
+                            {expanded ? '收起详情' : '展开详情'}
+                          </Button>
+                        </Space>
                       }
                       description={
                         expanded ? (
@@ -951,14 +1077,18 @@ export default function Builder() {
               style={{
                 position: 'sticky',
                 top: 16,
-                maxHeight: 'calc(100vh - 32px)',
-                overflowY: 'auto',
               }}
             >
               {!runtimeData ? (
                 <Empty description="暂无关键截图" />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {activeReviewEntry ? (
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <Typography.Text strong>{activeReviewEntry.item.field}</Typography.Text>
+                      <Typography.Text type="secondary">{activeReviewEntry.item.reason}</Typography.Text>
+                    </Space>
+                  ) : null}
                   {currentScreen ? (
                     <>
                       <Typography.Text strong>{currentScreen.label}</Typography.Text>
@@ -1039,7 +1169,40 @@ export default function Builder() {
                       Follow Latest
                     </Button>
                   </Space>
+                  {relatedEvidenceScreens.length ? (
+                    <>
+                      <Typography.Text strong>Related Evidence</Typography.Text>
+                      <List
+                        size="small"
+                        dataSource={relatedEvidenceScreens}
+                        renderItem={(item) => (
+                          <List.Item
+                            style={{
+                              cursor: 'pointer',
+                              background:
+                                item.path === currentScreen?.path ? 'rgba(22, 119, 255, 0.08)' : undefined,
+                              borderRadius: 8,
+                              paddingInline: 8,
+                            }}
+                            onClick={() => {
+                              setFollowLatestScreen(false)
+                              setSelectedStageKey(item.step)
+                              setSelectedScreenPath(item.path)
+                            }}
+                          >
+                            <Space direction="vertical" size={0} style={{ width: '100%' }}>
+                              <Typography.Text strong={item.path === currentScreen?.path}>
+                                {item.label}
+                              </Typography.Text>
+                              <Typography.Text type="secondary">{item.step}</Typography.Text>
+                            </Space>
+                          </List.Item>
+                        )}
+                      />
+                    </>
+                  ) : null}
                   <List
+                    header="All Screens"
                     size="small"
                     dataSource={availableScreens.slice().reverse()}
                     renderItem={(item) => (
