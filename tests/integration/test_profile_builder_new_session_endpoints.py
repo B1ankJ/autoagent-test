@@ -113,3 +113,53 @@ async def test_generate_draft_recovers_malformed_new_session_state(client, monke
         "strategy": "disabled",
         "steps": [],
     }
+
+
+async def test_generate_draft_recovers_empty_guided_new_session_state(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    state_path = artifact_dir / "new_session_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "strategy": "guided_tap_sequence",
+                "steps": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={"draft_mode": "rule", "inject_llm": False},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["new_session_strategy"] == "disabled"
+    assert body["new_session_steps"] == []
+    assert json.loads(state_path.read_text(encoding="utf-8")) == {
+        "strategy": "disabled",
+        "steps": [],
+    }
+
+
+async def test_new_session_state_file_is_hidden_from_session_artifacts(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    response = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 2},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+
+    get_response = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}",
+        headers=headers,
+    )
+
+    assert get_response.status_code == 200, get_response.text
+    assert "new_session_state.json" not in get_response.json()["artifacts"]

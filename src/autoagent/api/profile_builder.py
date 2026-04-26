@@ -92,6 +92,10 @@ def _new_session_state_path(session_id: str) -> Path:
     return _session_dir(session_id) / "new_session_state.json"
 
 
+def _is_internal_artifact_name(name: str) -> bool:
+    return name in {"session.json", "runtime.json", "new_session_state.json"}
+
+
 def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
     artifact_dir = Path(session.artifact_dir)
     if not artifact_dir.exists():
@@ -100,8 +104,7 @@ def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
         path.name
         for path in artifact_dir.iterdir()
         if path.is_file()
-        and path.name != "session.json"
-        and path.name != "runtime.json"
+        and not _is_internal_artifact_name(path.name)
         and not path.name.startswith("session.json.")
         and not path.name.endswith(".tmp")
     )
@@ -215,6 +218,10 @@ def _get_new_session_state(session: ProfileBuilderSessionView) -> dict:
     strategy = raw_state.get("strategy")
     raw_steps = raw_state.get("steps")
     if strategy not in {"disabled", "guided_tap_sequence"} or not isinstance(raw_steps, list):
+        normalized = _default_new_session_state()
+        _store_new_session_state(session.id, normalized)
+        return normalized
+    if strategy == "guided_tap_sequence" and not raw_steps:
         normalized = _default_new_session_state()
         _store_new_session_state(session.id, normalized)
         return normalized
@@ -878,6 +885,8 @@ async def get_session_runtime(session_id: str) -> ProfileBuilderRuntimeView:
 @router.get("/sessions/{session_id}/artifacts/{name}")
 async def download_session_artifact(session_id: str, name: str) -> FileResponse:
     session = _get_session_or_404(session_id)
+    if _is_internal_artifact_name(name):
+        raise HTTPException(status_code=404, detail="artifact not found")
     target = (Path(session.artifact_dir) / name).resolve()
     root = Path(session.artifact_dir).resolve()
     try:
