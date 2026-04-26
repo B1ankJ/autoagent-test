@@ -10,6 +10,12 @@ import httpx
 from autoagent.models.api import VLMConfig
 
 _RECOMMEND_TIMEOUT_SEC = 30.0
+
+
+class RecommendationProviderError(RuntimeError):
+    pass
+
+
 _RECOMMEND_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -102,7 +108,7 @@ def recommend_tap_point(
     vlm: VLMConfig | None,
 ) -> dict[str, Any]:
     if not _has_vlm_config(vlm):
-        raise RuntimeError("vlm unavailable")
+        raise RecommendationProviderError("vlm unavailable")
 
     url = vlm.base_url.rstrip("/") + "/chat/completions"
     headers = {
@@ -117,8 +123,11 @@ def recommend_tap_point(
         vlm=vlm,
     )
 
-    response = httpx.post(url, headers=headers, json=payload, timeout=_RECOMMEND_TIMEOUT_SEC)
-    response.raise_for_status()
+    try:
+        response = httpx.post(url, headers=headers, json=payload, timeout=_RECOMMEND_TIMEOUT_SEC)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise RecommendationProviderError(str(exc)) from exc
     data = response.json()
     try:
         content = data["choices"][0]["message"]["content"]

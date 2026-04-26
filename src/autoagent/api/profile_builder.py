@@ -522,6 +522,28 @@ def _archive_capture_artifacts(
     )
 
 
+def _archive_new_session_step_artifacts(
+    session: ProfileBuilderSessionView,
+    step_state: dict,
+) -> None:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    session_dir = Path(session.artifact_dir)
+    step_index = step_state["step_index"]
+    artifacts = (
+        ("xml_artifact", ".xml"),
+        ("screenshot_artifact", ".png"),
+    )
+    for field_name, suffix in artifacts:
+        artifact_name = step_state.get(field_name)
+        if not artifact_name:
+            continue
+        artifact_path = session_dir / artifact_name
+        if not artifact_path.exists():
+            continue
+        archived_name = f"capture_new_session_step_{step_index}_{timestamp}{suffix}"
+        artifact_path.replace(session_dir / archived_name)
+
+
 def _require_complete_captures(
     session: ProfileBuilderSessionView,
 ) -> dict[str, ProfileBuilderCaptureArtifact]:
@@ -1056,6 +1078,7 @@ async def capture_new_session_step(
         session = _get_session_or_404(session_id)
         state = _require_guided_new_session_step(session, step_index)
         step_name = f"new_session_step_{step_index}"
+        _archive_new_session_step_artifacts(session, state["steps"][step_index])
 
         try:
             captured = await capture_android_state(
@@ -1070,32 +1093,46 @@ async def capture_new_session_step(
                 detail=f"profile builder capture failed: {exc}",
             ) from exc
 
-        step = dict(state["steps"][step_index])
-        step["xml_artifact"] = captured.xml_path.name
-        step["screenshot_artifact"] = captured.screenshot_path.name
-        step["confirmed_tap"] = None
-        step["source"] = None
+        step_count = len(state["steps"])
+        stored_session = _store_session(session)
 
-        xml_text = captured.xml_path.read_text(encoding="utf-8")
-        raw_vlm = await get_config("vlm")
-        vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
-        try:
-            recommendation = profile_builder_new_session.recommend_tap_point(
-                screenshot_path=captured.screenshot_path,
-                xml_text=xml_text,
-                step_index=step_index,
-                step_count=len(state["steps"]),
-                vlm=vlm,
-            )
-        except Exception:
-            step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
-        else:
-            step["recommended_tap"] = {
-                "point": {"x": recommendation["x"], "y": recommendation["y"]},
-                "reason": recommendation["reason"],
-                "status": "ready",
-            }
+    step = {
+        "step_index": step_index,
+        "xml_artifact": captured.xml_path.name,
+        "screenshot_artifact": captured.screenshot_path.name,
+        "recommended_tap": {"point": None, "reason": None, "status": "idle"},
+        "confirmed_tap": None,
+        "source": None,
+    }
 
+    xml_text = captured.xml_path.read_text(encoding="utf-8")
+    raw_vlm = await get_config("vlm")
+    vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
+    recommendation_failed = False
+    try:
+        recommendation = await asyncio.to_thread(
+            profile_builder_new_session.recommend_tap_point,
+            screenshot_path=captured.screenshot_path,
+            xml_text=xml_text,
+            step_index=step_index,
+            step_count=step_count,
+            vlm=vlm,
+        )
+    except profile_builder_new_session.RecommendationProviderError:
+        recommendation_failed = True
+    else:
+        step["recommended_tap"] = {
+            "point": {"x": recommendation["x"], "y": recommendation["y"]},
+            "reason": recommendation["reason"],
+            "status": "ready",
+        }
+
+    if recommendation_failed:
+        step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
+
+    async with _get_session_lock(session_id):
+        session = _get_session_or_404(session_id)
+        state = _require_guided_new_session_step(session, step_index)
         steps = [dict(item) for item in state["steps"]]
         steps[step_index] = ProfileBuilderNewSessionStep.model_validate(step).model_dump(mode="json")
         state = _store_new_session_state(

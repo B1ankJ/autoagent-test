@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from autoagent.executors import profile_builder_new_session
 from autoagent.executors.profile_builder_capture import CapturedState
 from tests.integration.test_profile_builder_endpoints import (
     _create_builder_session_with_captures,
@@ -239,7 +240,9 @@ async def test_capture_new_session_step_handles_recommendation_failure(
     monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
     monkeypatch.setattr(
         "autoagent.executors.profile_builder_new_session.recommend_tap_point",
-        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("vlm unavailable")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            profile_builder_new_session.RecommendationProviderError("vlm unavailable")
+        ),
     )
 
     config = await client.put(
@@ -268,3 +271,68 @@ async def test_capture_new_session_step_handles_recommendation_failure(
     }
     assert step["confirmed_tap"] is None
     assert step["source"] is None
+
+
+async def test_capture_new_session_step_recapture_archives_previous_artifacts(
+    client, monkeypatch
+):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    artifact_dir = Path(session["artifact_dir"])
+    capture_round = {"value": 0}
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        capture_round["value"] += 1
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text(f"<hierarchy round='{capture_round['value']}'/>", encoding="utf-8")
+        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode("utf-8"))
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        lambda **_kwargs: {"x": 111, "y": 222, "reason": "plus button"},
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    first = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    second = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert second.status_code == 200, second.text
+
+    body = second.json()
+    step = body["new_session_steps"][0]
+    assert step["xml_artifact"] == "new_session_step_0.xml"
+    assert step["screenshot_artifact"] == "new_session_step_0.png"
+    assert (artifact_dir / "new_session_step_0.xml").read_text(encoding="utf-8") == (
+        "<hierarchy round='2'/>"
+    )
+    assert (artifact_dir / "new_session_step_0.png").read_bytes() == b"png-2"
+
+    archived_xml = sorted(artifact_dir.glob("capture_new_session_step_0_*.xml"))
+    archived_png = sorted(artifact_dir.glob("capture_new_session_step_0_*.png"))
+    assert len(archived_xml) == 1
+    assert len(archived_png) == 1
+    assert archived_xml[0].read_text(encoding="utf-8") == "<hierarchy round='1'/>"
+    assert archived_png[0].read_bytes() == b"png-1"
+    assert archived_xml[0].name in body["session"]["artifacts"]
+    assert archived_png[0].name in body["session"]["artifacts"]
