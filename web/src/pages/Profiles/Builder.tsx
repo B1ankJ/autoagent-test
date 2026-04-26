@@ -1,4 +1,10 @@
-import { CheckCircleOutlined, FileSearchOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import {
+  CheckCircleOutlined,
+  DownOutlined,
+  FileSearchOutlined,
+  PlayCircleOutlined,
+  UpOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
   App,
@@ -224,6 +230,7 @@ export default function Builder() {
   const [selectedEvidenceLabel, setSelectedEvidenceLabel] = useState<string | null>(null)
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
+  const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const runtime = useProfileBuilderRuntime(session?.id)
   const requiredReviewFields = draft ? Array.from(new Set(draft.review_items.map((item) => item.field))) : []
   const unresolvedReviewFields = draft?.pending_review_fields ?? requiredReviewFields.filter((field) => !appliedReviewChoices[field])
@@ -390,6 +397,7 @@ export default function Builder() {
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices({})
+      setExpandedReviewItems({})
       setDraftMode(vlmReady ? 'smart' : 'rule')
       setInjectLlm(false)
       message.success('Builder session 已创建')
@@ -431,6 +439,7 @@ export default function Builder() {
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
       setAppliedReviewChoices(appliedChoiceLabelsFromDraft(nextDraft))
+      setExpandedReviewItems({})
       message.success('Draft profile 已生成')
     } catch (error) {
       message.error((error as Error).message)
@@ -519,6 +528,13 @@ export default function Builder() {
     } catch (error) {
       message.error((error as Error).message)
     }
+  }
+
+  const toggleReviewItem = (key: string) => {
+    setExpandedReviewItems((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }))
   }
 
   return (
@@ -772,12 +788,26 @@ export default function Builder() {
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {draft.review_items.map((item, index) => (
+                    (() => {
+                      const reviewKey = `${item.field}-${index}`
+                      const expanded = !!expandedReviewItems[reviewKey]
+                      return (
                     <Alert
-                      key={`${item.field}-${index}`}
+                      key={reviewKey}
                       type="warning"
                       showIcon
                       message={`${item.field}: ${item.reason}`}
+                      action={
+                        <Button
+                          size="small"
+                          onClick={() => toggleReviewItem(reviewKey)}
+                          icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                        >
+                          {expanded ? '收起详情' : '展开详情'}
+                        </Button>
+                      }
                       description={
+                        expanded ? (
                         <Space direction="vertical" style={{ width: '100%' }}>
                           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
                             {reviewOptionText(item.recommended_option)}
@@ -854,8 +884,11 @@ export default function Builder() {
                             ))}
                           </Space>
                         </Space>
+                        ) : null
                       }
                     />
+                      )
+                    })()
                   ))}
                 </Space>
               )}
