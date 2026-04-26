@@ -49,7 +49,7 @@
 - Create: `tests/integration/test_profile_builder_new_session_endpoints.py`
 - Modify: `src/autoagent/models/api.py`
 
-- [ ] **Step 1: Write the failing backend model contract test**
+- [x] **Step 1: Write the failing backend model contract test**
 
 ```python
 def test_generate_draft_includes_empty_new_session_builder_state(client, session_id):
@@ -62,7 +62,7 @@ def test_generate_draft_includes_empty_new_session_builder_state(client, session
     assert body["new_session_steps"] == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -72,7 +72,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py::t
 
 Expected: FAIL because the response model does not yet expose `new_session_strategy` or `new_session_steps`.
 
-- [ ] **Step 3: Extend Profile Builder API models**
+- [x] **Step 3: Extend Profile Builder API models**
 
 Add focused Pydantic models in `src/autoagent/models/api.py` near the existing `ProfileBuilder*` types:
 
@@ -119,7 +119,7 @@ class ProfileBuilderNewSessionConfirmRequest(BaseModel):
     source: Literal["recommended", "manual"]
 ```
 
-- [ ] **Step 4: Run test to verify it still fails at serialization call sites**
+- [x] **Step 4: Run test to verify it still fails at serialization call sites**
 
 Run:
 
@@ -129,7 +129,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py::t
 
 Expected: FAIL later in the request path because draft generation code does not populate the new fields yet.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/models/api.py tests/integration/test_profile_builder_new_session_endpoints.py
@@ -142,7 +142,7 @@ git commit -m "feat(profile_builder): add new session builder api models"
 - Modify: `src/autoagent/api/profile_builder.py`
 - Test: `tests/integration/test_profile_builder_new_session_endpoints.py`
 
-- [ ] **Step 1: Add failing persistence tests**
+- [x] **Step 1: Add failing persistence tests**
 
 Add tests that define the session/draft defaults and step-count changes:
 
@@ -170,7 +170,7 @@ def test_new_session_config_truncates_higher_steps(client, session_id):
     assert len(body["new_session_steps"]) == 1
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -180,7 +180,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: FAIL because the endpoints and session state do not exist.
 
-- [ ] **Step 3: Add new-session session state helpers and config endpoint**
+- [x] **Step 3: Add new-session session state helpers and config endpoint**
 
 In `src/autoagent/api/profile_builder.py`, add small helpers:
 
@@ -218,7 +218,7 @@ async def configure_new_session(session_id: str, body: ProfileBuilderNewSessionC
 
 When the strategy is disabled, clear steps and keep draft YAML serialization at `new_session_action: []`.
 
-- [ ] **Step 4: Thread the state through draft responses**
+- [x] **Step 4: Thread the state through draft responses**
 
 When building the existing draft response body, include:
 
@@ -229,7 +229,7 @@ When building the existing draft response body, include:
 
 If no draft exists yet, return the same fields from the configured session state so the UI can render the panel before final YAML is complete.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -239,7 +239,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/autoagent/api/profile_builder.py tests/integration/test_profile_builder_new_session_endpoints.py
@@ -253,7 +253,7 @@ git commit -m "feat(profile_builder): persist new session builder state"
 - Modify: `src/autoagent/api/profile_builder.py`
 - Test: `tests/integration/test_profile_builder_new_session_endpoints.py`
 
-- [ ] **Step 1: Add failing capture/recommendation tests**
+- [x] **Step 1: Add failing capture/recommendation tests**
 
 ```python
 def test_capture_new_session_step_records_artifacts_and_recommendation(client, session_id, monkeypatch):
@@ -286,7 +286,7 @@ def test_capture_new_session_step_handles_recommendation_failure(client, session
     assert body["new_session_steps"][0]["recommended_tap"]["status"] == "failed"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -296,7 +296,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: FAIL because the executor helper and capture endpoint do not exist.
 
-- [ ] **Step 3: Add isolated step recommendation helper**
+- [x] **Step 3: Add isolated step recommendation helper**
 
 Create `src/autoagent/executors/profile_builder_new_session.py` with a small API:
 
@@ -316,7 +316,7 @@ def recommend_tap_point(
 
 The initial implementation can be thin and only shape the request/response contract used by the tests. Do not mix the logic into `profile_builder.py`.
 
-- [ ] **Step 4: Add step capture endpoint and recommendation persistence**
+- [x] **Step 4: Add step capture endpoint and recommendation persistence**
 
 In `profile_builder.py`, add:
 
@@ -350,7 +350,7 @@ step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
 
 - clear any stale `confirmed_tap` when a step is recaptured
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -360,7 +360,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/autoagent/executors/profile_builder_new_session.py src/autoagent/api/profile_builder.py tests/integration/test_profile_builder_new_session_endpoints.py
@@ -373,7 +373,7 @@ git commit -m "feat(profile_builder): add new session step capture flow"
 - Modify: `src/autoagent/api/profile_builder.py`
 - Test: `tests/integration/test_profile_builder_new_session_endpoints.py`
 
-- [ ] **Step 1: Add failing confirmation and YAML tests**
+- [x] **Step 1: Add failing confirmation and YAML tests**
 
 ```python
 def test_confirm_new_session_step_writes_tap_xy_into_draft_yaml(client, session_id):
@@ -400,7 +400,7 @@ def test_disable_new_session_strategy_clears_yaml_sequence(client, session_id):
     assert "new_session_action: []" in body["draft_profile_yaml"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -410,7 +410,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: FAIL because the confirmation endpoint and YAML integration do not exist.
 
-- [ ] **Step 3: Add step confirmation endpoint**
+- [x] **Step 3: Add step confirmation endpoint**
 
 In `profile_builder.py`, add:
 
@@ -431,7 +431,7 @@ step["confirmed_tap"] = {"x": body.x, "y": body.y}
 step["source"] = body.source
 ```
 
-- [ ] **Step 4: Extract YAML serialization helper**
+- [x] **Step 4: Extract YAML serialization helper**
 
 Add a helper that derives the final profile field from confirmed taps:
 
@@ -456,7 +456,7 @@ If the strategy is disabled, force:
 draft_profile["new_session_action"] = []
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -466,7 +466,7 @@ uv run pytest tests/integration/test_profile_builder_new_session_endpoints.py -k
 
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/autoagent/api/profile_builder.py tests/integration/test_profile_builder_new_session_endpoints.py

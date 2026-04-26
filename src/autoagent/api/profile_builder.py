@@ -258,7 +258,7 @@ def _new_session_action_from_state(state: dict) -> list[dict]:
     for step in state["steps"]:
         confirmed_tap = step.get("confirmed_tap")
         if not isinstance(confirmed_tap, dict):
-            continue
+            break
         action.append(
             {
                 "action": "tap_xy",
@@ -279,6 +279,39 @@ def _require_guided_new_session_step(
     if step_index < 0 or step_index >= len(state["steps"]):
         raise HTTPException(status_code=422, detail=f"unknown new-session step index: {step_index}")
     return state
+
+
+def _require_contiguous_new_session_prefix(state: dict, step_index: int) -> None:
+    for prior_index in range(step_index):
+        if state["steps"][prior_index].get("confirmed_tap") is None:
+            raise HTTPException(
+                status_code=422,
+                detail="new-session steps must be confirmed in order",
+            )
+
+
+def _require_valid_new_session_recommendation(
+    step: dict, body: ProfileBuilderNewSessionConfirmRequest
+) -> None:
+    recommendation = step.get("recommended_tap") or {}
+    if body.source != "recommended":
+        return
+    if recommendation.get("status") != "ready":
+        raise HTTPException(
+            status_code=422,
+            detail="recommended tap is not available for this step",
+        )
+    point = recommendation.get("point")
+    if not isinstance(point, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="recommended tap is not available for this step",
+        )
+    if point.get("x") != body.x or point.get("y") != body.y:
+        raise HTTPException(
+            status_code=422,
+            detail="recommended tap does not match the submitted coordinates",
+        )
 
 
 def _draft_profile_preview(session: ProfileBuilderSessionView) -> dict:
@@ -1196,8 +1229,10 @@ async def confirm_new_session_step(
     async with _get_session_lock(session_id):
         session = _get_session_or_404(session_id)
         state = _require_guided_new_session_step(session, step_index)
+        _require_contiguous_new_session_prefix(state, step_index)
         steps = [dict(item) for item in state["steps"]]
         updated_step = dict(steps[step_index])
+        _require_valid_new_session_recommendation(updated_step, body)
         updated_step["confirmed_tap"] = {"x": body.x, "y": body.y}
         updated_step["source"] = body.source
         steps[step_index] = ProfileBuilderNewSessionStep.model_validate(updated_step).model_dump(

@@ -618,20 +618,31 @@ async def test_confirm_new_session_step_writes_tap_xy_into_draft_yaml(client, mo
     assert config.status_code == 200, config.text
 
     response = await client.put(
-        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/1/confirm",
-        json={"x": 321, "y": 654, "source": "manual"},
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/confirm",
+        json={"x": 111, "y": 222, "source": "manual"},
         headers=headers,
     )
 
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["new_session_strategy"] == "guided_tap_sequence"
-    assert body["new_session_steps"][1]["confirmed_tap"] == {"x": 321, "y": 654}
-    assert body["new_session_steps"][1]["source"] == "manual"
+    assert body["new_session_steps"][0]["confirmed_tap"] == {"x": 111, "y": 222}
+    assert body["new_session_steps"][0]["source"] == "manual"
     assert "new_session_action:" in body["draft_profile_yaml"]
-    assert "- action: tap_xy" in body["draft_profile_yaml"]
-    assert "x: 321" in body["draft_profile_yaml"]
-    assert "y: 654" in body["draft_profile_yaml"]
+    assert body["draft_profile_yaml"].index("x: 111") < body["draft_profile_yaml"].index("y: 222")
+
+    second = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/1/confirm",
+        json={"x": 321, "y": 654, "source": "manual"},
+        headers=headers,
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["new_session_steps"][1]["confirmed_tap"] == {"x": 321, "y": 654}
+    assert second_body["new_session_steps"][1]["source"] == "manual"
+    yaml_text = second_body["draft_profile_yaml"]
+    assert yaml_text.index("x: 111") < yaml_text.index("x: 321")
+    assert yaml_text.index("x: 321") < yaml_text.index("y: 654")
 
 
 async def test_disable_new_session_strategy_clears_yaml_sequence(client, monkeypatch):
@@ -648,7 +659,7 @@ async def test_disable_new_session_strategy_clears_yaml_sequence(client, monkeyp
 
     confirmed = await client.put(
         f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/confirm",
-        json={"x": 11, "y": 22, "source": "recommended"},
+        json={"x": 11, "y": 22, "source": "manual"},
         headers=headers,
     )
     assert confirmed.status_code == 200, confirmed.text
@@ -675,3 +686,43 @@ async def test_disable_new_session_strategy_clears_yaml_sequence(client, monkeyp
     assert "new_session_action: []" in body["draft_profile_yaml"]
     assert "x: 11" not in body["draft_profile_yaml"]
     assert "new_session_action: []" in draft_path.read_text(encoding="utf-8")
+
+
+async def test_confirm_new_session_step_rejects_non_prefix_confirmation(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 2},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/1/confirm",
+        json={"x": 321, "y": 654, "source": "manual"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "new-session steps must be confirmed in order"
+
+
+async def test_confirm_new_session_step_rejects_fake_recommended_choice(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/confirm",
+        json={"x": 11, "y": 22, "source": "recommended"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "recommended tap is not available for this step"
