@@ -5,7 +5,9 @@ from autoagent.models.api import (
     BatchCreateJSON,
     BatchSummary,
     ProfileBuilderNewSessionConfigRequest,
+    ProfileBuilderDraftResponse,
     ProfileBuilderNewSessionStep,
+    ProfileBuilderSessionView,
     ProfileBuilderTapPoint,
     Sample,
     SampleResult,
@@ -106,3 +108,69 @@ def test_profile_builder_new_session_step_roundtrip():
     restored = ProfileBuilderNewSessionStep.model_validate(step.model_dump())
 
     assert restored == step
+
+
+def test_profile_builder_tap_point_rejects_negative_coordinate():
+    with pytest.raises(ValidationError):
+        ProfileBuilderTapPoint(x=-1, y=0)
+
+
+def test_profile_builder_new_session_step_rejects_negative_step_index():
+    with pytest.raises(ValidationError):
+        ProfileBuilderNewSessionStep(step_index=-1)
+
+
+def test_profile_builder_draft_response_rejects_disabled_with_steps():
+    with pytest.raises(ValidationError):
+        ProfileBuilderDraftResponse(
+            session=_session_view(),
+            draft_profile_yaml="name: qwen\n",
+            draft_mode="rule",
+            new_session_strategy="disabled",
+            new_session_steps=[_new_session_step()],
+        )
+
+
+def test_profile_builder_draft_response_rejects_guided_without_steps():
+    with pytest.raises(ValidationError):
+        ProfileBuilderDraftResponse(
+            session=_session_view(),
+            draft_profile_yaml="name: qwen\n",
+            draft_mode="rule",
+            new_session_strategy="guided_tap_sequence",
+            new_session_steps=[],
+        )
+
+
+def test_profile_builder_draft_response_roundtrip():
+    response = ProfileBuilderDraftResponse(
+        session=_session_view(),
+        draft_profile_yaml="name: qwen\n",
+        draft_mode="rule",
+        new_session_strategy="guided_tap_sequence",
+        new_session_steps=[_new_session_step()],
+    )
+
+    restored = ProfileBuilderDraftResponse.model_validate(response.model_dump())
+
+    assert restored == response
+
+
+def _session_view() -> ProfileBuilderSessionView:
+    return ProfileBuilderSessionView(
+        id="pb_123",
+        platform="android",
+        device_serial="serial-1",
+        name="qwen",
+        status="draft",
+        steps=["idle", "editing"],
+        artifact_dir="/tmp/pb_123",
+    )
+
+
+def _new_session_step() -> ProfileBuilderNewSessionStep:
+    return ProfileBuilderNewSessionStep(
+        step_index=0,
+        confirmed_tap=ProfileBuilderTapPoint(x=12, y=34),
+        source="manual",
+    )

@@ -200,8 +200,8 @@ class ProfileBuilderRuntimeView(BaseModel):
 
 
 class ProfileBuilderTapPoint(BaseModel):
-    x: int
-    y: int
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
 
 
 class ProfileBuilderNewSessionRecommendation(BaseModel):
@@ -211,7 +211,7 @@ class ProfileBuilderNewSessionRecommendation(BaseModel):
 
 
 class ProfileBuilderNewSessionStep(BaseModel):
-    step_index: int
+    step_index: int = Field(ge=0)
     xml_artifact: str | None = None
     screenshot_artifact: str | None = None
     recommended_tap: ProfileBuilderNewSessionRecommendation = Field(
@@ -260,3 +260,11 @@ class ProfileBuilderDraftResponse(BaseModel):
     auto_review_source: Literal["manual", "llm"] = "manual"
     new_session_strategy: Literal["disabled", "guided_tap_sequence"] = "disabled"
     new_session_steps: list[ProfileBuilderNewSessionStep] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _strategy_matches_steps(self) -> "ProfileBuilderDraftResponse":
+        if self.new_session_strategy == "disabled" and self.new_session_steps:
+            raise ValueError("disabled strategy requires no new_session_steps")
+        if self.new_session_strategy == "guided_tap_sequence" and not self.new_session_steps:
+            raise ValueError("guided_tap_sequence requires new_session_steps")
+        return self
