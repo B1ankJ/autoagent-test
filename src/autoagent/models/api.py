@@ -197,3 +197,50 @@ class ProfileBuilderRuntimeView(BaseModel):
         default_factory=ProfileBuilderRuntimeConnectivity
     )
     recent_screens: list[ProfileBuilderRuntimeScreen] = Field(default_factory=list)
+
+
+class ProfileBuilderTapPoint(BaseModel):
+    x: int
+    y: int
+
+
+class ProfileBuilderNewSessionRecommendation(BaseModel):
+    point: ProfileBuilderTapPoint | None = None
+    reason: str | None = None
+    status: Literal["idle", "ready", "failed"] = "idle"
+
+
+class ProfileBuilderNewSessionStep(BaseModel):
+    step_index: int
+    xml_artifact: str | None = None
+    screenshot_artifact: str | None = None
+    recommended_tap: ProfileBuilderNewSessionRecommendation = Field(
+        default_factory=ProfileBuilderNewSessionRecommendation
+    )
+    confirmed_tap: ProfileBuilderTapPoint | None = None
+    source: Literal["recommended", "manual"] | None = None
+
+
+class ProfileBuilderNewSessionConfigRequest(BaseModel):
+    strategy: Literal["disabled", "guided_tap_sequence"]
+    step_count: int = Field(default=0, ge=0, le=3)
+
+
+class ProfileBuilderNewSessionConfirmRequest(BaseModel):
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    source: Literal["recommended", "manual"]
+
+
+class ProfileBuilderDraftResponse(BaseModel):
+    session: ProfileBuilderSessionView
+    candidates: dict[str, Any] = Field(default_factory=dict)
+    review_items: list[dict[str, Any]] = Field(default_factory=list)
+    draft_profile_yaml: str
+    draft_mode: Literal["rule", "smart"]
+    requires_manual_review: bool = True
+    applied_review_choices: dict[str, Any] = Field(default_factory=dict)
+    pending_review_fields: list[str] = Field(default_factory=list)
+    auto_review_source: Literal["manual", "llm"] = "manual"
+    new_session_strategy: Literal["disabled", "guided_tap_sequence"] = "disabled"
+    new_session_steps: list[ProfileBuilderNewSessionStep] = Field(default_factory=list)

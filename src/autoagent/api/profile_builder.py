@@ -27,6 +27,7 @@ from autoagent.executors.profile_builder_generator import (
 )
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
+    ProfileBuilderDraftResponse,
     ProfileBuilderRuntimeCapture,
     ProfileBuilderRuntimeConnectivity,
     ProfileBuilderRuntimeScreen,
@@ -832,11 +833,11 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
         return stored
 
 
-@router.post("/sessions/{session_id}/draft")
+@router.post("/sessions/{session_id}/draft", response_model=ProfileBuilderDraftResponse)
 async def generate_draft(
     session_id: str,
     body: _GenerateDraftRequest = Body(default_factory=_GenerateDraftRequest),
-) -> dict:
+) -> ProfileBuilderDraftResponse:
     session = _get_session_or_404(session_id)
     draft_mode = body.resolved_draft_mode()
     try:
@@ -944,6 +945,8 @@ async def generate_draft(
             "auto_review_source": (
                 smart_draft["auto_review_source"] if smart_draft is not None else "manual"
             ),
+            "new_session_strategy": "disabled",
+            "new_session_steps": [],
         }
     finally:
         await _restore_builder_adb_keyboard(session)
