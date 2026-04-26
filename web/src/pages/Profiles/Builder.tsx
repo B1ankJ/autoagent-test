@@ -32,6 +32,9 @@ import { useVLM } from '../../api/config'
 import {
   useApplyProfileBuilderReview,
   useCaptureProfileBuilderStep,
+  useCaptureProfileBuilderNewSessionStep,
+  useConfigureProfileBuilderNewSession,
+  useConfirmProfileBuilderNewSessionStep,
   useCreateProfileBuilderSession,
   useGenerateProfileBuilderDraft,
   useValidateProfileBuilderDraft,
@@ -46,6 +49,7 @@ import { ResponseComparison } from '../../components/ResponseComparison'
 import {
   Device,
   ProfileBuilderDraftResponse,
+  ProfileBuilderNewSessionStep,
   ReviewEvidenceRef,
   SingleTestSyncResponse,
   ProfileBuilderRuntimeView,
@@ -215,6 +219,9 @@ export default function Builder() {
   const generateDraft = useGenerateProfileBuilderDraft()
   const applyReview = useApplyProfileBuilderReview()
   const validateDraft = useValidateProfileBuilderDraft()
+  const configureNewSession = useConfigureProfileBuilderNewSession()
+  const captureNewSessionStep = useCaptureProfileBuilderNewSessionStep()
+  const confirmNewSessionStep = useConfirmProfileBuilderNewSessionStep()
   const saveProfile = useSaveProfile()
   const { data: vlm } = useVLM()
   const { message } = App.useApp()
@@ -237,6 +244,9 @@ export default function Builder() {
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
   const [showUnresolvedOnly, setShowUnresolvedOnly] = useState(false)
+  const [newSessionStrategy, setNewSessionStrategy] = useState<'disabled' | 'guided_tap_sequence'>('disabled')
+  const [newSessionStepCount, setNewSessionStepCount] = useState(1)
+  const [manualTapStepIndex, setManualTapStepIndex] = useState<number | null>(null)
   const runtime = useProfileBuilderRuntime(session?.id)
   const reviewEntries = useMemo(
     () => draft?.review_items.map((item, index) => ({ item, index, key: reviewItemKey(item, index) })) ?? [],
@@ -507,6 +517,76 @@ export default function Builder() {
     }
   }
 
+  const handleNewSessionStrategyChange = async (strategy: 'disabled' | 'guided_tap_sequence') => {
+    setNewSessionStrategy(strategy)
+    if (!session) return
+    try {
+      const result = await configureNewSession.mutateAsync({ sessionId: session.id, strategy, stepCount: newSessionStepCount })
+      setDraft(result)
+      setManualTapStepIndex(null)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const handleNewSessionStepCountChange = async (stepCount: number) => {
+    setNewSessionStepCount(stepCount)
+    if (!session || newSessionStrategy !== 'guided_tap_sequence') return
+    try {
+      const result = await configureNewSession.mutateAsync({ sessionId: session.id, strategy: 'guided_tap_sequence', stepCount })
+      setDraft(result)
+      setManualTapStepIndex(null)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const handleNewSessionStepCapture = async (stepIndex: number) => {
+    if (!session) return
+    try {
+      const result = await captureNewSessionStep.mutateAsync({ sessionId: session.id, stepIndex })
+      setDraft(result)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const handleAcceptRecommendedTap = async (step: ProfileBuilderNewSessionStep) => {
+    if (!session || !step.recommended_tap.point) return
+    try {
+      const result = await confirmNewSessionStep.mutateAsync({
+        sessionId: session.id,
+        stepIndex: step.step_index,
+        x: step.recommended_tap.point.x,
+        y: step.recommended_tap.point.y,
+        source: 'recommended',
+      })
+      setDraft(result as ProfileBuilderDraftResponse)
+      setManualTapStepIndex(null)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const handleNewSessionStepImageClick = async (
+    event: React.MouseEvent<HTMLDivElement>,
+    stepIndex: number,
+  ) => {
+    if (!session) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const scaleX = rect.width > 0 && imageNaturalSize ? imageNaturalSize.width / rect.width : 1
+    const scaleY = rect.height > 0 && imageNaturalSize ? imageNaturalSize.height / rect.height : 1
+    const x = Math.round((event.clientX - rect.left) * scaleX)
+    const y = Math.round((event.clientY - rect.top) * scaleY)
+    try {
+      const result = await confirmNewSessionStep.mutateAsync({ sessionId: session.id, stepIndex, x, y, source: 'manual' })
+      setDraft(result as ProfileBuilderDraftResponse)
+      setManualTapStepIndex(null)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
   const runConnectivityValidation = async () => {
     if (!session || !draft) {
       return
@@ -761,6 +841,107 @@ export default function Builder() {
             </Checkbox>
           </Tooltip>
         </div>
+      </Card>
+
+      <Card title="New Session Action" style={{ marginTop: 16 }}>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Radio.Group
+            value={newSessionStrategy}
+            onChange={(event) => void handleNewSessionStrategyChange(event.target.value as 'disabled' | 'guided_tap_sequence')}
+          >
+            <Space direction="vertical">
+              <Radio value="disabled">不配置</Radio>
+              <Radio value="guided_tap_sequence" aria-label="配置多步新开对话">
+                配置多步新开对话
+              </Radio>
+            </Space>
+          </Radio.Group>
+          <div>
+            <Typography.Text type="secondary">Step Count</Typography.Text>
+            <Radio.Group
+              style={{ marginLeft: 8 }}
+              value={newSessionStepCount}
+              onChange={(event) => void handleNewSessionStepCountChange(event.target.value as number)}
+              disabled={newSessionStrategy === 'disabled'}
+            >
+              {[1, 2, 3].map((n) => (
+                <Radio key={n} value={n} aria-label={`Step Count ${n}`}>{n}</Radio>
+              ))}
+            </Radio.Group>
+          </div>
+          {(draft?.new_session_steps ?? []).map((step) => (
+            <Card
+              key={step.step_index}
+              size="small"
+              title={`New Session Step ${step.step_index + 1}`}
+              extra={step.confirmed_tap ? <Tag color="green">已确认</Tag> : <Tag>待确认</Tag>}
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <Button
+                    size="small"
+                    onClick={() => void handleNewSessionStepCapture(step.step_index)}
+                    loading={captureNewSessionStep.isPending}
+                    disabled={!session}
+                  >
+                    Capture
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={step.recommended_tap.status !== 'ready' || !step.recommended_tap.point}
+                    onClick={() => void handleAcceptRecommendedTap(step)}
+                  >
+                    接受推荐
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => setManualTapStepIndex(
+                      manualTapStepIndex === step.step_index ? null : step.step_index
+                    )}
+                  >
+                    {manualTapStepIndex === step.step_index ? '取消点选' : '重新点选'}
+                  </Button>
+                </Space>
+                {step.recommended_tap.status === 'failed' && (
+                  <Alert type="warning" showIcon message="需人工点选" />
+                )}
+                {step.recommended_tap.status === 'ready' && step.recommended_tap.point && (
+                  <Typography.Text type="secondary">
+                    推荐点: ({step.recommended_tap.point.x}, {step.recommended_tap.point.y})
+                    {step.recommended_tap.reason ? ` — ${step.recommended_tap.reason}` : ''}
+                  </Typography.Text>
+                )}
+                {step.confirmed_tap && (
+                  <Tag color="blue">
+                    已选: ({step.confirmed_tap.x}, {step.confirmed_tap.y}) [{step.source}]
+                  </Tag>
+                )}
+                {manualTapStepIndex === step.step_index && (
+                  <Typography.Text type="warning">点击下方截图选择 tap 点</Typography.Text>
+                )}
+                {step.screenshot_artifact && (
+                  <div
+                    aria-label={`New Session Step ${step.step_index + 1} preview`}
+                    style={{
+                      cursor: manualTapStepIndex === step.step_index ? 'crosshair' : 'default',
+                      display: 'inline-block',
+                    }}
+                    onClick={(event) => {
+                      if (manualTapStepIndex !== step.step_index) return
+                      void handleNewSessionStepImageClick(event, step.step_index)
+                    }}
+                  >
+                    <img
+                      src={`blob:${step.screenshot_artifact}`}
+                      alt={`step ${step.step_index + 1} screenshot`}
+                      style={{ maxWidth: '100%' }}
+                    />
+                  </div>
+                )}
+              </Space>
+            </Card>
+          ))}
+        </Space>
       </Card>
 
       {session ? (
