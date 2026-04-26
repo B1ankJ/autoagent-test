@@ -28,6 +28,8 @@ from autoagent.executors.profile_builder_generator import (
 from autoagent.models.api import (
     ProfileBuilderCaptureArtifact,
     ProfileBuilderDraftResponse,
+    ProfileBuilderNewSessionConfigRequest,
+    ProfileBuilderNewSessionStep,
     ProfileBuilderRuntimeCapture,
     ProfileBuilderRuntimeConnectivity,
     ProfileBuilderRuntimeScreen,
@@ -84,6 +86,10 @@ def _session_json_path(session_id: str) -> Path:
 
 def _runtime_json_path(session_id: str) -> Path:
     return _session_dir(session_id) / "runtime.json"
+
+
+def _new_session_state_path(session_id: str) -> Path:
+    return _session_dir(session_id) / "new_session_state.json"
 
 
 def _artifact_names(session: ProfileBuilderSessionView) -> list[str]:
@@ -159,6 +165,142 @@ def _store_runtime(session_id: str, runtime: dict) -> dict:
     tmp.write_text(json.dumps(runtime, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(path)
     return runtime
+
+
+def _default_new_session_state() -> dict:
+    return {"strategy": "disabled", "steps": []}
+
+
+def _empty_new_session_step(step_index: int) -> dict:
+    return {
+        "step_index": step_index,
+        "xml_artifact": None,
+        "screenshot_artifact": None,
+        "recommended_tap": {"point": None, "reason": None, "status": "idle"},
+        "confirmed_tap": None,
+        "source": None,
+    }
+
+
+def _load_new_session_state_from_disk(session_id: str) -> dict | None:
+    path = _new_session_state_path(session_id)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail="profile builder new-session load failed") from exc
+
+
+def _store_new_session_state(session_id: str, state: dict) -> dict:
+    path = _new_session_state_path(session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
+    return state
+
+
+def _resize_new_session_steps(steps: list[dict], step_count: int) -> list[dict]:
+    next_steps = [dict(step) for step in steps[:step_count]]
+    while len(next_steps) < step_count:
+        next_steps.append(_empty_new_session_step(len(next_steps)))
+    for index, step in enumerate(next_steps):
+        step["step_index"] = index
+    return next_steps
+
+
+def _get_new_session_state(session: ProfileBuilderSessionView) -> dict:
+    raw_state = _load_new_session_state_from_disk(session.id) or _default_new_session_state()
+    strategy = raw_state.get("strategy")
+    raw_steps = raw_state.get("steps")
+    if strategy not in {"disabled", "guided_tap_sequence"} or not isinstance(raw_steps, list):
+        normalized = _default_new_session_state()
+        _store_new_session_state(session.id, normalized)
+        return normalized
+
+    step_count = len(raw_steps) if strategy == "guided_tap_sequence" else 0
+    normalized_steps = _resize_new_session_steps(
+        [dict(step) for step in raw_steps if isinstance(step, dict)],
+        step_count,
+    )
+    validated_steps = [
+        ProfileBuilderNewSessionStep.model_validate(step).model_dump(mode="json")
+        for step in normalized_steps
+    ]
+    normalized = {
+        "strategy": strategy,
+        "steps": validated_steps if strategy == "guided_tap_sequence" else [],
+    }
+    if normalized != raw_state:
+        _store_new_session_state(session.id, normalized)
+    return normalized
+
+
+def _new_session_action_from_state(state: dict) -> list[dict]:
+    if state["strategy"] != "guided_tap_sequence":
+        return []
+    action: list[dict] = []
+    for step in state["steps"]:
+        confirmed_tap = step.get("confirmed_tap")
+        if not isinstance(confirmed_tap, dict):
+            continue
+        action.append(
+            {
+                "action": "tap_xy",
+                "x": confirmed_tap["x"],
+                "y": confirmed_tap["y"],
+            }
+        )
+    return action
+
+
+def _draft_profile_preview(session: ProfileBuilderSessionView) -> dict:
+    return {
+        "name": session.name,
+        "platform": session.platform,
+        "new_session_action": [],
+    }
+
+
+def _draft_profile_for_state(session: ProfileBuilderSessionView, state: dict) -> dict:
+    draft_path = _draft_profile_path(session)
+    if draft_path.exists():
+        draft_profile = yaml.safe_load(draft_path.read_text(encoding="utf-8"))
+        if not isinstance(draft_profile, dict):
+            raise HTTPException(status_code=500, detail="draft profile is invalid")
+    else:
+        draft_profile = _draft_profile_preview(session)
+    draft_profile["new_session_action"] = _new_session_action_from_state(state)
+    return draft_profile
+
+
+def _draft_response_payload(
+    *,
+    session: ProfileBuilderSessionView,
+    draft_profile_yaml: str,
+    state: dict,
+    candidates: dict | None = None,
+    review_items: list[dict] | None = None,
+    draft_mode: Literal["rule", "smart"] = "rule",
+    requires_manual_review: bool = True,
+    applied_review_choices: dict | None = None,
+    pending_review_fields: list[str] | None = None,
+    auto_review_source: Literal["manual", "llm"] = "manual",
+) -> dict:
+    return {
+        "session": session.model_dump(mode="json"),
+        "candidates": candidates or {},
+        "review_items": review_items or [],
+        "draft_profile_yaml": draft_profile_yaml,
+        "draft_mode": draft_mode,
+        "requires_manual_review": requires_manual_review,
+        "applied_review_choices": applied_review_choices or {},
+        "pending_review_fields": pending_review_fields or [],
+        "auto_review_source": auto_review_source,
+        "new_session_strategy": state["strategy"],
+        "new_session_steps": state["steps"],
+    }
 
 
 def _get_runtime(session: ProfileBuilderSessionView) -> ProfileBuilderRuntimeView:
@@ -833,6 +975,30 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
         return stored
 
 
+@router.put("/sessions/{session_id}/new-session/config", response_model=ProfileBuilderDraftResponse)
+async def configure_new_session(
+    session_id: str,
+    body: ProfileBuilderNewSessionConfigRequest,
+) -> ProfileBuilderDraftResponse:
+    session = _get_session_or_404(session_id)
+    steps = (
+        _resize_new_session_steps(_get_new_session_state(session)["steps"], body.step_count)
+        if body.strategy == "guided_tap_sequence"
+        else []
+    )
+    state = _store_new_session_state(
+        session.id,
+        {"strategy": body.strategy, "steps": steps},
+    )
+    draft_profile = _draft_profile_for_state(session, state)
+    draft_profile_yaml = _write_draft_profile_yaml(session, draft_profile)
+    return _draft_response_payload(
+        session=session,
+        draft_profile_yaml=draft_profile_yaml,
+        state=state,
+    )
+
+
 @router.post("/sessions/{session_id}/draft", response_model=ProfileBuilderDraftResponse)
 async def generate_draft(
     session_id: str,
@@ -889,6 +1055,8 @@ async def generate_draft(
         draft_profile = (
             smart_draft["draft"] if smart_draft is not None else merge_llm_draft(rule_draft, llm_output)
         )
+        new_session_state = _get_new_session_state(session)
+        draft_profile["new_session_action"] = _new_session_action_from_state(new_session_state)
         if body.inject_llm:
             if not (vlm.base_url and vlm.model and vlm.api_key):
                 raise HTTPException(status_code=400, detail={"error": "llm_config_incomplete"})
@@ -925,29 +1093,28 @@ async def generate_draft(
         (artifact_dir / "draft_profile.yaml").write_text(draft_profile_yaml, encoding="utf-8")
 
         updated = _store_session(session.model_copy(update={"status": "ready"}))
-        return {
-            "session": updated.model_dump(mode="json"),
-            "candidates": candidates,
-            "review_items": candidates["review_items"],
-            "draft_profile_yaml": draft_profile_yaml,
-            "draft_mode": draft_mode,
-            "requires_manual_review": (
+        return _draft_response_payload(
+            session=updated,
+            draft_profile_yaml=draft_profile_yaml,
+            state=new_session_state,
+            candidates=candidates,
+            review_items=candidates["review_items"],
+            draft_mode=draft_mode,
+            requires_manual_review=(
                 smart_draft["requires_manual_review"] if smart_draft is not None else True
             ),
-            "applied_review_choices": (
+            applied_review_choices=(
                 smart_draft["applied_review_choices"] if smart_draft is not None else {}
             ),
-            "pending_review_fields": (
+            pending_review_fields=(
                 smart_draft["pending_review_fields"]
                 if smart_draft is not None
                 else [item["field"] for item in candidates["review_items"] if item.get("field")]
             ),
-            "auto_review_source": (
+            auto_review_source=(
                 smart_draft["auto_review_source"] if smart_draft is not None else "manual"
             ),
-            "new_session_strategy": "disabled",
-            "new_session_steps": [],
-        }
+        )
     finally:
         await _restore_builder_adb_keyboard(session)
 
