@@ -961,26 +961,33 @@ export default function Builder() {
                             <Button
                               size="small"
                               type="primary"
-                              onClick={() => chooseReviewOption(item, item.recommended_option)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void chooseReviewOption(item, item.recommended_option)
+                              }}
                               loading={applyReview.isPending}
                             >
                               Apply Recommended
                             </Button>
                             <Button
                               size="small"
-                              onClick={() => focusEvidence(item.evidence_refs, `${item.field} · 推荐定位`)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                focusEvidence(item.evidence_refs, `${item.field} · 推荐定位`)
+                              }}
                               disabled={!item.evidence_refs.length}
                             >
                               查看推荐定位
                             </Button>
                             <Button
                               size="small"
-                              onClick={() =>
+                              onClick={(event) => {
+                                event.stopPropagation()
                                 focusEvidence(
                                   collectAllEvidenceRefs(item),
                                   `${item.field} · 全部证据`,
                                 )
-                              }
+                              }}
                               disabled={!collectAllEvidenceRefs(item).length}
                             >
                               查看全部证据
@@ -989,19 +996,23 @@ export default function Builder() {
                               <Space key={candidateIndex} size="small">
                                 <Button
                                   size="small"
-                                  onClick={() => chooseReviewOption(item, candidate)}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void chooseReviewOption(item, candidate)
+                                  }}
                                   loading={applyReview.isPending}
                                 >
                                   Apply Alternative {candidateIndex + 1}
                                 </Button>
                                 <Button
                                   size="small"
-                                  onClick={() =>
+                                  onClick={(event) => {
+                                    event.stopPropagation()
                                     focusEvidence(
                                       item.alternative_evidence_refs[candidateIndex] ?? [],
                                       `${item.field} · 备选 ${candidateIndex + 1}`,
                                     )
-                                  }
+                                  }}
                                   disabled={!(item.alternative_evidence_refs[candidateIndex] ?? []).length}
                                 >
                                   查看备选 {candidateIndex + 1}

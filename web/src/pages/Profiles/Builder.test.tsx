@@ -636,6 +636,157 @@ describe('Builder', () => {
     })
   })
 
+  it('keeps alternative evidence focus when clicking 查看备选', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'ready',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: ['draft_profile.yaml', 'capture_editing.png'],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+      ],
+    })
+    runtimeMockData = {
+      session_id: 'pb_1',
+      session_status: 'ready',
+      current_step: 'generate_draft',
+      step_state: 'done',
+      last_error: null,
+      captures: [
+        { step: 'idle', status: 'done', screenshot: 'capture_idle.png', updated_at: '2026-04-23T12:00:00Z' },
+        { step: 'editing', status: 'done', screenshot: 'capture_editing.png', updated_at: '2026-04-23T12:01:00Z' },
+      ],
+      connectivity: {
+        status: 'idle',
+        result_status: null,
+        result_summary: null,
+        screens: [],
+      },
+      recent_screens: [
+        { step: 'idle', label: 'capture_idle', path: 'capture_idle.png', taken_at: '2026-04-23T12:00:00Z' },
+        { step: 'editing', label: 'capture_editing', path: 'capture_editing.png', taken_at: '2026-04-23T12:01:00Z' },
+      ],
+    }
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml', 'capture_editing.png'],
+        captures: [
+          {
+            step: 'idle',
+            package: 'com.aliyun.tongyi',
+            activity: '.IdleActivity',
+            xml_artifact: 'capture_idle.xml',
+            screenshot_artifact: 'capture_idle.png',
+            active: true,
+            captured_at: '2026-04-23T12:00:00Z',
+          },
+          {
+            step: 'editing',
+            package: 'com.aliyun.tongyi',
+            activity: '.EditingActivity',
+            xml_artifact: 'capture_editing.xml',
+            screenshot_artifact: 'capture_editing.png',
+            active: true,
+            captured_at: '2026-04-23T12:01:00Z',
+          },
+        ],
+      },
+      candidates: {
+        input_candidates: [],
+        send_candidates: [],
+        response_candidates: [],
+        review_items: [],
+      },
+      review_items: [
+        {
+          field: 'send_action',
+          reason: 'Multiple clickable controls looked like send buttons.',
+          recommended_option: [{ action: 'tap_xy', x: 964, y: 2064 }],
+          alternative_candidates: [
+            [{ action: 'click_locator', locator: { type: 'xpath', value: '//*[@bounds="[909,2009][1020,2120]"]' } }],
+            [{ action: 'tap_xy', x: 964, y: 1346 }],
+          ],
+          evidence_refs: [
+            {
+              source: 'editing_xml',
+              step: 'editing',
+              artifact: 'capture_editing.png',
+              bounds: [909, 2009, 1020, 2120],
+              label: 'send-button',
+            },
+          ],
+          alternative_evidence_refs: [
+            [
+              {
+                source: 'editing_xml',
+                step: 'editing',
+                artifact: 'capture_editing.png',
+                bounds: [909, 2009, 1020, 2120],
+                label: 'send-button',
+              },
+            ],
+            [
+              {
+                source: 'editing_xml',
+                step: 'editing',
+                artifact: 'capture_editing.png',
+                bounds: [909, 1291, 1020, 1402],
+                label: 'send-button',
+              },
+            ],
+          ],
+        },
+      ],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: ['send_action'],
+      auto_review_source: 'manual',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(screen.getAllByRole('button', { name: /Generate Draft/ })[0])
+    await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
+    await userEvent.click(screen.getByRole('button', { name: '查看备选 2' }))
+
+    expect(await screen.findByText('send_action · 备选 2')).toBeInTheDocument()
+    expect(screen.queryByText('send_action · 推荐定位')).not.toBeInTheDocument()
+  })
+
   it('applies recommended input_focus_action review options', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
