@@ -319,6 +319,17 @@ complete_detection:
   max_wait_sec: 60
 ```
 
+## Step 12: New Session Action smoke
+
+1. Open Builder page, start a session against a real device.
+2. Select "配置多步新开对话", keep Step Count = 1.
+3. Click "Capture" on step 0, wait for recommendation.
+4. Click "接受推荐" — verify `confirmed_tap` appears in the step card and the draft YAML shows `new_session_action: [{action: tap_xy, ...}]`.
+5. Set Step Count = 2, capture and confirm both steps.
+6. Verify draft YAML lists two `tap_xy` entries in order.
+7. Click "重新点选" on step 0, then tap a different point on the screenshot.
+8. Verify the confirmed point updates and YAML reflects the new coordinates.
+
 ## Report format
 
 Reply with:
@@ -333,6 +344,7 @@ Reply with:
 7. Tier 1 batch + SampleDetail: 通过/失败
 8. Tier 2 OCR long response: 通过/失败
 9. Device disable behavior: 通过/失败/未测
+12. New Session Action authoring (one-step + two-step): 通过/失败/未测
 补充信息: 失败现象、报错、截图、使用的真实 App 名称、相关 session_id / batch_id
 ```
 

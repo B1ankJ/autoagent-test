@@ -480,7 +480,7 @@ git commit -m "feat(profile_builder): serialize new session tap sequence"
 - Modify: `web/src/api/profileBuilder.ts`
 - Test: `web/src/pages/Profiles/Builder.test.tsx`
 
-- [ ] **Step 1: Add failing frontend API-flow test**
+- [x] **Step 1: Add failing frontend API-flow test**
 
 Add one UI test that proves the page calls the new config endpoint:
 
@@ -497,7 +497,7 @@ it('configures guided new session step count before capture', async () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -507,7 +507,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "configure
 
 Expected: FAIL because the types and hook do not exist.
 
-- [ ] **Step 3: Add frontend types**
+- [x] **Step 3: Add frontend types**
 
 In `web/src/types/api.ts`, mirror the backend contract:
 
@@ -540,7 +540,7 @@ new_session_strategy: 'disabled' | 'guided_tap_sequence'
 new_session_steps: ProfileBuilderNewSessionStep[]
 ```
 
-- [ ] **Step 4: Add API hooks**
+- [x] **Step 4: Add API hooks**
 
 In `web/src/api/profileBuilder.ts`, add small wrappers:
 
@@ -552,7 +552,7 @@ export function useConfirmProfileBuilderNewSessionStep() { ... }
 
 Each should call the new backend routes and return `ProfileBuilderDraftResponse`.
 
-- [ ] **Step 5: Run targeted test to verify the new imports compile**
+- [x] **Step 5: Run targeted test to verify the new imports compile**
 
 Run:
 
@@ -562,7 +562,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "configure
 
 Expected: FAIL later in the page logic because the UI still does not render the controls.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add web/src/types/api.ts web/src/api/profileBuilder.ts web/src/pages/Profiles/Builder.test.tsx
@@ -575,7 +575,7 @@ git commit -m "feat(web): add new session builder api types"
 - Modify: `web/src/pages/Profiles/Builder.tsx`
 - Test: `web/src/pages/Profiles/Builder.test.tsx`
 
-- [ ] **Step 1: Add failing UI interaction tests**
+- [x] **Step 1: Add failing UI interaction tests**
 
 Add tests for the core interactions:
 
@@ -615,7 +615,7 @@ it('allows manual override on the step image', async () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -625,7 +625,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "guided ne
 
 Expected: FAIL because the panel is not yet rendered.
 
-- [ ] **Step 3: Add local Builder state and strategy controls**
+- [x] **Step 3: Add local Builder state and strategy controls**
 
 In `Builder.tsx`, add page state:
 
@@ -646,7 +646,7 @@ Render under Session Setup:
 
 When enabled, render a simple count selector and call `useConfigureProfileBuilderNewSession`.
 
-- [ ] **Step 4: Render per-step cards**
+- [x] **Step 4: Render per-step cards**
 
 For each `draft?.new_session_steps`, render:
 
@@ -669,7 +669,7 @@ If recommendation failed, show:
 <Alert type="warning" message="需人工点选" />
 ```
 
-- [ ] **Step 5: Add manual point override on the preview image**
+- [x] **Step 5: Add manual point override on the preview image**
 
 Reuse the existing preview image area. When a step is in manual mode:
 
@@ -685,7 +685,7 @@ onClick={(event) => {
 
 Show the confirmed point overlay with a distinct color so the user sees what will be written into YAML.
 
-- [ ] **Step 6: Run targeted tests to verify they pass**
+- [x] **Step 6: Run targeted tests to verify they pass**
 
 Run:
 
@@ -695,7 +695,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "guided ne
 
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add web/src/pages/Profiles/Builder.tsx web/src/pages/Profiles/Builder.test.tsx
@@ -708,7 +708,7 @@ git commit -m "feat(web): add guided new session builder flow"
 - Modify: `web/src/pages/Profiles/Builder.test.tsx`
 - Modify: `tests/integration/test_profile_builder_new_session_endpoints.py`
 
-- [ ] **Step 1: Add final end-to-end contract tests**
+- [x] **Step 1: Add final end-to-end contract tests**
 
 Backend:
 
@@ -729,7 +729,7 @@ it('updates Draft YAML after confirming all new session steps', async () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -740,7 +740,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "updates D
 
 Expected: FAIL if any serialization or UI refresh gaps remain.
 
-- [ ] **Step 3: Fix the minimal synchronization gaps**
+- [x] **Step 3: Fix the minimal synchronization gaps**
 
 Expected minimal fixes:
 
@@ -757,7 +757,7 @@ setDraft(validatedDraftResponse)
 
 Only add the missing refresh logic required to make both contract tests pass. Do not expand scope into live execution or extra review systems.
 
-- [ ] **Step 4: Run focused tests to verify they pass**
+- [x] **Step 4: Run focused tests to verify they pass**
 
 Run:
 
@@ -768,7 +768,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/integration/test_profile_builder_new_session_endpoints.py web/src/pages/Profiles/Builder.test.tsx src/autoagent/api/profile_builder.py web/src/pages/Profiles/Builder.tsx
@@ -781,7 +781,7 @@ git commit -m "fix(profile_builder): sync guided new session yaml state"
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`
 
-- [ ] **Step 1: Update developer docs**
+- [x] **Step 1: Update developer docs**
 
 Add concise notes to `CLAUDE.md`:
 
@@ -801,7 +801,7 @@ Add smoke steps to `2026-04-23-plan-4-android-manual-smoke.md`:
    - verify manual override path
 ```
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -819,7 +819,7 @@ Expected:
 - lint: PASS
 - build: PASS
 
-- [ ] **Step 3: Commit docs and verification-ready state**
+- [x] **Step 3: Commit docs and verification-ready state**
 
 ```bash
 git add CLAUDE.md docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md
