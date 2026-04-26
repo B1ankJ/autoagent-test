@@ -14,6 +14,9 @@ const {
   saveProfileMock,
   fetchArtifactBlobUrlMock,
   useVlmMock,
+  configureNewSessionMock,
+  captureNewSessionStepMock,
+  confirmNewSessionStepMock,
 } = vi.hoisted(() => ({
   createSessionMock: vi.fn(),
   captureStepMock: vi.fn(),
@@ -25,6 +28,9 @@ const {
   useVlmMock: vi.fn<[], { data: { base_url: string; model: string; api_key: string | null } }>(
     () => ({ data: { base_url: 'u', model: 'm', api_key: 'k' } }),
   ),
+  configureNewSessionMock: vi.fn(),
+  captureNewSessionStepMock: vi.fn(),
+  confirmNewSessionStepMock: vi.fn(),
 }))
 let runtimeMockData: unknown = null
 
@@ -75,6 +81,18 @@ vi.mock('../../api/profileBuilder', () => ({
   useValidateProfileBuilderDraft: () => ({
     isPending: false,
     mutateAsync: validateDraftMock,
+  }),
+  useConfigureProfileBuilderNewSession: () => ({
+    isPending: false,
+    mutateAsync: configureNewSessionMock,
+  }),
+  useCaptureProfileBuilderNewSessionStep: () => ({
+    isPending: false,
+    mutateAsync: captureNewSessionStepMock,
+  }),
+  useConfirmProfileBuilderNewSessionStep: () => ({
+    isPending: false,
+    mutateAsync: confirmNewSessionStepMock,
   }),
 }))
 
@@ -1596,6 +1614,54 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Capture Idle State' }))
     await waitFor(() => {
       expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'capture_idle.png')
+    })
+  })
+
+  it('configures guided new session step count before capture', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'draft',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: [],
+      captures: [],
+    })
+    configureNewSessionMock.mockResolvedValue({
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [],
+      draft_profile_yaml: '',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: [],
+      auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: null, screenshot_artifact: null,
+          recommended_tap: { point: null, reason: null, status: 'idle' }, confirmed_tap: null, source: null },
+        { step_index: 1, xml_artifact: null, screenshot_artifact: null,
+          recommended_tap: { point: null, reason: null, status: 'idle' }, confirmed_tap: null, source: null },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+    await userEvent.click(screen.getByLabelText('Step Count 2'))
+
+    expect(configureNewSessionMock).toHaveBeenCalledWith({
+      sessionId: 'pb_1',
+      strategy: 'guided_tap_sequence',
+      stepCount: 2,
     })
   })
 })

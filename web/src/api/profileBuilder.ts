@@ -7,6 +7,25 @@ import {
   ProfileBuilderValidateResponse,
   ProfileBuilderSessionView,
 } from '../types/api'
+
+interface NewSessionConfigArgs {
+  sessionId: string
+  strategy: 'disabled' | 'guided_tap_sequence'
+  stepCount: number
+}
+
+interface NewSessionStepCaptureArgs {
+  sessionId: string
+  stepIndex: number
+}
+
+interface NewSessionStepConfirmArgs {
+  sessionId: string
+  stepIndex: number
+  x: number
+  y: number
+  source: 'recommended' | 'manual'
+}
 import { client } from './client'
 
 export function useCreateProfileBuilderSession() {
@@ -60,6 +79,41 @@ export function useValidateProfileBuilderDraft() {
       (
         await client.post<ProfileBuilderValidateResponse>(
           `/profile-builder/sessions/${sessionId}/validate`,
+        )
+      ).data,
+  })
+}
+
+export function useConfigureProfileBuilderNewSession() {
+  return useMutation({
+    mutationFn: async ({ sessionId, strategy, stepCount }: NewSessionConfigArgs) =>
+      (
+        await client.put<ProfileBuilderDraftResponse>(
+          `/profile-builder/sessions/${sessionId}/new-session/config`,
+          { strategy, step_count: stepCount },
+        )
+      ).data,
+  })
+}
+
+export function useCaptureProfileBuilderNewSessionStep() {
+  return useMutation({
+    mutationFn: async ({ sessionId, stepIndex }: NewSessionStepCaptureArgs) =>
+      (
+        await client.post<ProfileBuilderDraftResponse>(
+          `/profile-builder/sessions/${sessionId}/new-session/step/${stepIndex}/capture`,
+        )
+      ).data,
+  })
+}
+
+export function useConfirmProfileBuilderNewSessionStep() {
+  return useMutation({
+    mutationFn: async ({ sessionId, stepIndex, x, y, source }: NewSessionStepConfirmArgs) =>
+      (
+        await client.put<ProfileBuilderDraftResponse>(
+          `/profile-builder/sessions/${sessionId}/new-session/step/${stepIndex}/confirm`,
+          { x, y, source },
         )
       ).data,
   })

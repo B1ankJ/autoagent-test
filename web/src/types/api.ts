@@ -270,6 +270,26 @@ export interface ProfileBuilderRuntimeView {
   recent_screens: ProfileBuilderRuntimeScreen[]
 }
 
+export interface ProfileBuilderTapPoint {
+  x: number
+  y: number
+}
+
+export interface ProfileBuilderNewSessionRecommendation {
+  point: ProfileBuilderTapPoint | null
+  reason: string | null
+  status: 'idle' | 'ready' | 'failed'
+}
+
+export interface ProfileBuilderNewSessionStep {
+  step_index: number
+  xml_artifact: string | null
+  screenshot_artifact: string | null
+  recommended_tap: ProfileBuilderNewSessionRecommendation
+  confirmed_tap: ProfileBuilderTapPoint | null
+  source: 'recommended' | 'manual' | null
+}
+
 export interface ProfileBuilderDraftResponse {
   session: ProfileBuilderSessionView
   candidates: ProfileBuilderCandidates
@@ -280,6 +300,8 @@ export interface ProfileBuilderDraftResponse {
   applied_review_choices: Record<string, number>
   pending_review_fields: string[]
   auto_review_source: 'manual' | 'llm'
+  new_session_strategy: 'disabled' | 'guided_tap_sequence'
+  new_session_steps: ProfileBuilderNewSessionStep[]
 }
 
 export interface ProfileBuilderReviewResponse {
