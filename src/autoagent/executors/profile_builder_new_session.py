@@ -27,6 +27,12 @@ _RECOMMEND_SCHEMA: dict[str, Any] = {
         "y": {"type": "integer", "minimum": 0},
         "target_text": {"type": "string"},
         "target_hint": {"type": "string"},
+        "target_bounds": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 4,
+            "maxItems": 4,
+        },
         "reason": {"type": "string"},
     },
     "required": ["reason"],
@@ -65,7 +71,8 @@ def _request_payload(
             "Prefer controls that open navigation drawers, chat history, overflow menus, compose buttons, or explicit new conversation actions.",
             "For early steps in a multi-step flow, prefer entry points that reveal a new-conversation action instead of the existing input area.",
             "Prefer returning target_text for the exact control label so the tap point can be calibrated from XML bounds.",
-            "Only return x/y when the XML does not expose a usable target label for calibration.",
+            "If XML text matching is ambiguous, return target_bounds for the chosen control so the tap point can still be centered programmatically.",
+            "Only return raw x/y when neither target_text nor target_bounds can identify the control.",
             "Keep the reason short and concrete.",
         ],
         "xml": xml_text,
@@ -143,6 +150,17 @@ def _node_strings(node: ElementTree.Element) -> list[str]:
 def _center_from_bounds(bounds: tuple[int, int, int, int]) -> tuple[int, int]:
     x1, y1, x2, y2 = bounds
     return ((x1 + x2) // 2, (y1 + y2) // 2)
+
+
+def _bounds_from_payload(value: Any) -> tuple[int, int, int, int] | None:
+    if not isinstance(value, list) or len(value) != 4:
+        return None
+    if not all(isinstance(item, int) for item in value):
+        return None
+    x1, y1, x2, y2 = value
+    if x2 < x1 or y2 < y1:
+        return None
+    return (x1, y1, x2, y2)
 
 
 def _best_tap_node(
@@ -262,10 +280,16 @@ def recommend_tap_point(
         if calibrated_point is not None:
             x, y = calibrated_point
         else:
-            if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
-                raise ValueError("new-session recommendation requires target_text or integer x/y")
-            x = parsed["x"]
-            y = parsed["y"]
+            target_bounds = _bounds_from_payload(parsed.get("target_bounds"))
+            if target_bounds is not None:
+                x, y = _center_from_bounds(target_bounds)
+            else:
+                if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
+                    raise ValueError(
+                        "new-session recommendation requires target_text, target_bounds, or integer x/y"
+                    )
+                x = parsed["x"]
+                y = parsed["y"]
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RecommendationProviderError(
             f"malformed new-session recommendation response: {exc}"

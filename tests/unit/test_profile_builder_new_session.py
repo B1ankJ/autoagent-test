@@ -125,3 +125,54 @@ def test_recommend_tap_point_calibrates_to_xml_bounds_from_target_text(monkeypat
         "y": 250,
         "reason": "The explicit new conversation button is visible.",
     }
+
+
+def test_recommend_tap_point_falls_back_to_target_bounds_when_xml_match_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+):
+    screenshot_path = tmp_path / "screen.png"
+    screenshot_path.write_bytes(b"png")
+    response = httpx.Response(
+        status_code=200,
+        request=httpx.Request("POST", "http://vlm.test/chat/completions"),
+        json={
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "target_text": "未命中文本",
+                                "target_bounds": [120, 220, 520, 320],
+                                "reason": "The highlighted card is the new conversation entry.",
+                            },
+                            ensure_ascii=False,
+                        )
+                    }
+                }
+            ]
+        },
+    )
+
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.httpx.post",
+        lambda *args, **kwargs: response,
+    )
+
+    result = recommend_tap_point(
+        screenshot_path=screenshot_path,
+        xml_text="<hierarchy><node text=\"其他控件\" bounds=\"[0,0][10,10]\" /></hierarchy>",
+        step_index=1,
+        step_count=2,
+        vlm=VLMConfig(
+            base_url="http://vlm.test",
+            model="demo",
+            api_key="secret",
+        ),
+    )
+
+    assert result == {
+        "x": 320,
+        "y": 270,
+        "reason": "The highlighted card is the new conversation entry.",
+    }
