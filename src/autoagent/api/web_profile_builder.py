@@ -30,7 +30,7 @@ _sessions: dict[str, dict[str, Any]] = {}
 # ── JS helper injected into the page to derive a stable CSS selector ──────────
 
 _SELECTOR_JS = """
-(x, y) => {
+([x, y]) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
 
@@ -86,7 +86,7 @@ _SELECTOR_JS = """
 """
 
 _ELEMENT_INFO_JS = """
-(x, y) => {
+([x, y]) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
     return {
@@ -146,11 +146,11 @@ async def _take_screenshot_b64(page: Any) -> str:
 
 
 async def _get_selector(page: Any, x: float, y: float) -> str | None:
-    return await page.evaluate(_SELECTOR_JS, x, y)
+    return await page.evaluate(_SELECTOR_JS, [x, y])
 
 
 async def _get_element_info(page: Any, x: float, y: float) -> dict[str, Any]:
-    info = await page.evaluate(_ELEMENT_INFO_JS, x, y)
+    info = await page.evaluate(_ELEMENT_INFO_JS, [x, y])
     return info or {}
 
 
