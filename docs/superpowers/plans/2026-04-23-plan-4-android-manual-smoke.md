@@ -330,6 +330,12 @@ complete_detection:
 7. Click "重新点选" on step 0, then tap a different point on the screenshot.
 8. Verify the confirmed point updates and YAML reflects the new coordinates.
 
+Recommendation-state checks:
+
+- If `VLM` is not configured, the new-session step should show `当前未配置 VLM，仅支持人工点选`.
+- If recommendation fails, the step should show `推荐请求失败：<reason>`.
+- In both states, manual point selection must still work when the screenshot exists.
+
 ## Report format
 
 Reply with:

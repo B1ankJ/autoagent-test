@@ -8,6 +8,8 @@
 
 **Tech Stack:** FastAPI, Pydantic, SQLite storage, React, TypeScript, Ant Design, Vitest, pytest.
 
+**Status (2026-04-27):** Complete. Backend recommendation states, Builder UI rendering, tests, and smoke notes are implemented. Commits: `f353f1d`, `d4065fe`, `d93549b7`.
+
 ---
 
 ### Task 1: Add explicit recommendation state to new-session step models and backend capture flow
@@ -18,7 +20,7 @@
 - Modify: `src/autoagent/api/profile_builder.py:160-220, 1120-1215`
 - Test: `tests/integration/test_profile_builder_new_session_endpoints.py`
 
-- [ ] **Step 1: Write the failing backend tests**
+- [x] **Step 1: Write the failing backend tests**
 
 Add three focused integration tests that assert the new recommendation states:
 
@@ -93,7 +95,7 @@ async def test_new_session_capture_marks_ready_on_success(client, monkeypatch):
     assert step["recommendation_error"] is None
 ```
 
-- [ ] **Step 2: Run the focused backend tests and confirm they fail on the current coarse state**
+- [x] **Step 2: Run the focused backend tests and confirm they fail on the current coarse state**
 
 Run:
 
@@ -105,7 +107,7 @@ Expected:
 - the tests fail because the current state only distinguishes `idle`, `ready`, and `failed`
 - the backend has no explicit `recommendation_error` field yet
 
-- [ ] **Step 3: Implement the minimal backend state changes**
+- [x] **Step 3: Implement the minimal backend state changes**
 
 Update the model and capture flow so each step carries a stable recommendation state:
 
@@ -163,7 +165,7 @@ else:
         }
 ```
 
-- [ ] **Step 4: Run the backend tests again and verify the new recommendation states pass**
+- [x] **Step 4: Run the backend tests again and verify the new recommendation states pass**
 
 Run:
 
@@ -175,7 +177,7 @@ Expected:
 - `unavailable`, `failed`, and `ready` assertions pass
 - existing manual confirmation tests still serialize `new_session_action`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/models/api.py src/autoagent/executors/profile_builder_new_session.py src/autoagent/api/profile_builder.py tests/integration/test_profile_builder_new_session_endpoints.py
@@ -189,7 +191,7 @@ git commit -m "feat(profile-builder): add new session recommendation states"
 - Modify: `web/src/pages/Profiles/Builder.test.tsx:1640-1835`
 - Modify: `web/src/types/api.ts:158-188`
 
-- [ ] **Step 1: Write the failing frontend tests**
+- [x] **Step 1: Write the failing frontend tests**
 
 Add two focused UI tests that assert the new messages and button behavior:
 
@@ -298,7 +300,7 @@ it('shows recommendation failure reason when provider fails', async () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused frontend tests and confirm the current UI still only understands the coarse status**
+- [x] **Step 2: Run the focused frontend tests and confirm the current UI still only understands the coarse status**
 
 Run:
 
@@ -309,7 +311,7 @@ pnpm --dir web exec vitest run src/pages/Profiles/Builder.test.tsx -t "new sessi
 Expected:
 - the tests fail until the Builder step card can render `unavailable` and the error reason
 
-- [ ] **Step 3: Implement the minimal UI state rendering**
+- [x] **Step 3: Implement the minimal UI state rendering**
 
 Update the step card rendering so it uses both `recommended_tap.status` and `recommended_tap.error`:
 
@@ -365,7 +367,7 @@ const recommendationMessage =
 </Button>
 ```
 
-- [ ] **Step 4: Run the frontend tests and build**
+- [x] **Step 4: Run the frontend tests and build**
 
 Run:
 
@@ -380,7 +382,7 @@ Expected:
 - lint passes
 - build passes
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/src/pages/Profiles/Builder.tsx web/src/pages/Profiles/Builder.test.tsx web/src/types/api.ts
@@ -393,7 +395,7 @@ git commit -m "feat(web): clarify new session recommendation states"
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`
 
-- [ ] **Step 1: Update the smoke guide with the new UI expectations**
+- [x] **Step 1: Update the smoke guide with the new UI expectations**
 
 Add the following note to the manual smoke doc:
 
@@ -403,14 +405,13 @@ Add the following note to the manual smoke doc:
 - In both states, manual point selection must still work when the screenshot exists.
 ```
 
-- [ ] **Step 2: Update the working notes in CLAUDE.md**
+- [x] **Step 2: Update the working notes in CLAUDE.md**
 
 Add a short note that the new-session panel now distinguishes `unavailable` and `failed` recommendation states, and that users should not need to click `重新点选` just to discover missing configuration.
 
-- [ ] **Step 3: Commit the documentation updates**
+- [x] **Step 3: Commit the documentation updates**
 
 ```bash
 git add CLAUDE.md docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md
 git commit -m "docs: update new session recommendation notes"
 ```
-
