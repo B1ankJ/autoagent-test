@@ -22,16 +22,20 @@ from autoagent.storage.devices import (
 _scheduler: BatchScheduler | None = None
 _device_pool: DevicePool | None = None
 _device_monitor: DeviceMonitor | None = None
+_executors: dict[str, Executor] = {}
 
 
 def _build_executor(mode: str) -> Executor:
-    if mode == "api":
-        return ApiExecutor()
-    if mode == "gui_pc_web":
-        return WebExecutor()
-    if mode == "gui_android":
-        return AndroidExecutor()
-    raise ValueError(f"mode {mode} not supported in this build")
+    if mode not in _executors:
+        if mode == "api":
+            _executors[mode] = ApiExecutor()
+        elif mode == "gui_pc_web":
+            _executors[mode] = WebExecutor()
+        elif mode == "gui_android":
+            _executors[mode] = AndroidExecutor()
+        else:
+            raise ValueError(f"mode {mode} not supported in this build")
+    return _executors[mode]
 
 
 def _lookup_profile(name: str) -> Any:
@@ -105,3 +109,4 @@ def reset_scheduler_for_tests() -> None:
     _scheduler = None
     _device_pool = None
     _device_monitor = None
+    _executors.clear()

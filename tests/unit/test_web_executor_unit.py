@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -73,14 +72,14 @@ def _patch_playwright(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
     pw = AsyncMock()
     pw.chromium = chromium
+    pw.stop = AsyncMock()
 
-    @asynccontextmanager
-    async def fake_async_playwright():
-        yield pw
+    playwright_handle = MagicMock()
+    playwright_handle.start = AsyncMock(return_value=pw)
 
     from autoagent.executors import web_executor as we
 
-    monkeypatch.setattr(we, "async_playwright", fake_async_playwright)
+    monkeypatch.setattr(we, "async_playwright", lambda: playwright_handle)
     return page
 
 
@@ -167,7 +166,26 @@ async def test_retry_on_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     ctx = ExecutorContext(verbose_logs=False)
     with pytest.raises(RuntimeError):
         await executor.execute(_sample(["hi"], retry=1), _profile(), ctx)
+    # First attempt navigates; after error session is invalidated; retry navigates again
     assert page.goto.await_count >= 2
+
+
+async def test_session_reused_across_samples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """new_session=False on second call must not re-navigate."""
+    page = _patch_playwright(monkeypatch)
+    executor = WebExecutor(screenshots_root=tmp_path)
+    ctx = ExecutorContext(verbose_logs=False)
+    prof = _profile()
+
+    # First sample creates the session
+    await executor.execute(_sample(["hello"], new_session=False), prof, ctx)
+    goto_count_after_first = page.goto.await_count
+
+    # Second sample with new_session=False should reuse session — no extra goto
+    await executor.execute(_sample(["world"], new_session=False), prof, ctx)
+    assert page.goto.await_count == goto_count_after_first
 
 
 async def test_verbose_logs_captures_per_action_screenshot(

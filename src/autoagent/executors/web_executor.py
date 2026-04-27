@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -12,12 +14,80 @@ from autoagent.executors.screenshot_store import ScreenshotStore
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import WebProfile, WebSendMethodClick, WebSendMethodKeyboard
 
+_log = logging.getLogger(__name__)
+
+
+class _WebSession:
+    """Holds a live browser context + page for one profile."""
+
+    def __init__(self, context: Any, page: Any, runner: ActionRunner) -> None:
+        self.context = context
+        self.page = page
+        self.runner = runner
+        self._lock = asyncio.Lock()
+
 
 class WebExecutor(Executor):
-    """Playwright-backed executor for `mode=gui_pc_web`."""
+    """Playwright-backed executor for `mode=gui_pc_web`.
+
+    Browser sessions are reused across samples when new_session=False.
+    Each profile gets its own persistent context keyed by profile.name.
+    """
 
     def __init__(self, screenshots_root: Path | None = None) -> None:
         self._root = Path(screenshots_root) if screenshots_root else Path("./data/logs")
+        self._pw: Any = None
+        self._sessions: dict[str, _WebSession] = {}
+
+    async def _ensure_playwright(self) -> Any:
+        if self._pw is None:
+            self._pw = await async_playwright().start()
+        return self._pw
+
+    async def _launch_context(self, profile: WebProfile) -> Any:
+        pw = await self._ensure_playwright()
+        if profile.browser.user_data_dir:
+            return await pw.chromium.launch_persistent_context(
+                user_data_dir=profile.browser.user_data_dir,
+                channel=profile.browser.channel,
+                headless=profile.browser.headless,
+            ), None
+        browser = await pw.chromium.launch(
+            channel=profile.browser.channel,
+            headless=profile.browser.headless,
+        )
+        return await browser.new_context(), browser
+
+    async def _get_or_create_session(
+        self, profile: WebProfile, store: ScreenshotStore, verbose: bool
+    ) -> _WebSession:
+        """Return an existing warm session for this profile, creating one if needed."""
+        key = profile.name
+        if key in self._sessions:
+            return self._sessions[key]
+
+        context, _browser = await self._launch_context(profile)
+        page = await context.new_page()
+        runner = ActionRunner(page)
+
+        await page.goto(profile.url, timeout=30_000)
+        await page.wait_for_selector(
+            profile.ready_check.selector,
+            timeout=int(profile.ready_check.timeout_sec * 1000),
+        )
+        await self._screenshot(page, store, "ready", verbose=True)
+
+        session = _WebSession(context, page, runner)
+        self._sessions[key] = session
+        return session
+
+    async def _invalidate_session(self, profile_name: str) -> None:
+        session = self._sessions.pop(profile_name, None)
+        if session:
+            try:
+                await session.context.close()
+            except Exception:
+                pass
 
     async def execute(self, sample: Sample, profile: Any, ctx: ExecutorContext) -> list[str]:
         if not isinstance(profile, WebProfile):
@@ -28,34 +98,25 @@ class WebExecutor(Executor):
         ctx.logs_dir = store.logs_dir
         responses: list[str] = []
 
-        async with async_playwright() as pw:
-            if profile.browser.user_data_dir:
-                context = await pw.chromium.launch_persistent_context(
-                    user_data_dir=profile.browser.user_data_dir,
-                    channel="chromium",
-                    headless=profile.browser.headless,
-                )
-                browser = None
-            else:
-                browser = await pw.chromium.launch(
-                    channel="chromium", headless=profile.browser.headless
-                )
-                context = await browser.new_context()
+        session = await self._get_or_create_session(profile, store, ctx.verbose_logs)
+
+        async with session._lock:
+            page = session.page
+            runner = session.runner
 
             try:
-                page = await context.new_page()
-                runner = ActionRunner(page)
-
-                await page.goto(profile.url, timeout=30_000)
-                await page.wait_for_selector(
-                    profile.ready_check.selector,
-                    timeout=int(profile.ready_check.timeout_sec * 1000),
-                )
-                await self._screenshot(page, store, "ready", verbose=True)
-
-                if sample.new_session and profile.new_session_action:
-                    await runner.run(list(profile.new_session_action))
-                    await self._screenshot(page, store, "new_session", verbose=ctx.verbose_logs)
+                if sample.new_session:
+                    if profile.new_session_action:
+                        await runner.run(list(profile.new_session_action))
+                        await self._screenshot(page, store, "new_session", verbose=ctx.verbose_logs)
+                    else:
+                        # No new_session_action defined: navigate fresh
+                        await page.goto(profile.url, timeout=30_000)
+                        await page.wait_for_selector(
+                            profile.ready_check.selector,
+                            timeout=int(profile.ready_check.timeout_sec * 1000),
+                        )
+                        await self._screenshot(page, store, "ready", verbose=True)
 
                 for idx, prompt in enumerate(sample.prompts, start=1):
                     try:
@@ -84,15 +145,16 @@ class WebExecutor(Executor):
                             await runner.run(list(profile.recovery_path))
                         except Exception:
                             pass
+                        # Invalidate session on error so next call gets a fresh browser
+                        await self._invalidate_session(profile.name)
                         raise
 
                 ctx.action_log = runner.log  # type: ignore[attr-defined]
                 return responses
-            finally:
-                if browser is not None:
-                    await browser.close()
-                else:
-                    await context.close()
+
+            except Exception:
+                # If session was already invalidated above, that's fine
+                raise
 
     async def _send(self, page: Any, method: Any) -> None:
         if isinstance(method, WebSendMethodKeyboard):
@@ -117,6 +179,21 @@ class WebExecutor(Executor):
             await page.screenshot(path=str(path), full_page=False)
         except Exception:  # noqa: BLE001
             pass
+
+    async def close(self) -> None:
+        """Release all sessions and the playwright subprocess."""
+        for session in list(self._sessions.values()):
+            try:
+                await session.context.close()
+            except Exception:
+                pass
+        self._sessions.clear()
+        if self._pw is not None:
+            try:
+                await self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
 
 
 def _send_button_selector(method: Any) -> str | None:

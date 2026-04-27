@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 
@@ -5,6 +6,8 @@ import yaml
 
 from autoagent.config.settings import get_settings
 from autoagent.profiles.schemas import Profile, parse_profile
+
+_log = logging.getLogger(__name__)
 
 _NAME_RE = re.compile(r"[A-Za-z0-9_\-]{1,64}")
 
@@ -29,8 +32,12 @@ def load_profile(name: str) -> Profile | None:
     path = _path(name)
     if not path.exists():
         return None
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return parse_profile(data)
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return parse_profile(data)
+    except Exception as exc:
+        _log.warning("skipping invalid profile %r: %s", name, exc)
+        return None
 
 
 def load_profile_yaml(name: str) -> str | None:

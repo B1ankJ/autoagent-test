@@ -91,6 +91,7 @@ WebSendMethod = Annotated[
 class WebBrowserConfig(BaseModel):
     headless: bool = False
     user_data_dir: str | None = None
+    channel: str = "chromium"  # "chromium" = bundled, "chrome" = system Chrome
 
 
 class WebProfile(BaseModel):
