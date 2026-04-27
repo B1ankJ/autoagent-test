@@ -205,12 +205,12 @@ class ProfileBuilderTapPoint(BaseModel):
 
 
 class ProfileBuilderNewSessionRecommendation(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid")
 
     point: ProfileBuilderTapPoint | None = None
     reason: str | None = None
     status: Literal["idle", "ready", "unavailable", "failed"] = "idle"
-    error: str | None = Field(default=None, alias="recommendation_error")
+    error: str | None = None
 
 
 class ProfileBuilderNewSessionStep(BaseModel):

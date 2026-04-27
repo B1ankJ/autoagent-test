@@ -257,6 +257,7 @@ async def test_new_session_capture_marks_unavailable_without_vlm(client, monkeyp
     body = response.json()
     step = body["new_session_steps"][0]
     assert step["recommended_tap"]["status"] == "unavailable"
+    assert step["recommended_tap"]["error"] == "vlm_unavailable"
     assert step["recommendation_error"] == "vlm_unavailable"
 
 
@@ -352,7 +353,7 @@ async def test_new_session_capture_marks_ready_on_success(client, monkeypatch):
     assert step["recommendation_error"] is None
 
 
-async def test_capture_new_session_step_handles_recommendation_failure(
+async def test_capture_new_session_step_without_vlm_marks_unavailable(
     client, monkeypatch
 ):
     headers, session = await _create_builder_session_with_captures(client, monkeypatch)
@@ -373,13 +374,6 @@ async def test_capture_new_session_step_handles_recommendation_failure(
         )
 
     monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
-    monkeypatch.setattr(
-        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            profile_builder_new_session.RecommendationProviderError("vlm unavailable")
-        ),
-    )
-
     config = await client.put(
         f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
         json={"strategy": "guided_tap_sequence", "step_count": 1},
@@ -403,7 +397,7 @@ async def test_capture_new_session_step_handles_recommendation_failure(
         "point": None,
         "reason": None,
         "status": "unavailable",
-        "recommendation_error": "vlm_unavailable",
+        "error": "vlm_unavailable",
     }
     assert step["confirmed_tap"] is None
     assert step["source"] is None
@@ -742,7 +736,7 @@ async def test_capture_new_session_step_malformed_recommendation_degrades_to_fai
         "point": None,
         "reason": None,
         "status": "failed",
-        "recommendation_error": "response_shape_error",
+        "error": "response_shape_error",
     }
 
 
