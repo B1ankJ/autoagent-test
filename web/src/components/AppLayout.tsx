@@ -18,6 +18,7 @@ const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/devices', icon: <MobileOutlined />, label: 'Devices' },
   { key: '/profiles', icon: <FileTextOutlined />, label: 'Profiles' },
+  { key: '/profiles/web-builder', icon: <FileTextOutlined />, label: 'Web Builder' },
   { key: '/tests/quick', icon: <ThunderboltOutlined />, label: '单次测试' },
   { key: '/batches', icon: <ExperimentOutlined />, label: 'Batches' },
   { key: '/config', icon: <SettingOutlined />, label: 'Config' },

@@ -13,6 +13,7 @@ import { Login } from './pages/Login'
 import Builder from './pages/Profiles/Builder'
 import { ProfileEdit } from './pages/Profiles/Edit'
 import { ProfileList } from './pages/Profiles/List'
+import WebBuilder from './pages/Profiles/WebBuilder'
 import { TestsQuick } from './pages/Tests/Quick'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="devices" element={<DevicesPage />} />
           <Route path="profiles" element={<ProfileList />} />
           <Route path="profiles/builder" element={<Builder />} />
+          <Route path="profiles/web-builder" element={<WebBuilder />} />
           <Route path="profiles/new" element={<ProfileEdit />} />
           <Route path="profiles/:name" element={<ProfileEdit />} />
           <Route path="tests/quick" element={<TestsQuick />} />

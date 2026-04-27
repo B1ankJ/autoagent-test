@@ -16,6 +16,7 @@ from autoagent.api.devices import router as devices_router
 from autoagent.api.profile_builder import router as profile_builder_router
 from autoagent.api.profiles import router as profiles_router
 from autoagent.api.tests import router as tests_router
+from autoagent.api.web_profile_builder import router as web_profile_builder_router
 from autoagent.auth.passwords import hash_password
 from autoagent.config.settings import get_settings
 from autoagent.storage.database import init_db
@@ -63,6 +64,7 @@ app.include_router(batches_router, prefix="/api/v1")
 app.include_router(config_router, prefix="/api/v1")
 app.include_router(devices_router, prefix="/api/v1")
 app.include_router(profile_builder_router, prefix="/api/v1")
+app.include_router(web_profile_builder_router, prefix="/api/v1")
 
 
 def _mount_static(app: FastAPI) -> None:
