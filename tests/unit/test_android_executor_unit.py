@@ -327,6 +327,119 @@ async def test_execute_skips_new_session_action_when_sample_does_not_request_it(
 
 
 @pytest.mark.asyncio
+async def test_execute_waits_two_seconds_between_new_session_steps(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    device = MagicMock()
+    first_target = MagicMock()
+    second_target = MagicMock()
+    input_target = MagicMock()
+    send_target = MagicMock()
+    events: list[str] = []
+    sleeps: list[float] = []
+
+    def lookup(**kwargs):
+        if kwargs == {"resourceId": "demo:id/step1"}:
+            return first_target
+        if kwargs == {"resourceId": "demo:id/step2"}:
+            return second_target
+        if kwargs == {"resourceId": "demo:id/input"}:
+            return input_target
+        if kwargs == {"text": "Send"}:
+            return send_target
+        raise AssertionError(f"unexpected selector: {kwargs}")
+
+    device.side_effect = lookup
+    device.dump_hierarchy.return_value = "<hierarchy/>"
+    device.screenshot.return_value = b"raw-frame"
+    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
+
+    async def fake_wait_for_ready_text(*_args, **_kwargs):
+        return True
+
+    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
+        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
+
+    async def fake_sleep(delay: float):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor._wait_for_ready_text",
+        fake_wait_for_ready_text,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
+        fake_wait_for_ui_tree_stable,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.asyncio.sleep",
+        fake_sleep,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.ensure_adb_keyboard_ready",
+        lambda _device: "com.example/.Ime",
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.is_package_installed",
+        lambda _serial, _pkg: False,
+    )
+    monkeypatch.setattr(
+        "autoagent.executors.android_input.set_ime",
+        lambda _serial, _ime: None,
+    )
+    first_target.click.side_effect = lambda *_, **__: events.append("step1")
+    second_target.click.side_effect = lambda *_, **__: events.append("step2")
+
+    profile = AndroidProfile(
+        name="fake_android",
+        platform="android",
+        package="demo.app",
+        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
+        recovery_path=[],
+        input_locator=Locator(type="resource_id", value="demo:id/input"),
+        send_button_locator=Locator(type="text", value="Send"),
+        response_extraction=AndroidResponseExtraction(
+            method="ui_tree_only",
+            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
+            latest_bubble_match=Locator(
+                type="last_child_with_class",
+                value="android.widget.TextView",
+            ),
+        ),
+        new_session_action=[
+            {
+                "action": "click_locator",
+                "locator": {"type": "resource_id", "value": "demo:id/step1"},
+            },
+            {
+                "action": "click_locator",
+                "locator": {"type": "resource_id", "value": "demo:id/step2"},
+            },
+        ],
+        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["hi"],
+        mode="gui_android",
+        target_profile="fake_android",
+        new_session=True,
+        retry=0,
+    )
+
+    out = await AndroidExecutor(screenshots_root=tmp_path).execute(
+        sample,
+        profile,
+        ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
+    )
+
+    assert out == ["echo: hi"]
+    assert events[:2] == ["step1", "step2"]
+    assert sleeps == [2.0]
+
+
+@pytest.mark.asyncio
 async def test_execute_prefers_send_action_over_send_button_locator(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:

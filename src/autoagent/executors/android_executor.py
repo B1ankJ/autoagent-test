@@ -26,6 +26,7 @@ from autoagent.models.api import Sample
 from autoagent.profiles.schemas import ActionStep, AndroidProfile
 
 log = logging.getLogger(__name__)
+_NEW_SESSION_STEP_DELAY_SEC = 2.0
 
 
 def _clip_log_text(value: str | None, max_chars: int = 240) -> str | None:
@@ -124,7 +125,10 @@ class AndroidExecutor(Executor):
                     await input_ctl.prepare_for_prompt(sample.prompts[0])
                 if sample.new_session and profile.new_session_action:
                     sample_log.info("android sample %s running new_session_action", sample.id)
-                    await action_runner.run(profile.new_session_action)
+                    await _run_new_session_action_with_delay(
+                        action_runner,
+                        profile.new_session_action,
+                    )
                 for idx, prompt in enumerate(sample.prompts, start=1):
                     resolved_input = resolved_methods[idx - 1]
                     if profile.input_focus_action:
@@ -358,3 +362,13 @@ async def _wait_for_ready_text(device: Any, text: str, *, timeout_sec: float) ->
             return True
         await asyncio.sleep(0.2)
     return False
+
+
+async def _run_new_session_action_with_delay(
+    action_runner: AndroidActionRunner,
+    steps: list[ActionStep],
+) -> None:
+    for idx, step in enumerate(steps):
+        await action_runner.run([step])
+        if idx < len(steps) - 1:
+            await asyncio.sleep(_NEW_SESSION_STEP_DELAY_SEC)
