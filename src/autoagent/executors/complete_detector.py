@@ -60,6 +60,20 @@ async def _collect_text(page: Any, selector: str) -> str:
         return await page.inner_text(selector)
 
 
+async def _collect_latest_text(page: Any, selector: str) -> str:
+    """Return innerText of the last non-empty element matching selector."""
+    try:
+        parts: list[str] = await page.evaluate(
+            "([sel]) => Array.from(document.querySelectorAll(sel))"
+            ".map(el => (el.innerText || el.textContent || '').trim())"
+            ".filter(t => t.length > 0)",
+            [selector],
+        )
+        return parts[-1] if parts else ""
+    except Exception:
+        return ""
+
+
 async def _dom_stable(
     page: Any,
     *,

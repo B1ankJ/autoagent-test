@@ -9,7 +9,11 @@ from playwright.async_api import async_playwright
 
 from autoagent.executors.action_runner import ActionRunner
 from autoagent.executors.base import Executor, ExecutorContext
-from autoagent.executors.complete_detector import _collect_text, wait_for_complete
+from autoagent.executors.complete_detector import (
+    _collect_latest_text,
+    _collect_text,
+    wait_for_complete,
+)
 from autoagent.executors.screenshot_store import ScreenshotStore
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import WebProfile, WebSendMethodClick, WebSendMethodKeyboard
@@ -134,9 +138,13 @@ class WebExecutor(Executor):
                             response_selector=profile.response_container_selector,
                             send_button_selector=_send_button_selector(profile.send_method),
                         )
-                        text = stable_text
-                        if text is None:
-                            text = await _collect_text(page, profile.response_container_selector)
+                        text = await _collect_latest_text(
+                            page, profile.response_container_selector
+                        )
+                        if not text:
+                            text = stable_text or await _collect_text(
+                                page, profile.response_container_selector
+                            )
                         responses.append(text)
                         await self._screenshot(page, store, f"done_{idx}", verbose=True)
                     except Exception:

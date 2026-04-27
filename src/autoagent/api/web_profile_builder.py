@@ -30,58 +30,157 @@ _sessions: dict[str, dict[str, Any]] = {}
 # ── JS helper injected into the page to derive a stable CSS selector ──────────
 
 _SELECTOR_JS = """
-([x, y]) => {
+([x, y, field]) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
 
-    function trySelector(sel) {
-        try { return document.querySelector(sel) === el ? sel : null; }
-        catch { return null; }
+    const textOf = (node) => ((node.innerText || node.textContent || '').trim());
+    const meaningfulClasses = (node) =>
+        Array.from(node.classList || []).filter(
+            (cls) => cls.length > 2 && !(cls.match(/^[a-z]+-[a-zA-Z0-9]{6,}$/) && /\\d/.test(cls))
+        );
+
+    function simpleCandidates(node) {
+        const out = [];
+        if (node.id) out.push('#' + CSS.escape(node.id));
+        const tid = node.getAttribute('data-testid');
+        if (tid) out.push(`[data-testid="${tid}"]`);
+        const role = node.getAttribute('role');
+        const label = node.getAttribute('aria-label');
+        if (role && label) out.push(`[role="${role}"][aria-label="${CSS.escape(label)}"]`);
+        if (role) out.push(`[role="${role}"]`);
+        const ph = node.getAttribute('placeholder');
+        if (ph) out.push(`[placeholder="${ph}"]`);
+        if (node.getAttribute('contenteditable') === 'true') out.push('[contenteditable="true"]');
+        for (const cls of meaningfulClasses(node)) {
+            out.push('.' + CSS.escape(cls));
+        }
+        return out;
     }
 
-    // 1. id
-    if (el.id) {
-        const s = '#' + CSS.escape(el.id);
-        if (trySelector(s)) return s;
-    }
-    // 2. data-testid
-    const tid = el.getAttribute('data-testid');
-    if (tid) {
-        const s = `[data-testid="${tid}"]`;
-        if (trySelector(s)) return s;
-    }
-    // 3. role + aria-label
-    const role = el.getAttribute('role');
-    const label = el.getAttribute('aria-label');
-    if (role && label) {
-        const s = `[role="${role}"][aria-label="${CSS.escape(label)}"]`;
-        if (trySelector(s)) return s;
-    }
-    // 4. role alone (if unique)
-    if (role) {
-        const s = `[role="${role}"]`;
-        if (trySelector(s)) return s;
-    }
-    // 5. placeholder
-    const ph = el.getAttribute('placeholder');
-    if (ph) {
-        const s = `[placeholder="${ph}"]`;
-        if (trySelector(s)) return s;
-    }
-    // 6. contenteditable
-    if (el.getAttribute('contenteditable') === 'true') {
-        const s = '[contenteditable="true"]';
-        if (trySelector(s)) return s;
-    }
-    // 7. class (first meaningful class)
-    for (const cls of el.classList) {
-        if (cls.length > 2 && !cls.match(/^[a-z]+-[a-zA-Z0-9]{6,}$/)) {
-            const s = '.' + CSS.escape(cls);
-            if (trySelector(s)) return s;
+    function isUniqueMatch(root, node, sel) {
+        try {
+            const matches = root.querySelectorAll(sel);
+            return matches.length === 1 && matches[0] === node;
+        } catch {
+            return false;
         }
     }
-    // 8. tag
-    return el.tagName.toLowerCase();
+
+    function firstUniqueSimpleSelector(root, node) {
+        for (const sel of simpleCandidates(node)) {
+            if (isUniqueMatch(root, node, sel)) return sel;
+        }
+        return null;
+    }
+
+    function nthOfTypeSegment(node) {
+        const tag = node.tagName.toLowerCase();
+        let index = 1;
+        let prev = node.previousElementSibling;
+        while (prev) {
+            if (prev.tagName === node.tagName) index += 1;
+            prev = prev.previousElementSibling;
+        }
+        return `${tag}:nth-of-type(${index})`;
+    }
+
+    function pathFromAncestor(ancestor, node) {
+        const segments = [];
+        let cur = node;
+        while (cur && cur !== ancestor) {
+            segments.unshift(nthOfTypeSegment(cur));
+            cur = cur.parentElement;
+        }
+        return segments.join(' > ');
+    }
+
+    function uniqueSelectorFor(node) {
+        const direct = firstUniqueSimpleSelector(document, node);
+        if (direct) return direct;
+
+        let ancestor = node.parentElement;
+        while (ancestor && ancestor !== document.documentElement) {
+            const anchor = firstUniqueSimpleSelector(document, ancestor);
+            if (anchor) {
+                const suffix = pathFromAncestor(ancestor, node);
+                return suffix ? `${anchor} > ${suffix}` : anchor;
+            }
+            ancestor = ancestor.parentElement;
+        }
+
+        const suffix = pathFromAncestor(document.documentElement, node);
+        return suffix ? `html > ${suffix}` : 'html';
+    }
+
+    function repeatedItemSelector(node) {
+        const parent = node.parentElement;
+        if (!parent) return null;
+
+        for (const cls of meaningfulClasses(node)) {
+            const siblings = Array.from(parent.children).filter(
+                (child) => child.classList && child.classList.contains(cls)
+            );
+            if (siblings.length >= 2) return '.' + CSS.escape(cls) + ':last-child';
+        }
+
+        const sameTagSiblings = Array.from(parent.children).filter((child) => child.tagName === node.tagName);
+        if (sameTagSiblings.length >= 2) {
+            const parentSelector = firstUniqueSimpleSelector(document, parent) || uniqueSelectorFor(parent);
+            return `${parentSelector} > ${node.tagName.toLowerCase()}:last-child`;
+        }
+
+        return null;
+    }
+
+    function promotedResponseNode(node) {
+        const baseText = textOf(node);
+        let cur = node;
+        for (let depth = 0; depth < 4 && cur.parentElement; depth += 1) {
+            cur = cur.parentElement;
+            const curText = textOf(cur);
+            if (baseText && curText && curText !== baseText) return cur;
+        }
+        return node;
+    }
+
+    function findRepeatedItem(node) {
+        let cur = node;
+        for (let depth = 0; depth < 6 && cur && cur !== document.body; depth += 1) {
+            if (repeatedItemSelector(cur)) return cur;
+            cur = cur.parentElement;
+        }
+        return null;
+    }
+
+    function relativeSelectorWithin(ancestor, node) {
+        if (ancestor === node) return '';
+
+        let cur = node;
+        while (cur && cur !== ancestor) {
+            const direct = firstUniqueSimpleSelector(ancestor, cur);
+            if (direct) return direct;
+            cur = cur.parentElement;
+        }
+
+        const suffix = pathFromAncestor(ancestor, node);
+        return suffix || '';
+    }
+
+    if (field === 'response') {
+        const textNode = promotedResponseNode(el);
+        const itemNode = findRepeatedItem(textNode) || findRepeatedItem(el);
+        if (itemNode) {
+            const itemSelector = repeatedItemSelector(itemNode);
+            if (itemSelector) {
+                const rel = relativeSelectorWithin(itemNode, textNode);
+                return rel ? `${itemSelector} ${rel}` : itemSelector;
+            }
+        }
+        return uniqueSelectorFor(textNode);
+    }
+
+    return uniqueSelectorFor(el);
 }
 """
 
@@ -145,8 +244,8 @@ async def _take_screenshot_b64(page: Any) -> str:
     return base64.b64encode(raw).decode()
 
 
-async def _get_selector(page: Any, x: float, y: float) -> str | None:
-    return await page.evaluate(_SELECTOR_JS, [x, y])
+async def _get_selector(page: Any, x: float, y: float, field: str) -> str | None:
+    return await page.evaluate(_SELECTOR_JS, [x, y, field])
 
 
 async def _get_element_info(page: Any, x: float, y: float) -> dict[str, Any]:
@@ -212,7 +311,7 @@ async def get_screenshot(session_id: str) -> dict[str, str]:
 async def pick_element(session_id: str, req: PickRequest) -> PickResult:
     s = _get_session(session_id)
     page = s["page"]
-    selector = await _get_selector(page, req.x, req.y)
+    selector = await _get_selector(page, req.x, req.y, req.field)
     if not selector:
         raise HTTPException(status_code=422, detail="no element found at that position")
     info = await _get_element_info(page, req.x, req.y)

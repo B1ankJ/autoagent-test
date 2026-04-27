@@ -78,6 +78,42 @@ async def test_new_session_clears_history(tmp_path: Path) -> None:
     assert responses == ["echo: fresh"]
 
 
+async def test_reused_session_with_multi_match_selector_returns_latest_reply_only(
+    tmp_path: Path,
+) -> None:
+    executor = WebExecutor(screenshots_root=tmp_path)
+    ctx = ExecutorContext(logs_dir="b_test", verbose_logs=False)
+    profile = _profile().model_copy(
+        update={"response_container_selector": "#responses > div[data-role='assistant']"}
+    )
+
+    first = await executor.execute(
+        Sample(
+            id="s_reuse_1",
+            prompts=["first"],
+            mode="gui_pc_web",
+            target_profile="fake",
+            new_session=False,
+        ),
+        profile,
+        ctx,
+    )
+    second = await executor.execute(
+        Sample(
+            id="s_reuse_2",
+            prompts=["second"],
+            mode="gui_pc_web",
+            target_profile="fake",
+            new_session=False,
+        ),
+        profile,
+        ctx,
+    )
+
+    assert first == ["echo: first"]
+    assert second == ["echo: second"]
+
+
 async def test_bad_selector_triggers_recovery(tmp_path: Path) -> None:
     executor = WebExecutor(screenshots_root=tmp_path)
     bad = _profile().model_copy(update={"input_selector": "#does-not-exist"})
