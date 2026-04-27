@@ -18,6 +18,35 @@ from autoagent.profiles.schemas import (
 
 
 @pytest.mark.asyncio
+async def test_wait_for_ready_text_matches_any_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from autoagent.executors.android_executor import _wait_for_ready_text
+
+    device = MagicMock()
+    device.dump_hierarchy.side_effect = [
+        '<hierarchy><node text="加载中" class="android.widget.TextView"/></hierarchy>',
+        '<hierarchy><node text="发消息" class="android.widget.TextView"/></hierarchy>',
+    ]
+    sleep_calls = []
+
+    async def fake_sleep(_seconds: float) -> None:
+        sleep_calls.append(_seconds)
+
+    monkeypatch.setattr("autoagent.executors.android_executor.asyncio.sleep", fake_sleep)
+
+    matched = await _wait_for_ready_text(
+        device,
+        ["发消息", "语音输入"],
+        timeout_sec=1,
+    )
+
+    assert matched is True
+    assert device.dump_hierarchy.call_count == 2
+    assert sleep_calls == [0.2]
+
+
+@pytest.mark.asyncio
 async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     device = MagicMock()
     input_target = MagicMock()

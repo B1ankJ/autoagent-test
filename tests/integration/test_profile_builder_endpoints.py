@@ -74,7 +74,9 @@ async def _create_builder_session_with_captures(client, monkeypatch, *, name: st
     device.dump_hierarchy.side_effect = [
         (
             '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
+            'bounds="[177,2066][777,2123]" />'
+            '<node text="语音输入" class="android.widget.ImageView" '
+            'bounds="[820,2060][980,2120]" /></hierarchy>'
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" '
@@ -170,7 +172,9 @@ async def test_profile_builder_session_enables_adb_keyboard_until_draft_finishes
     device.dump_hierarchy.side_effect = [
         (
             '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
+            'bounds="[177,2066][777,2123]" />'
+            '<node text="语音输入" class="android.widget.ImageView" '
+            'bounds="[820,2060][980,2120]" /></hierarchy>'
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" '
@@ -327,7 +331,9 @@ async def test_profile_builder_generate_draft_inject_llm_rejects_without_global_
     device.dump_hierarchy.side_effect = [
         (
             '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
+            'bounds="[177,2066][777,2123]" />'
+            '<node text="语音输入" class="android.widget.ImageView" '
+            'bounds="[820,2060][980,2120]" /></hierarchy>'
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" '
@@ -748,7 +754,9 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     device.dump_hierarchy.side_effect = [
         (
             '<hierarchy><node text="发消息或按住说话..." class="android.widget.TextView" '
-            'bounds="[177,2066][777,2123]" /></hierarchy>'
+            'bounds="[177,2066][777,2123]" />'
+            '<node text="语音输入" class="android.widget.ImageView" '
+            'bounds="[820,2060][980,2120]" /></hierarchy>'
         ),
         (
             '<hierarchy><node text="你好" class="android.widget.EditText" '
@@ -804,6 +812,13 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert body["review_items"][0]["recommended_option"] == [
         {"action": "tap_xy", "x": 477, "y": 2094}
     ]
+    ready_check_review = next(item for item in body["review_items"] if item["field"] == "ready_check")
+    assert ready_check_review["recommended_option"] == {
+        "type": "ui_tree_contains",
+        "text": ["发消息", "语音输入"],
+        "timeout_sec": 5,
+    }
+    assert ready_check_review["candidate_texts"] == ["发消息", "语音输入"]
     assert len(body["review_items"][0]["alternative_candidates"]) >= 2
     assert [
         {

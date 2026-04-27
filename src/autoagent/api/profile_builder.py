@@ -727,7 +727,7 @@ def _collect_validation_screens_from_logs(
     return _runtime_screens_for_validation(session)
 
 
-def _ready_check_text(idle_xml: str) -> str:
+def _ready_check_text(idle_xml: str) -> str | list[str]:
     try:
         root = ElementTree.fromstring(idle_xml)
     except ElementTree.ParseError:
@@ -743,15 +743,68 @@ def _ready_check_text(idle_xml: str) -> str:
             continue
         lowered = text.lower()
         if any(keyword in lowered for keyword in ("发消息", "说话", "输入", "send", "message")):
-            preferred.append(text)
+            if text not in preferred:
+                preferred.append(text)
             continue
-        fallback_texts.append(text)
+        if text not in fallback_texts:
+            fallback_texts.append(text)
     if preferred:
-        best = min(preferred, key=len)
-        return "发消息" if "发消息" in best else best
+        if len(preferred) == 1:
+            best = preferred[0]
+            return "发消息" if "发消息" in best else best
+        return ["发消息" if "发消息" in text else text for text in preferred]
     if fallback_texts:
         return fallback_texts[0]
     return "发消息"
+
+
+def _ready_check_review_item(idle_xml: str) -> dict | None:
+    ready_text = _ready_check_text(idle_xml)
+    if isinstance(ready_text, str):
+        return None
+
+    try:
+        root = ElementTree.fromstring(idle_xml)
+    except ElementTree.ParseError:
+        return None
+
+    evidence_by_text: dict[str, dict] = {}
+    for node in root.iter():
+        text = (node.attrib.get("text") or "").strip()
+        if not text:
+            continue
+        normalized = "发消息" if "发消息" in text else text
+        if normalized not in ready_text or normalized in evidence_by_text:
+            continue
+        bounds = _parse_bounds(node.attrib.get("bounds"))
+        evidence_by_text[normalized] = {
+            "source": "idle_xml",
+            "step": "idle",
+            "artifact": "capture_idle.png",
+            "bounds": list(bounds) if bounds is not None else None,
+            "label": "ready-check",
+            "text": normalized,
+        }
+
+    recommended_option = {
+        "type": "ui_tree_contains",
+        "text": ready_text,
+        "timeout_sec": 5,
+    }
+    evidence_refs = [
+        evidence_by_text[text]
+        for text in ready_text
+        if text in evidence_by_text
+    ]
+    return {
+        "field": "ready_check",
+        "reason": "Choose one or more stable idle-state texts. Runtime passes when any selected text is present.",
+        "recommended_option": recommended_option,
+        "alternative_candidates": [],
+        "evidence_refs": evidence_refs,
+        "alternative_evidence_refs": [],
+        "candidate_texts": ready_text,
+    }
 
 
 def _input_placeholder_locator(idle_xml: str) -> dict | None:
@@ -1333,6 +1386,11 @@ async def generate_draft(
             item.get("field") == "input_focus_action" for item in candidates["review_items"]
         ):
             candidates["review_items"].insert(0, input_focus_action_review_item)
+        ready_check_review_item = _ready_check_review_item(idle_xml)
+        if ready_check_review_item is not None and not any(
+            item.get("field") == "ready_check" for item in candidates["review_items"]
+        ):
+            candidates["review_items"].insert(1, ready_check_review_item)
         raw_vlm = await get_config("vlm")
         vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else VLMConfig()
         llm_output = (

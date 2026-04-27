@@ -112,7 +112,7 @@ class WebProfile(BaseModel):
 
 class AndroidReadyCheckTree(BaseModel):
     type: Literal["ui_tree_contains"]
-    text: str
+    text: str | list[str]
     timeout_sec: float = 5
 
 

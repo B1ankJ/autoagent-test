@@ -49,3 +49,13 @@ def test_android_profile_llm_disabled_when_any_field_missing():
         kwargs[missing] = None
         p = AndroidProfile(**_BASE, **kwargs)
         assert p.llm_response_enabled() is False, f"{missing} missing should disable"
+
+
+def test_android_ready_check_accepts_multiple_text_candidates():
+    check = AndroidReadyCheckTree(
+        type="ui_tree_contains",
+        text=["发消息", "语音输入"],
+        timeout_sec=5,
+    )
+
+    assert check.text == ["发消息", "语音输入"]

@@ -185,6 +185,12 @@ export interface ActionStepChoice {
 
 export type ActionStepsReviewOption = ActionStepChoice[]
 
+export interface ReadyCheckReviewOption {
+  type: 'ui_tree_contains'
+  text: string | string[]
+  timeout_sec: number
+}
+
 export interface ReviewEvidenceRef {
   source: string
   step: string
@@ -201,10 +207,17 @@ export interface ReviewEvidenceRef {
 export interface ReviewItem {
   field: string
   reason: string
-  recommended_option: LocatorChoice | ResponseReviewOption | ActionStepsReviewOption
-  alternative_candidates: Array<LocatorChoice | ResponseReviewOption | ActionStepsReviewOption>
+  recommended_option:
+    | LocatorChoice
+    | ResponseReviewOption
+    | ActionStepsReviewOption
+    | ReadyCheckReviewOption
+  alternative_candidates: Array<
+    LocatorChoice | ResponseReviewOption | ActionStepsReviewOption | ReadyCheckReviewOption
+  >
   evidence_refs: ReviewEvidenceRef[]
   alternative_evidence_refs: ReviewEvidenceRef[][]
+  candidate_texts?: string[]
 }
 
 export interface CandidateOption {

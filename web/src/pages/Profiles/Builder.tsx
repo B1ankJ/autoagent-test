@@ -54,6 +54,8 @@ import {
   SingleTestSyncResponse,
   ProfileBuilderRuntimeView,
   ProfileBuilderSessionView,
+  ReadyCheckReviewOption,
+  ResponseReviewOption,
   ReviewItem,
 } from '../../types/api'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
@@ -146,17 +148,23 @@ function reviewOptionText(value: ReviewItem['recommended_option']) {
       })
       .join('\n')
   }
-  if ('type' in value) {
+  if ('type' in value && value.type === 'ui_tree_contains' && 'text' in value) {
+    return `ui_tree_contains: ${readyCheckTexts(value).join(' OR ')}`
+  }
+  if ('type' in value && 'value' in value) {
     return `${value.type}: ${value.value}`
   }
-  return [
-    value.bubble_preview ? `bubble_text=${value.bubble_preview}` : null,
-    `response=${value.response_container_locator.value}`,
-    `scroll=${value.scroll_container_locator.value}`,
-    `bubble=${value.latest_bubble_match.value}`,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  if (isResponseReviewOption(value)) {
+    return [
+      value.bubble_preview ? `bubble_text=${value.bubble_preview}` : null,
+      `response=${value.response_container_locator.value}`,
+      `scroll=${value.scroll_container_locator.value}`,
+      `bubble=${value.latest_bubble_match.value}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  return ''
 }
 
 function toReviewPayload(
@@ -165,6 +173,15 @@ function toReviewPayload(
 ): Record<string, unknown> {
   if (Array.isArray(value)) {
     return { [field]: value }
+  }
+  if ('type' in value && value.type === 'ui_tree_contains' && 'text' in value) {
+    return {
+      ready_check: {
+        type: value.type,
+        text: value.text,
+        timeout_sec: value.timeout_sec,
+      },
+    }
   }
   if ('type' in value) {
     return { [field]: value }
@@ -181,6 +198,20 @@ function toReviewPayload(
 function reviewOptionByIndex(item: ReviewItem, index: number): ReviewItem['recommended_option'] | null {
   const options = [item.recommended_option, ...item.alternative_candidates]
   return options[index] ?? null
+}
+
+function isReadyCheckReviewOption(value: ReviewItem['recommended_option']): value is ReadyCheckReviewOption {
+  return !Array.isArray(value) && 'type' in value && value.type === 'ui_tree_contains' && 'text' in value
+}
+
+function readyCheckTexts(option: ReadyCheckReviewOption): string[] {
+  return Array.isArray(option.text) ? option.text : [option.text]
+}
+
+function isResponseReviewOption(
+  value: ReviewItem['recommended_option'],
+): value is ResponseReviewOption {
+  return !Array.isArray(value) && 'response_container_locator' in value
 }
 
 function appliedChoiceLabelsFromDraft(
@@ -308,6 +339,7 @@ export default function Builder() {
   >({})
   const [expandedNewSessionPreviews, setExpandedNewSessionPreviews] = useState<Record<number, boolean>>({})
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
+  const [readyCheckSelections, setReadyCheckSelections] = useState<Record<string, string[]>>({})
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
   const [showUnresolvedOnly, setShowUnresolvedOnly] = useState(false)
@@ -319,10 +351,21 @@ export default function Builder() {
     if (!draft) {
       setDraftYamlText('')
       setDraftYamlEditing(false)
+      setReadyCheckSelections({})
       return
     }
     setDraftYamlText(draft.draft_profile_yaml)
     setDraftYamlEditing(false)
+    setReadyCheckSelections(
+      Object.fromEntries(
+        (draft.review_items ?? [])
+          .filter((item) => item.field === 'ready_check' && isReadyCheckReviewOption(item.recommended_option))
+          .map((item, index) => {
+            const key = reviewItemKey(item, index)
+            return [key, readyCheckTexts(item.recommended_option as ReadyCheckReviewOption)]
+          }),
+      ),
+    )
   }, [draft?.draft_profile_yaml, draft])
   const reviewEntries = useMemo(
     () => draft?.review_items.map((item, index) => ({ item, index, key: reviewItemKey(item, index) })) ?? [],
@@ -621,6 +664,47 @@ export default function Builder() {
   ) => {
     if (!session || !draft) {
       return
+    }
+    try {
+      const updated = await applyReview.mutateAsync({
+        sessionId: session.id,
+        payload: toReviewPayload(item.field, option),
+      })
+      setSession(updated.session)
+      setDraft({
+        ...draft,
+        session: updated.session,
+        draft_profile_yaml: updated.draft_profile_yaml,
+        pending_review_fields: draft.pending_review_fields.filter((field) => field !== item.field),
+        requires_manual_review: draft.pending_review_fields.filter((field) => field !== item.field).length > 0,
+      })
+      setAppliedReviewChoices((previous) => ({
+        ...previous,
+        [item.field]: reviewOptionText(option),
+      }))
+      message.success(`${item.field} 已更新`)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const chooseReadyCheckSelection = async (item: ReviewItem, key: string) => {
+    if (!session || !draft) {
+      return
+    }
+    const selectedTexts = readyCheckSelections[key] ?? []
+    if (!selectedTexts.length) {
+      message.warning('请至少选择一个 ready_check 文本')
+      return
+    }
+    const baseOption = isReadyCheckReviewOption(item.recommended_option) ? item.recommended_option : null
+    if (!baseOption) {
+      return
+    }
+    const option: ReadyCheckReviewOption = {
+      type: 'ui_tree_contains',
+      text: selectedTexts,
+      timeout_sec: baseOption.timeout_sec,
     }
     try {
       const updated = await applyReview.mutateAsync({
@@ -1301,6 +1385,14 @@ export default function Builder() {
                       const isActive = activeReviewKey === key
                       const isApplied = !!appliedReviewChoices[item.field]
                       const isUnresolved = unresolvedFieldSet.has(item.field)
+                      const readyCheckOption = isReadyCheckReviewOption(item.recommended_option)
+                        ? item.recommended_option
+                        : null
+                      const isReadyCheckItem = item.field === 'ready_check' && readyCheckOption != null
+                      const readyCheckOptions = isReadyCheckItem
+                        ? item.candidate_texts ?? readyCheckTexts(readyCheckOption)
+                        : []
+                      const readyCheckSelection = isReadyCheckItem ? (readyCheckSelections[key] ?? readyCheckOptions) : []
                       return (
                     <Alert
                       key={key}
@@ -1338,9 +1430,34 @@ export default function Builder() {
                       description={
                         expanded ? (
                         <Space direction="vertical" style={{ width: '100%' }}>
-                          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-                            {reviewOptionText(item.recommended_option)}
-                          </Typography.Paragraph>
+                          {isReadyCheckItem ? (
+                            <Space direction="vertical" style={{ width: '100%' }}>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                选择一个或多个空闲态文本，运行时任一命中即可通过。
+                              </Typography.Paragraph>
+                              <Checkbox.Group
+                                value={readyCheckSelection}
+                                onChange={(values) => {
+                                  setReadyCheckSelections((previous) => ({
+                                    ...previous,
+                                    [key]: values.map(String),
+                                  }))
+                                }}
+                              >
+                                <Space direction="vertical">
+                                  {readyCheckOptions.map((text: string) => (
+                                    <Checkbox key={text} value={text}>
+                                      {text}
+                                    </Checkbox>
+                                  ))}
+                                </Space>
+                              </Checkbox.Group>
+                            </Space>
+                          ) : (
+                            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                              {reviewOptionText(item.recommended_option)}
+                            </Typography.Paragraph>
+                          )}
                           {appliedReviewChoices[item.field] ? (
                             <Alert
                               type="success"
@@ -1366,11 +1483,15 @@ export default function Builder() {
                               type="primary"
                               onClick={(event) => {
                                 event.stopPropagation()
+                                if (isReadyCheckItem) {
+                                  void chooseReadyCheckSelection(item, key)
+                                  return
+                                }
                                 void chooseReviewOption(item, item.recommended_option)
                               }}
                               loading={applyReview.isPending}
                             >
-                              Apply Recommended
+                              {isReadyCheckItem ? '确认 ready_check' : 'Apply Recommended'}
                             </Button>
                             <Button
                               size="small"
@@ -1395,7 +1516,7 @@ export default function Builder() {
                             >
                               查看全部证据
                             </Button>
-                            {item.alternative_candidates.map((candidate, candidateIndex) => (
+                            {!isReadyCheckItem && item.alternative_candidates.map((candidate, candidateIndex) => (
                               <Space key={candidateIndex} size="small">
                                 <Button
                                   size="small"

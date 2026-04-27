@@ -60,6 +60,14 @@ class _SampleLogger:
             f.write(f"{ts} {level} {message}\n")
 
 
+def _ready_check_text_candidates(text: str | list[str]) -> list[str]:
+    if isinstance(text, str):
+        candidates = [text.strip()]
+    else:
+        candidates = [candidate.strip() for candidate in text if candidate and candidate.strip()]
+    return [candidate for candidate in candidates if candidate]
+
+
 class AndroidExecutor(Executor):
     def __init__(self, screenshots_root: Path | None = None) -> None:
         self._root = Path(screenshots_root) if screenshots_root else Path("./data/logs")
@@ -354,11 +362,12 @@ class AndroidExecutor(Executor):
         return responses
 
 
-async def _wait_for_ready_text(device: Any, text: str, *, timeout_sec: float) -> bool:
+async def _wait_for_ready_text(device: Any, text: str | list[str], *, timeout_sec: float) -> bool:
+    candidates = _ready_check_text_candidates(text)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
         xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
-        if text in xml:
+        if any(candidate in xml for candidate in candidates):
             return True
         await asyncio.sleep(0.2)
     return False
