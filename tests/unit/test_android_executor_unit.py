@@ -436,7 +436,7 @@ async def test_execute_waits_two_seconds_between_new_session_steps(
 
     assert out == ["echo: hi"]
     assert events[:2] == ["step1", "step2"]
-    assert sleeps == [2.0]
+    assert sleeps == [2.0, 2.0]
 
 
 @pytest.mark.asyncio

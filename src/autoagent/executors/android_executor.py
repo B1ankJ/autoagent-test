@@ -368,7 +368,6 @@ async def _run_new_session_action_with_delay(
     action_runner: AndroidActionRunner,
     steps: list[ActionStep],
 ) -> None:
-    for idx, step in enumerate(steps):
+    for step in steps:
         await action_runner.run([step])
-        if idx < len(steps) - 1:
-            await asyncio.sleep(_NEW_SESSION_STEP_DELAY_SEC)
+        await asyncio.sleep(_NEW_SESSION_STEP_DELAY_SEC)
