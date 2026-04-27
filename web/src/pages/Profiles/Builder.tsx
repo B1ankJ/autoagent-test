@@ -301,6 +301,9 @@ export default function Builder() {
   const [newSessionStepPreviewUrls, setNewSessionStepPreviewUrls] = useState<Record<string, string>>(
     {},
   )
+  const [newSessionStepPreviewSizes, setNewSessionStepPreviewSizes] = useState<
+    Record<string, { width: number; height: number }>
+  >({})
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
@@ -682,11 +685,13 @@ export default function Builder() {
   const handleNewSessionStepImageClick = async (
     event: React.MouseEvent<HTMLDivElement>,
     stepIndex: number,
+    screenshotArtifact: string | null,
   ) => {
     if (!session) return
     const rect = event.currentTarget.getBoundingClientRect()
-    const scaleX = rect.width > 0 && imageNaturalSize ? imageNaturalSize.width / rect.width : 1
-    const scaleY = rect.height > 0 && imageNaturalSize ? imageNaturalSize.height / rect.height : 1
+    const naturalSize = screenshotArtifact ? newSessionStepPreviewSizes[screenshotArtifact] : undefined
+    const scaleX = rect.width > 0 && naturalSize ? naturalSize.width / rect.width : 1
+    const scaleY = rect.height > 0 && naturalSize ? naturalSize.height / rect.height : 1
     const x = Math.round((event.clientX - rect.left) * scaleX)
     const y = Math.round((event.clientY - rect.top) * scaleY)
     try {
@@ -1033,17 +1038,76 @@ export default function Builder() {
                     style={{
                       cursor: manualTapStepIndex === step.step_index ? 'crosshair' : 'default',
                       display: 'inline-block',
+                      position: 'relative',
                     }}
                     onClick={(event) => {
                       if (manualTapStepIndex !== step.step_index) return
-                      void handleNewSessionStepImageClick(event, step.step_index)
+                      void handleNewSessionStepImageClick(
+                        event,
+                        step.step_index,
+                        step.screenshot_artifact,
+                      )
                     }}
                   >
                     <img
                       src={newSessionStepPreviewUrls[step.screenshot_artifact] ?? undefined}
                       alt={`step ${step.step_index + 1} screenshot`}
-                      style={{ maxWidth: '100%' }}
+                      style={{ maxWidth: '100%', display: 'block' }}
+                      onLoad={(event) => {
+                        const img = event.currentTarget
+                        const artifact = step.screenshot_artifact
+                        if (!artifact) return
+                        setNewSessionStepPreviewSizes((current) => ({
+                          ...current,
+                          [artifact]: {
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                          },
+                        }))
+                      }}
                     />
+                    {step.screenshot_artifact && newSessionStepPreviewSizes[step.screenshot_artifact]
+                      ? (
+                          <>
+                            {step.recommended_tap.point ? (
+                              <div
+                                aria-label={`New Session Step ${step.step_index + 1} recommended point`}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${(step.recommended_tap.point.x / newSessionStepPreviewSizes[step.screenshot_artifact].width) * 100}%`,
+                                  top: `${(step.recommended_tap.point.y / newSessionStepPreviewSizes[step.screenshot_artifact].height) * 100}%`,
+                                  width: 18,
+                                  height: 18,
+                                  transform: 'translate(-50%, -50%)',
+                                  border: '2px solid #fa8c16',
+                                  background: 'rgba(250, 140, 22, 0.18)',
+                                  borderRadius: 6,
+                                  boxShadow: '0 0 0 2px rgba(255,255,255,0.9)',
+                                  pointerEvents: 'none',
+                                }}
+                              />
+                            ) : null}
+                            {step.confirmed_tap ? (
+                              <div
+                                aria-label={`New Session Step ${step.step_index + 1} confirmed point`}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${(step.confirmed_tap.x / newSessionStepPreviewSizes[step.screenshot_artifact].width) * 100}%`,
+                                  top: `${(step.confirmed_tap.y / newSessionStepPreviewSizes[step.screenshot_artifact].height) * 100}%`,
+                                  width: 20,
+                                  height: 20,
+                                  transform: 'translate(-50%, -50%)',
+                                  border: '2px solid #1677ff',
+                                  background: 'rgba(22, 119, 255, 0.18)',
+                                  borderRadius: '50%',
+                                  boxShadow: '0 0 0 2px rgba(255,255,255,0.95)',
+                                  pointerEvents: 'none',
+                                }}
+                              />
+                            ) : null}
+                          </>
+                        )
+                      : null}
                   </div>
                 )}
               </Space>

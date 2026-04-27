@@ -1851,6 +1851,41 @@ describe('Builder', () => {
     })
   })
 
+  it('renders the recommended point marker on the step preview', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
+    })
+    configureNewSessionMock.mockResolvedValue({
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_profile_yaml: '', draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: 'new_session_step_0.xml', screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: { x: 111, y: 222 }, reason: 'start chat', status: 'ready' },
+          confirmed_tap: null, source: null },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+
+    const img = await screen.findByRole('img', { name: 'step 1 screenshot' })
+    Object.defineProperty(img, 'naturalWidth', { configurable: true, value: 1080 })
+    Object.defineProperty(img, 'naturalHeight', { configurable: true, value: 2400 })
+    fireEvent.load(img)
+
+    expect(await screen.findByLabelText('New Session Step 1 recommended point')).toBeInTheDocument()
+  })
+
   it('allows manual override on the step image', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
