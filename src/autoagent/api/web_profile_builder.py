@@ -39,6 +39,7 @@ _SELECTOR_JS = """
         Array.from(node.classList || []).filter(
             (cls) => cls.length > 2 && !(cls.match(/^[a-z]+-[a-zA-Z0-9]{6,}$/) && /\\d/.test(cls))
         );
+    const classSummary = (node) => meaningfulClasses(node).join(' ').toLowerCase();
 
     function simpleCandidates(node) {
         const out = [];
@@ -136,12 +137,31 @@ _SELECTOR_JS = """
     function promotedResponseNode(node) {
         const baseText = textOf(node);
         let cur = node;
+        let candidate = node;
         for (let depth = 0; depth < 4 && cur.parentElement; depth += 1) {
             cur = cur.parentElement;
             const curText = textOf(cur);
-            if (baseText && curText && curText !== baseText) return cur;
+            if (baseText && curText && curText !== baseText) {
+                candidate = cur;
+                break;
+            }
         }
-        return node;
+
+        let container = candidate;
+        for (let depth = 0; depth < 3 && container.parentElement; depth += 1) {
+            const summary = classSummary(container);
+            if (
+                summary.includes('markdown') ||
+                summary.includes('message') ||
+                summary.includes('answer') ||
+                summary.includes('reply') ||
+                summary.includes('content')
+            ) {
+                return container;
+            }
+            container = container.parentElement;
+        }
+        return candidate;
     }
 
     function findRepeatedItem(node) {

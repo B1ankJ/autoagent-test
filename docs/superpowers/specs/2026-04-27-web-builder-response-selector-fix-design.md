@@ -17,6 +17,7 @@ When the user clicked inside a response paragraph, the Web Builder could emit se
 That selector was too broad for chat UIs because:
 
 - a single assistant reply may contain multiple paragraph nodes
+- a single assistant reply may also use one text wrapper such as `.qk-md-text` around multiple paragraphs
 - older replies may reuse the same class
 - the selector did not represent the reply container or the latest reply item
 
@@ -72,6 +73,7 @@ Added regression coverage for both failure modes:
 
 - `tests/integration/test_web_profile_builder_endpoints.py`
   - verifies clicking the second paragraph of the latest reply produces `.answerItem:last-child .qk-markdown`
+  - verifies Qwen-like DOMs promote past a single `.qk-md-text` wrapper to the markdown container
 - `tests/integration/test_web_executor_e2e.py`
   - verifies a reused session with a multi-match selector returns only the latest reply
 
