@@ -12,6 +12,7 @@ async def test_dom_stable_returns_when_text_stops_changing() -> None:
     page = AsyncMock()
     texts = iter(["a", "ab", "abc", "abc", "abc", "abc", "abc"])
     page.inner_text = AsyncMock(side_effect=lambda *_a, **_kw: next(texts))
+    page.evaluate = AsyncMock(side_effect=NotImplementedError("mock"))
 
     await wait_for_complete(
         page,
@@ -31,6 +32,7 @@ async def test_dom_stable_times_out() -> None:
         return f"text {counter['i']}"
 
     page.inner_text = never_stable
+    page.evaluate = AsyncMock(side_effect=NotImplementedError("mock"))
     with pytest.raises(TimeoutError):
         await wait_for_complete(
             page,

@@ -57,6 +57,8 @@ def _patch_playwright(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     page.screenshot = AsyncMock()
     page.inner_text = AsyncMock(return_value="echo: hi")
     page.is_disabled = AsyncMock(return_value=False)
+    # evaluate is used by _collect_text; raise to trigger inner_text fallback in tests
+    page.evaluate = AsyncMock(side_effect=NotImplementedError("mock: use inner_text"))
 
     context = AsyncMock()
     context.new_page = AsyncMock(return_value=page)

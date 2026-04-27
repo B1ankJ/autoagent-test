@@ -42,6 +42,24 @@ async def wait_for_complete(
         raise ValueError(f"unsupported completion strategy: {type(strategy).__name__}")
 
 
+async def _collect_text(page: Any, selector: str) -> str:
+    """Return innerText of ALL elements matching selector, joined by newlines.
+
+    Falls back to the first-match behaviour of page.inner_text() if the JS
+    evaluation fails for any reason.
+    """
+    try:
+        parts: list[str] = await page.evaluate(
+            "([sel]) => Array.from(document.querySelectorAll(sel))"
+            ".map(el => (el.innerText || el.textContent || '').trim())"
+            ".filter(t => t.length > 0)",
+            [selector],
+        )
+        return "\n".join(parts) if parts else ""
+    except Exception:
+        return await page.inner_text(selector)
+
+
 async def _dom_stable(
     page: Any,
     *,
@@ -55,7 +73,7 @@ async def _dom_stable(
     stable_since: float | None = None
 
     while time.monotonic() < deadline:
-        text = await page.inner_text(response_selector)
+        text = await _collect_text(page, response_selector)
         now = time.monotonic()
         # Don't start stability timer on empty text — wait for the response to begin.
         if text and text == last_text:
