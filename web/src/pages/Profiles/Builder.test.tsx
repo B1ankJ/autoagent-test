@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -1643,6 +1643,41 @@ describe('Builder', () => {
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     expect(await screen.findByText('New Session Step 1')).toBeInTheDocument()
+  })
+
+  it('loads guided new session step previews from artifact downloads', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [],
+      captures: [],
+    })
+    configureNewSessionMock.mockResolvedValue({
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_profile_yaml: '', draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: null, screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: null, reason: null, status: 'idle' }, confirmed_tap: null, source: null },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+    await waitFor(() => {
+      expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'new_session_step_0.png')
+    })
+
+    const preview = await screen.findByLabelText('New Session Step 1 preview')
+    const img = within(preview).getByRole('img', { name: 'step 1 screenshot' })
+    expect(img).toHaveAttribute('src', 'blob:new_session_step_0.png')
   })
 
   it('accepts the recommended tap for one step', async () => {

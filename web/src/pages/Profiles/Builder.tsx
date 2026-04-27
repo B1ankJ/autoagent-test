@@ -240,6 +240,9 @@ export default function Builder() {
   const [selectedEvidenceRefs, setSelectedEvidenceRefs] = useState<ReviewEvidenceRef[]>([])
   const [selectedEvidenceLabel, setSelectedEvidenceLabel] = useState<string | null>(null)
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null)
+  const [newSessionStepPreviewUrls, setNewSessionStepPreviewUrls] = useState<Record<string, string>>(
+    {},
+  )
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
@@ -363,6 +366,56 @@ export default function Builder() {
   useEffect(() => {
     setImageNaturalSize(null)
   }, [currentScreen?.path])
+
+  useEffect(() => {
+    let cancelled = false
+    let loadedUrls: string[] = []
+
+    const revokeObjectUrl = (value: string) => {
+      if (typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(value)
+      }
+    }
+
+    async function loadStepPreviews() {
+      if (!session?.id) {
+        setNewSessionStepPreviewUrls({})
+        return
+      }
+      const stepArtifacts = (draft?.new_session_steps ?? [])
+        .map((step) => step.screenshot_artifact)
+        .filter((artifact): artifact is string => Boolean(artifact))
+      if (!stepArtifacts.length) {
+        setNewSessionStepPreviewUrls({})
+        return
+      }
+      try {
+        const entries = await Promise.all(
+          stepArtifacts.map(async (artifact) => [artifact, await fetchProfileBuilderArtifactBlobUrl(session.id, artifact)] as const),
+        )
+        loadedUrls = entries.map(([, url]) => url)
+        if (cancelled) {
+          entries.forEach(([, url]) => revokeObjectUrl(url))
+          return
+        }
+        setNewSessionStepPreviewUrls((previous) => {
+          Object.values(previous).forEach(revokeObjectUrl)
+          return Object.fromEntries(entries)
+        })
+      } catch {
+        if (!cancelled) {
+          setNewSessionStepPreviewUrls({})
+        }
+      }
+    }
+
+    void loadStepPreviews()
+
+    return () => {
+      cancelled = true
+      loadedUrls.forEach(revokeObjectUrl)
+    }
+  }, [draft?.new_session_steps, session?.id])
 
   useEffect(() => {
     const revokeObjectUrl = (value: string) => {
@@ -932,7 +985,7 @@ export default function Builder() {
                     }}
                   >
                     <img
-                      src={`blob:${step.screenshot_artifact}`}
+                      src={newSessionStepPreviewUrls[step.screenshot_artifact] ?? undefined}
                       alt={`step ${step.step_index + 1} screenshot`}
                       style={{ maxWidth: '100%' }}
                     />
