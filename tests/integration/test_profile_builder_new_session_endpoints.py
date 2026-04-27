@@ -186,9 +186,13 @@ async def test_capture_new_session_step_records_artifacts_and_recommendation(
             activity=".IdleActivity",
             xml_path=xml_path,
             screenshot_path=screenshot_path,
-        )
+    )
 
     monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    async def _get_config(_key):
+        return {"base_url": "http://vlm.test", "model": "demo", "api_key": "secret"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.get_config", _get_config)
     monkeypatch.setattr(
         "autoagent.executors.profile_builder_new_session.recommend_tap_point",
         lambda **_kwargs: {"x": 111, "y": 222, "reason": "plus button"},
@@ -214,9 +218,138 @@ async def test_capture_new_session_step_records_artifacts_and_recommendation(
     assert step["recommended_tap"]["point"] == {"x": 111, "y": 222}
     assert step["recommended_tap"]["reason"] == "plus button"
     assert step["recommended_tap"]["status"] == "ready"
+    assert step["recommendation_error"] is None
     assert step["confirmed_tap"] is None
     assert "new_session_step_0.xml" in body["session"]["artifacts"]
     assert "new_session_step_0.png" in body["session"]["artifacts"]
+
+
+async def test_new_session_capture_marks_unavailable_without_vlm(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    step = body["new_session_steps"][0]
+    assert step["recommended_tap"]["status"] == "unavailable"
+    assert step["recommendation_error"] == "vlm_unavailable"
+
+
+async def test_new_session_capture_marks_failed_on_provider_error(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    async def _get_config(_key):
+        return {"base_url": "http://vlm.test", "model": "demo", "api_key": "secret"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.get_config", _get_config)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            profile_builder_new_session.RecommendationProviderError("auth failed")
+        ),
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    step = body["new_session_steps"][0]
+    assert step["recommended_tap"]["status"] == "failed"
+    assert step["recommendation_error"] == "auth_error"
+
+
+async def test_new_session_capture_marks_ready_on_success(client, monkeypatch):
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+
+    async def _capture(device, session_dir, step, **_kwargs):
+        xml_path = session_dir / "new_session_step_0.xml"
+        screenshot_path = session_dir / "new_session_step_0.png"
+        xml_path.write_text("<hierarchy/>", encoding="utf-8")
+        screenshot_path.write_bytes(b"png")
+        return CapturedState(
+            step=step,
+            package="com.aliyun.tongyi",
+            activity=".IdleActivity",
+            xml_path=xml_path,
+            screenshot_path=screenshot_path,
+        )
+
+    monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    async def _get_config(_key):
+        return {"base_url": "http://vlm.test", "model": "demo", "api_key": "secret"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.get_config", _get_config)
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.recommend_tap_point",
+        lambda **_kwargs: {"x": 111, "y": 222, "reason": "plus button"},
+    )
+
+    config = await client.put(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/config",
+        json={"strategy": "guided_tap_sequence", "step_count": 1},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+
+    response = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/new-session/step/0/capture",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    step = body["new_session_steps"][0]
+    assert step["recommended_tap"]["status"] == "ready"
+    assert step["recommended_tap"]["point"] == {"x": 111, "y": 222}
+    assert step["recommended_tap"]["reason"] == "plus button"
+    assert step["recommendation_error"] is None
 
 
 async def test_capture_new_session_step_handles_recommendation_failure(
@@ -269,7 +402,8 @@ async def test_capture_new_session_step_handles_recommendation_failure(
     assert step["recommended_tap"] == {
         "point": None,
         "reason": None,
-        "status": "failed",
+        "status": "unavailable",
+        "recommendation_error": "vlm_unavailable",
     }
     assert step["confirmed_tap"] is None
     assert step["source"] is None
@@ -501,6 +635,10 @@ async def test_capture_new_session_step_stays_consistent_during_overlapping_conf
         return {"x": 111, "y": 222, "reason": "plus button"}
 
     monkeypatch.setattr("autoagent.api.profile_builder.capture_android_state", _capture)
+    async def _get_config(_key):
+        return {"base_url": "http://vlm.test", "model": "demo", "api_key": "secret"}
+
+    monkeypatch.setattr("autoagent.api.profile_builder.get_config", _get_config)
     monkeypatch.setattr(
         "autoagent.executors.profile_builder_new_session.recommend_tap_point",
         _recommend,
@@ -604,6 +742,7 @@ async def test_capture_new_session_step_malformed_recommendation_degrades_to_fai
         "point": None,
         "reason": None,
         "status": "failed",
+        "recommendation_error": "response_shape_error",
     }
 
 

@@ -205,15 +205,19 @@ class ProfileBuilderTapPoint(BaseModel):
 
 
 class ProfileBuilderNewSessionRecommendation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     point: ProfileBuilderTapPoint | None = None
     reason: str | None = None
-    status: Literal["idle", "ready", "failed"] = "idle"
+    status: Literal["idle", "ready", "unavailable", "failed"] = "idle"
+    error: str | None = Field(default=None, alias="recommendation_error")
 
 
 class ProfileBuilderNewSessionStep(BaseModel):
     step_index: int = Field(ge=0)
     xml_artifact: str | None = None
     screenshot_artifact: str | None = None
+    recommendation_error: str | None = None
     recommended_tap: ProfileBuilderNewSessionRecommendation = Field(
         default_factory=ProfileBuilderNewSessionRecommendation
     )

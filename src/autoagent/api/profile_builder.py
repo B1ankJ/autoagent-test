@@ -181,7 +181,8 @@ def _empty_new_session_step(step_index: int) -> dict:
         "step_index": step_index,
         "xml_artifact": None,
         "screenshot_artifact": None,
-        "recommended_tap": {"point": None, "reason": None, "status": "idle"},
+        "recommendation_error": None,
+        "recommended_tap": {"point": None, "reason": None, "status": "idle", "error": None},
         "confirmed_tap": None,
         "source": None,
     }
@@ -312,6 +313,17 @@ def _require_valid_new_session_recommendation(
             status_code=422,
             detail="recommended tap does not match the submitted coordinates",
         )
+
+
+def _classify_recommendation_error(message: str) -> str:
+    lower = message.lower()
+    if "401" in lower or "403" in lower or "auth" in lower:
+        return "auth_error"
+    if "timeout" in lower:
+        return "connect_error"
+    if "404" in lower or "model" in lower:
+        return "model_error"
+    return "response_shape_error"
 
 
 def _draft_profile_preview(session: ProfileBuilderSessionView) -> dict:
@@ -1165,7 +1177,13 @@ async def capture_new_session_step(
             "step_index": step_index,
             "xml_artifact": captured.xml_path.name,
             "screenshot_artifact": captured.screenshot_path.name,
-            "recommended_tap": {"point": None, "reason": None, "status": "idle"},
+            "recommendation_error": None,
+            "recommended_tap": {
+                "point": None,
+                "reason": None,
+                "status": "idle",
+                "error": None,
+            },
             "confirmed_tap": None,
             "source": None,
         }
@@ -1173,27 +1191,41 @@ async def capture_new_session_step(
         xml_text = captured.xml_path.read_text(encoding="utf-8")
         raw_vlm = await get_config("vlm")
         vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else None
-        recommendation_failed = False
-        try:
-            recommendation = await asyncio.to_thread(
-                profile_builder_new_session.recommend_tap_point,
-                screenshot_path=captured.screenshot_path,
-                xml_text=xml_text,
-                step_index=step_index,
-                step_count=step_count,
-                vlm=vlm,
-            )
-        except profile_builder_new_session.RecommendationProviderError:
-            recommendation_failed = True
-        else:
+        if not profile_builder_new_session._has_vlm_config(vlm):
+            recommendation_error = "vlm_unavailable"
             step["recommended_tap"] = {
-                "point": {"x": recommendation["x"], "y": recommendation["y"]},
-                "reason": recommendation["reason"],
-                "status": "ready",
+                "point": None,
+                "reason": None,
+                "status": "unavailable",
+                "error": recommendation_error,
             }
-
-        if recommendation_failed:
-            step["recommended_tap"] = {"point": None, "reason": None, "status": "failed"}
+        else:
+            try:
+                recommendation = await asyncio.to_thread(
+                    profile_builder_new_session.recommend_tap_point,
+                    screenshot_path=captured.screenshot_path,
+                    xml_text=xml_text,
+                    step_index=step_index,
+                    step_count=step_count,
+                    vlm=vlm,
+                )
+            except profile_builder_new_session.RecommendationProviderError as exc:
+                recommendation_error = _classify_recommendation_error(str(exc))
+                step["recommended_tap"] = {
+                    "point": None,
+                    "reason": None,
+                    "status": "failed",
+                    "error": recommendation_error,
+                }
+            else:
+                recommendation_error = None
+                step["recommended_tap"] = {
+                    "point": {"x": recommendation["x"], "y": recommendation["y"]},
+                    "reason": recommendation["reason"],
+                    "status": "ready",
+                    "error": None,
+                }
+        step["recommendation_error"] = recommendation_error
 
         session = _get_session_or_404(session_id)
         state = _require_guided_new_session_step(session, step_index)
