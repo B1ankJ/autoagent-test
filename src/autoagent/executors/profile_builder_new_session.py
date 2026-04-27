@@ -23,8 +23,6 @@ _RECOMMEND_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
-        "x": {"type": "integer", "minimum": 0},
-        "y": {"type": "integer", "minimum": 0},
         "target_text": {"type": "string"},
         "target_hint": {"type": "string"},
         "target_bounds": {
@@ -72,7 +70,7 @@ def _request_payload(
             "For early steps in a multi-step flow, prefer entry points that reveal a new-conversation action instead of the existing input area.",
             "Prefer returning target_text for the exact control label so the tap point can be calibrated from XML bounds.",
             "If XML text matching is ambiguous, return target_bounds for the chosen control so the tap point can still be centered programmatically.",
-            "Only return raw x/y when neither target_text nor target_bounds can identify the control.",
+            "Do not return raw x/y coordinates. Always identify the control by target_text or target_bounds.",
             "Keep the reason short and concrete.",
         ],
         "xml": xml_text,
@@ -284,12 +282,7 @@ def recommend_tap_point(
             if target_bounds is not None:
                 x, y = _center_from_bounds(target_bounds)
             else:
-                if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
-                    raise ValueError(
-                        "new-session recommendation requires target_text, target_bounds, or integer x/y"
-                    )
-                x = parsed["x"]
-                y = parsed["y"]
+                raise ValueError("new-session recommendation requires target_text or target_bounds")
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RecommendationProviderError(
             f"malformed new-session recommendation response: {exc}"

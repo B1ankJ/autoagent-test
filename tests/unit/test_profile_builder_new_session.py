@@ -176,3 +176,52 @@ def test_recommend_tap_point_falls_back_to_target_bounds_when_xml_match_is_missi
         "y": 270,
         "reason": "The highlighted card is the new conversation entry.",
     }
+
+
+def test_recommend_tap_point_rejects_raw_xy_without_text_or_bounds(monkeypatch, tmp_path: Path):
+    screenshot_path = tmp_path / "screen.png"
+    screenshot_path.write_bytes(b"png")
+    response = httpx.Response(
+        status_code=200,
+        request=httpx.Request("POST", "http://vlm.test/chat/completions"),
+        json={
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "x": 308,
+                                "y": 254,
+                                "reason": "Approximate point for the new conversation button.",
+                            },
+                            ensure_ascii=False,
+                        )
+                    }
+                }
+            ]
+        },
+    )
+
+    monkeypatch.setattr(
+        "autoagent.executors.profile_builder_new_session.httpx.post",
+        lambda *args, **kwargs: response,
+    )
+
+    try:
+        recommend_tap_point(
+            screenshot_path=screenshot_path,
+            xml_text="<hierarchy><node text=\"其他控件\" bounds=\"[0,0][10,10]\" /></hierarchy>",
+            step_index=1,
+            step_count=2,
+            vlm=VLMConfig(
+                base_url="http://vlm.test",
+                model="demo",
+                api_key="secret",
+            ),
+        )
+    except RecommendationProviderError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected RecommendationProviderError")
+
+    assert "target_text or target_bounds" in message
