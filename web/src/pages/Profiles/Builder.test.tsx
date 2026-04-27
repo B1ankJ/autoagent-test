@@ -1747,6 +1747,37 @@ describe('Builder', () => {
     expect(screen.getByRole('button', { name: '重新点选' })).toBeEnabled()
   })
 
+  it('shows unknown recommendation failures without English fallback text', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
+    })
+    configureNewSessionMock.mockResolvedValue({
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_profile_yaml: '', draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: 'new_session_step_0.xml', screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: null, reason: null, status: 'failed', error: null },
+          recommendation_error: null, confirmed_tap: null, source: null },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+
+    expect(await screen.findByText('推荐请求失败：未知错误')).toBeInTheDocument()
+    expect(screen.queryByText('推荐请求失败：unknown')).not.toBeInTheDocument()
+  })
+
   it('accepts the recommended tap for one step', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({

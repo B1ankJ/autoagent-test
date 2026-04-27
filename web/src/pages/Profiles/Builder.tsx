@@ -225,7 +225,7 @@ function formatRecommendationError(error: string | null | undefined): string {
     case 'response_shape_error':
       return '返回格式异常'
     default:
-      return 'unknown'
+      return error || '未知错误'
   }
 }
 
