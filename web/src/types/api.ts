@@ -278,7 +278,8 @@ export interface ProfileBuilderTapPoint {
 export interface ProfileBuilderNewSessionRecommendation {
   point: ProfileBuilderTapPoint | null
   reason: string | null
-  status: 'idle' | 'ready' | 'failed'
+  status: 'idle' | 'ready' | 'unavailable' | 'failed'
+  error?: string | null
 }
 
 export interface ProfileBuilderNewSessionStep {
@@ -286,6 +287,7 @@ export interface ProfileBuilderNewSessionStep {
   xml_artifact: string | null
   screenshot_artifact: string | null
   recommended_tap: ProfileBuilderNewSessionRecommendation
+  recommendation_error?: string | null
   confirmed_tap: ProfileBuilderTapPoint | null
   source: 'recommended' | 'manual' | null
 }

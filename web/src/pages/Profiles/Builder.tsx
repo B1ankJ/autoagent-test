@@ -212,6 +212,58 @@ function reviewItemKey(item: ReviewItem, index: number): string {
   return `${item.field}-${index}`
 }
 
+function formatRecommendationError(error: string | null | undefined): string {
+  switch (error) {
+    case 'vlm_unavailable':
+      return 'VLM 未配置'
+    case 'auth_error':
+      return '认证失败'
+    case 'connect_error':
+      return '连接失败'
+    case 'model_error':
+      return '模型不可用'
+    case 'response_shape_error':
+      return '返回格式异常'
+    default:
+      return 'unknown'
+  }
+}
+
+function newSessionRecommendationMessage(step: ProfileBuilderNewSessionStep): string {
+  const { recommended_tap: recommendedTap } = step
+  switch (recommendedTap.status) {
+    case 'ready':
+      if (!recommendedTap.point) {
+        return '推荐结果缺少坐标，请人工点选'
+      }
+      return [
+        `推荐点: (${recommendedTap.point.x}, ${recommendedTap.point.y})`,
+        recommendedTap.reason ? `原因: ${recommendedTap.reason}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    case 'unavailable':
+      return '当前未配置 VLM，仅支持人工点选'
+    case 'failed':
+      return `推荐请求失败：${formatRecommendationError(recommendedTap.error)}`
+    case 'idle':
+    default:
+      return '暂无推荐，请先 Capture 或人工点选'
+  }
+}
+
+function newSessionRecommendationAlertType(
+  status: ProfileBuilderNewSessionStep['recommended_tap']['status'],
+): 'info' | 'success' | 'warning' {
+  if (status === 'ready') {
+    return 'success'
+  }
+  if (status === 'failed' || status === 'unavailable') {
+    return 'warning'
+  }
+  return 'info'
+}
+
 export default function Builder() {
   const devices = useDevices()
   const createSession = useCreateProfileBuilderSession()
@@ -605,7 +657,7 @@ export default function Builder() {
   }
 
   const handleAcceptRecommendedTap = async (step: ProfileBuilderNewSessionStep) => {
-    if (!session || !step.recommended_tap.point) return
+    if (!session || step.recommended_tap.status !== 'ready' || !step.recommended_tap.point) return
     try {
       const result = await confirmNewSessionStep.mutateAsync({
         sessionId: session.id,
@@ -951,19 +1003,16 @@ export default function Builder() {
                     onClick={() => setManualTapStepIndex(
                       manualTapStepIndex === step.step_index ? null : step.step_index
                     )}
+                    disabled={!step.screenshot_artifact}
                   >
                     {manualTapStepIndex === step.step_index ? '取消点选' : '重新点选'}
                   </Button>
                 </Space>
-                {step.recommended_tap.status === 'failed' && (
-                  <Alert type="warning" showIcon message="需人工点选" />
-                )}
-                {step.recommended_tap.status === 'ready' && step.recommended_tap.point && (
-                  <Typography.Text type="secondary">
-                    推荐点: ({step.recommended_tap.point.x}, {step.recommended_tap.point.y})
-                    {step.recommended_tap.reason ? ` — ${step.recommended_tap.reason}` : ''}
-                  </Typography.Text>
-                )}
+                <Alert
+                  type={newSessionRecommendationAlertType(step.recommended_tap.status)}
+                  showIcon
+                  message={newSessionRecommendationMessage(step)}
+                />
                 {step.confirmed_tap && (
                   <Tag color="blue">
                     已选: ({step.confirmed_tap.x}, {step.confirmed_tap.y}) [{step.source}]
