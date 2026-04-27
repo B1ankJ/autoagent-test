@@ -2064,6 +2064,80 @@ describe('Builder', () => {
     })
   })
 
+  it('uses edited Draft YAML when saving to Profiles', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1',
+      platform: 'android',
+      device_serial: 'serial-1',
+      name: 'qwen_android',
+      status: 'draft',
+      steps: ['idle', 'editing'],
+      artifact_dir: '/tmp/pb_1',
+      artifacts: [],
+      captures: [
+        {
+          step: 'idle',
+          package: 'com.aliyun.tongyi',
+          activity: '.IdleActivity',
+          xml_artifact: 'capture_idle.xml',
+          screenshot_artifact: 'capture_idle.png',
+          active: true,
+          captured_at: '2026-04-23T12:00:00Z',
+        },
+        {
+          step: 'editing',
+          package: 'com.aliyun.tongyi',
+          activity: '.EditingActivity',
+          xml_artifact: 'capture_editing.xml',
+          screenshot_artifact: 'capture_editing.png',
+          active: true,
+          captured_at: '2026-04-23T12:01:00Z',
+        },
+      ],
+    })
+    generateDraftMock.mockResolvedValue({
+      session: {
+        id: 'pb_1',
+        platform: 'android',
+        device_serial: 'serial-1',
+        name: 'qwen_android',
+        status: 'ready',
+        steps: ['idle', 'editing'],
+        artifact_dir: '/tmp/pb_1',
+        artifacts: ['draft_profile.yaml'],
+        captures: [],
+      },
+      candidates: { input_candidates: [], send_candidates: [], response_candidates: [], review_items: [] },
+      review_items: [],
+      draft_profile_yaml: 'name: qwen_android\nplatform: android\n',
+      draft_mode: 'rule',
+      requires_manual_review: true,
+      applied_review_choices: {},
+      pending_review_fields: [],
+      auto_review_source: 'manual',
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
+    await userEvent.click(screen.getByRole('button', { name: '编辑 YAML' }))
+
+    const textarea = screen.getByRole('textbox', { name: /Draft YAML/ })
+    await userEvent.clear(textarea)
+    await userEvent.type(textarea, 'name: edited_profile\nplatform: android\n')
+    await userEvent.click(screen.getByRole('button', { name: '保存/覆盖到 Profiles' }))
+
+    expect(saveProfileMock).toHaveBeenCalledWith({
+      name: 'qwen_android',
+      yaml: 'name: edited_profile\nplatform: android\n',
+      create: true,
+    })
+  })
+
   it('configures guided new session step count before capture', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({

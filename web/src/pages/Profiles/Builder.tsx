@@ -290,6 +290,8 @@ export default function Builder() {
   const [injectLlm, setInjectLlm] = useState(false)
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
+  const [draftYamlText, setDraftYamlText] = useState('')
+  const [draftYamlEditing, setDraftYamlEditing] = useState(false)
   const [connectivityResult, setConnectivityResult] = useState<SingleTestSyncResponse | null>(null)
   const [currentScreenUrl, setCurrentScreenUrl] = useState<string | null>(null)
   const [selectedScreenPath, setSelectedScreenPath] = useState<string | null>(null)
@@ -313,6 +315,15 @@ export default function Builder() {
   const [newSessionStepCount, setNewSessionStepCount] = useState(1)
   const [manualTapStepIndex, setManualTapStepIndex] = useState<number | null>(null)
   const runtime = useProfileBuilderRuntime(session?.id)
+  useEffect(() => {
+    if (!draft) {
+      setDraftYamlText('')
+      setDraftYamlEditing(false)
+      return
+    }
+    setDraftYamlText(draft.draft_profile_yaml)
+    setDraftYamlEditing(false)
+  }, [draft?.draft_profile_yaml, draft])
   const reviewEntries = useMemo(
     () => draft?.review_items.map((item, index) => ({ item, index, key: reviewItemKey(item, index) })) ?? [],
     [draft],
@@ -590,6 +601,8 @@ export default function Builder() {
       })
       setSession(nextDraft.session)
       setDraft(nextDraft)
+      setDraftYamlText(nextDraft.draft_profile_yaml)
+      setDraftYamlEditing(false)
       setConnectivityResult(null)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
@@ -725,6 +738,8 @@ export default function Builder() {
         session: validated.session,
         draft_profile_yaml: validated.draft_profile_yaml,
       })
+      setDraftYamlText(validated.draft_profile_yaml)
+      setDraftYamlEditing(false)
       setConnectivityResult(validated.connectivity_result)
       setSelectedEvidenceRefs([])
       setSelectedEvidenceLabel(null)
@@ -758,7 +773,7 @@ export default function Builder() {
     try {
       await saveProfile.mutateAsync({
         name,
-        yaml: draft.draft_profile_yaml,
+        yaml: draftYamlText,
         create: true,
       })
       message.success(`已保存到 Profiles: ${name}`)
@@ -1448,22 +1463,65 @@ export default function Builder() {
               title="Draft YAML"
               style={{ marginTop: 16 }}
               extra={
-                <Button
-                  type="primary"
-                  disabled={!draft}
-                  loading={saveProfile.isPending}
-                  onClick={saveDraftAsProfile}
-                >
-                  保存/覆盖到 Profiles
-                </Button>
+                <Space>
+                  <Button
+                    disabled={!draft}
+                    onClick={() => {
+                      if (!draft) {
+                        return
+                      }
+                      setDraftYamlText(draft.draft_profile_yaml)
+                      setDraftYamlEditing(true)
+                    }}
+                  >
+                    编辑 YAML
+                  </Button>
+                  <Button
+                    disabled={!draft || !draftYamlEditing}
+                    onClick={() => {
+                      if (!draft) {
+                        return
+                      }
+                      setDraftYamlText(draft.draft_profile_yaml)
+                      setDraftYamlEditing(false)
+                    }}
+                  >
+                    恢复生成版本
+                  </Button>
+                  <Button
+                    type="primary"
+                    disabled={!draft}
+                    loading={saveProfile.isPending}
+                    onClick={saveDraftAsProfile}
+                  >
+                    保存/覆盖到 Profiles
+                  </Button>
+                </Space>
               }
             >
               {draft ? (
-                <Input.TextArea
-                  readOnly
-                  autoSize={{ minRows: 12, maxRows: 24 }}
-                  value={draft.draft_profile_yaml}
-                />
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {draftYamlEditing ? (
+                    <Alert
+                      type="info"
+                      showIcon
+                      message="正在编辑本地 Draft YAML"
+                      description="你可以直接修改文本后保存到 Profiles，或点击恢复生成版本丢弃本地修改。"
+                    />
+                  ) : null}
+                  <Input.TextArea
+                    aria-label="Draft YAML"
+                    readOnly={!draftYamlEditing}
+                    autoSize={{ minRows: 12, maxRows: 24 }}
+                    value={draftYamlText}
+                    onChange={(event) => {
+                      if (!draftYamlEditing) {
+                        return
+                      }
+                      setDraftYamlText(event.target.value)
+                    }}
+                  />
+                </Space>
               ) : (
                 <Empty description="尚未生成 draft profile" />
               )}
