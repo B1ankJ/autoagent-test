@@ -57,7 +57,8 @@ async def _dom_stable(
     while time.monotonic() < deadline:
         text = await page.inner_text(response_selector)
         now = time.monotonic()
-        if text == last_text:
+        # Don't start stability timer on empty text — wait for the response to begin.
+        if text and text == last_text:
             if stable_since is None:
                 stable_since = now
             elif now - stable_since >= stable_sec:
