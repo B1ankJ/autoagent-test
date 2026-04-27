@@ -1,0 +1,4 @@
+- source device: synthetic fixture generated locally for OCR regression coverage
+- app under test: none; this is a deterministic rendered text image
+- screen shape: one screen
+- expected stitched text file path: `long_reply_01.expected.txt`

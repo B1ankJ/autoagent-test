@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { createElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useBatchStream } from './useBatchStream'
+import { applyEvent, useBatchStream } from './useBatchStream'
 
 let fetchCalls: string[] = []
 let readerFrames: string[] = []
@@ -85,5 +85,36 @@ describe('useBatchStream', () => {
     })
     await waitFor(() => expect(result.current.data?.done).toBe(5))
     expect(result.current.data?.done).not.toBe(99)
+  })
+
+  it('applies sample_update device fields', () => {
+    const next = applyEvent(
+      {
+        batch_id: 'b1',
+        name: 'n',
+        mode: 'gui_android',
+        status: 'running',
+        total: 1,
+        done: 0,
+        failed: 0,
+        concurrency: 1,
+        samples: [{ id: 's1', status: 'running' }],
+        seq: 1,
+      } as never,
+      {
+        seq: 2,
+        kind: 'sample_update',
+        payload: {
+          sample_id: 's1',
+          status: 'running',
+          device_serial: 'emulator-5554',
+          waiting_for_device: false,
+        },
+        ts: '2026-04-22T00:00:00Z',
+      },
+    )
+
+    expect(next?.samples[0].device_serial).toBe('emulator-5554')
+    expect(next?.samples[0].waiting_for_device).toBe(false)
   })
 })

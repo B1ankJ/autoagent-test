@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import OperationalError
 from sse_starlette.sse import EventSourceResponse
 
 from autoagent.api._deps import get_scheduler
@@ -28,11 +29,34 @@ from autoagent.storage.batches import get_batch, list_batches
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
-_SCREENSHOT_RE = re.compile(r"^\d{2,3}_[a-z0-9_]+\.png$")
+_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.png$")
+_STAGE_ORDER = {
+    "before_input": 0,
+    "after_input": 1,
+    "after_send": 2,
+    "after_result": 3,
+    "done": 4,
+    "on_error": 5,
+}
 
 
 def _json_dumps(obj: object) -> str:
     return json.dumps(obj, separators=(",", ":"))
+
+
+def _screenshot_order_key(name: str) -> tuple[int, int, str]:
+    stem = Path(name).stem
+    for prefix, order in _STAGE_ORDER.items():
+        if stem == prefix:
+            return (order, 0, name)
+        if stem.startswith(f"{prefix}_"):
+            suffix = stem[len(prefix) + 1 :]
+            try:
+                step = int(suffix)
+            except ValueError:
+                step = 0
+            return (order, step, name)
+    return (99, 0, name)
 
 
 def _parse_file(filename: str, text: str):
@@ -52,6 +76,42 @@ def _apply_default_profile(samples, default_profile: str | None):
     for s in samples:
         if not s.target_profile:
             s.target_profile = default_profile
+
+
+async def _screenshot_meta_map(batch_id: str, sample_id: str) -> tuple[dict[str, dict], dict[str, int]]:
+    try:
+        samples = await list_samples_for_batch(batch_id)
+    except OperationalError:
+        return {}, {}
+    for sample in samples:
+        if sample.id != sample_id:
+            continue
+        shots = sample.metadata.get("screenshots")
+        if isinstance(shots, list):
+            meta_map = {
+                str(item.get("name")): item
+                for item in shots
+                if isinstance(item, dict) and item.get("name")
+            }
+            order_map = {
+                str(item.get("name")): index
+                for index, item in enumerate(shots)
+                if isinstance(item, dict) and item.get("name")
+            }
+            return meta_map, order_map
+    return {}, {}
+
+
+async def _sample_logs_dir(batch_id: str, sample_id: str) -> Path | None:
+    try:
+        samples = await list_samples_for_batch(batch_id)
+    except OperationalError:
+        return None
+    for sample in samples:
+        if sample.id != sample_id or not sample.logs_dir:
+            continue
+        return Path(sample.logs_dir).resolve()
+    return None
 
 
 @router.post("", response_model=BatchCreatedResponse, status_code=201)
@@ -192,18 +252,58 @@ async def stream_batch_events(batch_id: str) -> EventSourceResponse:
 @router.get("/{batch_id}/samples/{sample_id}/screenshots", response_model=list[ScreenshotInfo])
 async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo]:
     settings = get_settings()
-    sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
     if not sample_dir.is_dir():
         return []
 
+    meta_map, order_map = await _screenshot_meta_map(batch_id, sample_id)
     out: list[ScreenshotInfo] = []
-    for entry in sorted(sample_dir.iterdir()):
+    entries = sorted(
+        sample_dir.iterdir(),
+        key=lambda entry: (
+            0 if entry.name in order_map else 1,
+            order_map.get(entry.name, 10_000),
+            _screenshot_order_key(entry.name),
+        ),
+    )
+    for entry in entries:
         if not entry.is_file() or not _SCREENSHOT_RE.match(entry.name):
             continue
-        label = entry.stem.split("_", 1)[1] if "_" in entry.stem else entry.stem
+        meta = meta_map.get(entry.name, {})
+        fallback_label = entry.stem.split("_", 1)[1] if "_" in entry.stem else entry.stem
+        label = str(meta.get("label") or fallback_label)
         taken = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
-        out.append(ScreenshotInfo(name=entry.name, label=label, taken_at=taken))
+        out.append(
+            ScreenshotInfo(
+                name=entry.name,
+                label=label,
+                taken_at=taken,
+                is_sensitive=bool(meta.get("is_sensitive")) if meta else None,
+            )
+        )
     return out
+
+
+@router.get("/{batch_id}/samples/{sample_id}/actions.jsonl")
+async def download_actions(batch_id: str, sample_id: str) -> FileResponse:
+    root = get_settings().logs_root.resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (root / batch_id / sample_id).resolve()
+    target = (sample_dir / "actions.jsonl").resolve()
+    try:
+        target.relative_to(sample_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="path traversal blocked") from e
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="actions replay not found")
+    return FileResponse(
+        target,
+        media_type="application/x-ndjson",
+        filename=f"{sample_id}.actions.jsonl",
+    )
 
 
 @router.get("/{batch_id}/samples/{sample_id}/screenshots/{name}")
@@ -213,9 +313,12 @@ async def download_screenshot(batch_id: str, sample_id: str, name: str) -> FileR
 
     settings = get_settings()
     root = settings.logs_root.resolve()
-    target = (root / batch_id / sample_id / name).resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (root / batch_id / sample_id).resolve()
+    target = (sample_dir / name).resolve()
     try:
-        target.relative_to(root)
+        target.relative_to(sample_dir)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="path traversal blocked") from e
     if not target.is_file():

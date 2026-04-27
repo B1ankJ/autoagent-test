@@ -26,6 +26,7 @@ export function ProfileEdit() {
   }, [data])
 
   const profileMode = useMemo(() => {
+    if (/^platform:\s*android\b/m.test(yaml)) return 'gui_android' as const
     if (/^platform:\s*web\b/m.test(yaml)) return 'gui_pc_web' as const
     if (/^platform:\s*api\b/m.test(yaml)) return 'api' as const
     return null

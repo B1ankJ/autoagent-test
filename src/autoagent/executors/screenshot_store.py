@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 _ALLOWED = re.compile(r"[a-z0-9_]+")
@@ -11,6 +12,22 @@ def slug_label(label: str) -> str:
     parts = _ALLOWED.findall(lowered)
     joined = "_".join(parts)
     return joined or "step"
+
+
+@dataclass(frozen=True)
+class ScreenshotResult:
+    path: Path
+    label: str
+    is_sensitive: bool = False
+    error: str | None = None
+
+    def to_metadata(self) -> dict[str, object]:
+        return {
+            "name": self.path.name,
+            "label": self.label,
+            "is_sensitive": self.is_sensitive,
+            "error": self.error,
+        }
 
 
 class ScreenshotStore:
@@ -29,3 +46,15 @@ class ScreenshotStore:
         self._counter += 1
         n = f"{self._counter:02d}" if self._counter < 100 else f"{self._counter:03d}"
         return self._dir / f"{n}_{slug_label(label)}.png"
+
+    def artifact_path(self, label: str, suffix: str) -> Path:
+        normalized = suffix if suffix.startswith(".") else f".{suffix}"
+        return self._dir / f"{slug_label(label)}{normalized}"
+
+    @classmethod
+    def from_logs_dir(cls, logs_dir: Path) -> ScreenshotStore:
+        self = cls.__new__(cls)
+        self._dir = logs_dir.resolve()
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._counter = 0
+        return self

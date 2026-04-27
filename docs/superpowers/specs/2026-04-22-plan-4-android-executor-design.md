@@ -1,6 +1,6 @@
 # Plan 4 — Android Executor (uiautomator2 + OCR) 设计
 
-**Status:** draft for implementation planning
+**Status:** implementation largely complete; final real-device manual validation pending
 **Created:** 2026-04-22
 **Depends on:** Plan 3 tag `web-gui-executor-v0.3.0` (事件总线、SSE、ScreenshotStore、ActionRunner 抽象化基础)
 **References:**

@@ -13,9 +13,11 @@ import {
 } from 'antd'
 import { useState } from 'react'
 import { client } from '../../api/client'
+import { ResponseComparison } from '../../components/ResponseComparison'
 import { useProfiles } from '../../api/profiles'
 import { useAsyncResult, useRunAsync } from '../../api/tests'
 import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
+import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 interface FormValues {
   id?: string
@@ -34,7 +36,8 @@ export function TestsQuick() {
   const { message } = App.useApp()
   const [lastSyncResult, setLastSyncResult] = useState<SingleTestSyncResponse | null>(null)
   const mode = Form.useWatch('mode', form) ?? 'api'
-  const selectedPlatform = mode === 'gui_pc_web' ? 'web' : 'api'
+  const selectedPlatform =
+    mode === 'gui_pc_web' ? 'web' : mode === 'gui_android' ? 'android' : 'api'
 
   const profileOptions = (profiles.data ?? [])
     .filter((profile) => profile.platform === selectedPlatform)
@@ -47,7 +50,7 @@ export function TestsQuick() {
       mode: values.mode,
       target_profile: values.target_profile,
       retry: 0,
-      timeout_sec: values.mode === 'gui_pc_web' ? 180 : 60,
+      timeout_sec: values.mode === 'api' ? 60 : 180,
     }
 
     if (values.kind === 'sync') {
@@ -56,7 +59,7 @@ export function TestsQuick() {
         setLastSyncResult(null)
         const result = (
           await client.post<SingleTestSyncResponse>('/tests/sync', sample, {
-            timeout: values.mode === 'gui_pc_web' ? 240_000 : 60_000,
+            timeout: values.mode === 'api' ? 60_000 : 240_000,
           })
         ).data
         setLastSyncResult(result)
@@ -84,6 +87,7 @@ export function TestsQuick() {
     asyncResult.data?.status === 'cancelled'
       ? asyncResult.data
       : undefined)
+  const llmEnabled = hasLLMExtractionData(currentResult?.llm_responses, currentResult?.llm_errors)
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -103,6 +107,7 @@ export function TestsQuick() {
               options={[
                 { label: 'API', value: 'api' },
                 { label: 'Web (GUI)', value: 'gui_pc_web' },
+                { label: 'Android (GUI)', value: 'gui_android' },
               ]}
             />
           </Form.Item>
@@ -139,13 +144,18 @@ export function TestsQuick() {
             <Typography.Paragraph type="danger">{currentResult.error}</Typography.Paragraph>
           ) : null}
           <Collapse
+            defaultActiveKey={(currentResult.responses ?? []).map((_, index) => String(index))}
             items={(currentResult.responses ?? []).map((response, index) => ({
               key: String(index),
+              forceRender: true,
               label: `第 ${index + 1} 轮响应`,
               children: (
-                <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-                  {response}
-                </Typography.Paragraph>
+                <ResponseComparison
+                  ruleResponse={response}
+                  llmResponse={currentResult.llm_responses?.[index]}
+                  llmError={currentResult.llm_errors?.[index]}
+                  llmEnabled={llmEnabled}
+                />
               ),
             }))}
           />

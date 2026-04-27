@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
@@ -17,9 +16,9 @@ class ApiExecutor(Executor):
         if not isinstance(profile, ApiProfile):
             raise TypeError(f"ApiExecutor expects ApiProfile, got {type(profile).__name__}")
 
-        api_key = os.getenv(profile.api.api_key_env)
+        api_key = profile.api.api_key
         if not api_key:
-            raise RuntimeError(f"env var {profile.api.api_key_env} is not set")
+            raise RuntimeError("api_key is not set in profile")
 
         url = profile.api.base_url.rstrip("/") + "/chat/completions"
         headers = {

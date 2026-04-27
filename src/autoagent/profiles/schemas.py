@@ -50,7 +50,7 @@ CompleteDetection = Annotated[
 class ApiConfig(BaseModel):
     base_url: str
     model: str
-    api_key_env: str
+    api_key: str
     extra_headers: dict[str, str] = Field(default_factory=dict)
     temperature: float | None = None
     max_tokens: int | None = None
@@ -112,7 +112,7 @@ class WebProfile(BaseModel):
 
 class AndroidReadyCheckTree(BaseModel):
     type: Literal["ui_tree_contains"]
-    text: str
+    text: str | list[str]
     timeout_sec: float = 5
 
 
@@ -128,13 +128,23 @@ class AndroidProfile(BaseModel):
     platform: Literal["android"]
     package: str
     activity: str | None = None
+    serial: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+    input_method: Literal["auto", "adb_keyboard", "u2_send_keys"] = "auto"
     ready_check: AndroidReadyCheckTree
     recovery_path: list[ActionStep]
     input_locator: Locator
     send_button_locator: Locator
     response_extraction: AndroidResponseExtraction
     new_session_action: list[ActionStep] = Field(default_factory=list)
+    input_focus_action: list[ActionStep] = Field(default_factory=list)
+    send_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
+
+    def llm_response_enabled(self) -> bool:
+        return bool(self.base_url and self.model and self.api_key)
 
 
 # ---- Union + parser ----

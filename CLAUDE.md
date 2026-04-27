@@ -14,7 +14,7 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Plan 2 — React Web UI:** ✅ complete (tag `web-ui-v0.2.0`, 2026-04-22). Single-binary deploy (FastAPI serves built SPA from `src/autoagent/static/` with SPA fallback). 2s polling via TanStack Query for batch progress (WebSocket deferred to Plan 3). 68 backend tests + 8 frontend tests green; browser smoke (login → profiles → dry_run batch → download → config → logout) passed.
   Important runtime note: this repo uses a `src/` layout. In a git worktree, run uvicorn with `--app-dir src` (or equivalent `PYTHONPATH=src`) so the current checkout is imported instead of an older editable install from another checkout.
 - **Plan 3 — Web GUI Executor (Playwright):** ✅ complete (tag `web-gui-executor-v0.3.0`, 2026-04-22). Playwright-backed `WebExecutor`, in-process event bus + SSE, screenshot APIs, web connectivity testing, `BatchDetail` SSE streaming, and `SampleDetail` screenshot/action-log UI are in the repo. Verification status: backend full suite `128 passed` when run outside the sandbox so Chromium can launch; backend fast suite `123 passed, 5 deselected`; frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all green; manual browser smoke passed end-to-end.
-- **Plan 4 — Android Executor (uiautomator2 + OCR):** not started.
+- **Plan 4 — Android Executor (uiautomator2 + OCR):** ✅ complete (tag `android-executor-v0.4.0`, 2026-04-27). Full feature set: device discovery, `/devices` API + IME management, `gui_android` scheduling, Android Profile Builder (rule/smart draft modes, Review flow, connectivity validation, new_session_action guided tap-sequence authoring), OCR long-response stitching, `pixel_stable`/`ui_tree_stable`, opt-in LLM response extraction, SampleDetail dual-view. Backend fast suite 293 passed; frontend 21 passed; lint/build green.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
 
 ## Deferred work for Plan 5
@@ -66,6 +66,32 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Result format:** one JSONL file per batch at `<data_dir>/results/<batch_id>.jsonl`. Writer is append-only and thread-safe.
 - **Profiles:** YAML files under `<data_dir>/profiles/<name>.yaml`. Names restricted by allowlist regex in `profiles/registry.py::_path`.
 - **Playwright verification:** in this environment, real-browser pytest cases may need to run outside the sandbox because Chromium launch is blocked inside the sandbox. When verifying Plan 3 locally, use `python3.11 -m pytest -v` outside the sandbox for the full suite, or `python3.11 -m pytest -q -m "not playwright"` for the fast subset.
+- **Android verification:** real-device cases will be marked `@pytest.mark.android`; keep them out of the fast suite with `-m "not android"`.
+- **ADB Keyboard:** bundled at `src/autoagent/fixtures/ADBKeyboard.apk`. The `/devices` page shows:
+  - **Install** button (if not yet installed on device)
+  - **Enable/Disable IME** toggles (if installed)
+  - Status tags: `installed`/`not installed`, `ime enabled`/`ime disabled`
+  Android execution auto-switches to `com.android.adbkeyboard/.AdbIME` for non-ASCII prompts and restores the previous IME when done.
+- **Fake chat fixture APK:** source lives in `tests/fixtures/fake_chat_apk/`; build `fake_chat-debug.apk` with Android Studio or set `AUTOAGENT_FAKE_CHAT_APK` to an externally built artifact before running `pytest -m android`. This fixture is optional; Plan 4 can also be validated manually against a real device + real target app.
+- **Android/Profile Builder handoff:** read `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md` first when resuming Plan 4. It is the active status note for recent Qwen/Tongyi debugging, ADB Keyboard input fixes, and remaining verification blockers.
+- **Android profile semantics:** `new_session_action` is for starting a clean conversation. Input focusing belongs in `input_focus_action`. Send triggering can live in `send_action` when runtime behavior is better represented by `tap_xy` or `click_locator` actions than by a static locator. Do not overload `new_session_action` with "tap the input box" unless the product truly uses that step to create a new conversation. Runtime only executes `new_session_action` when the sample explicitly sets `new_session=true`; the default sample behavior is to stay in the existing conversation context.
+- **Builder new-session authoring:** Builder exposes a guided `tap_xy` sequence flow for `new_session_action`. Select "配置多步新开对话" on the Builder page, choose a step count (1–3), then capture each step to get AI-recommended tap points. Accept or manually override each point; the confirmed sequence is serialized into `new_session_action` in the draft YAML automatically. The flow only outputs `tap_xy` actions. Builder authoring does not execute the new-session flow; runtime still requires `sample.new_session=true`. The step cards distinguish `unavailable` (`当前未配置 VLM，仅支持人工点选`) from `failed` (`推荐请求失败：<reason>`), so users should not need to click "重新点选" just to discover missing VLM configuration.
+- **Profile Builder capture/runtime alignment:** `Start Builder Session` enables ADB Keyboard once for the builder session and `Generate Draft` restores the previous IME. `Capture Editing State` is manual-only: the user must focus the input first, and the backend should not auto-tap into editing or run an extra runtime probe during draft generation. Builder now has two draft modes: `rule` keeps manual review mandatory before connectivity validation, while `smart` can auto-apply review decisions and enable connectivity immediately only when the backend returns `requires_manual_review=false`.
+- **Profile Builder review completeness:** do not collapse Android builder candidates away before review. For `input_locator`, `input_focus_action`, and `send_action`, keep every bounded node as a review candidate and let recommendation affect ordering only. Keep `latest_bubble_match` review conditional on real ambiguity rather than always forcing the user through it.
+- **Visual send controls:** some apps expose the send icon/label as a non-clickable node even though tapping its bounds works. `send_action` candidate generation should keep those visual send controls as tap-only review choices instead of dropping them.
+- **Android response extraction:** runtime UI-tree extraction must honor `response_container_locator` before applying `latest_bubble_match`. Do not scan the whole page by class alone when the profile already contains a reviewed response container.
+- **Profile Builder response ranking:** keep all `latest_bubble_match` candidates visible in review, but rank likely assistant replies ahead of UI chrome, placeholders, and bottom feature chips so the default recommendation tracks the latest visible assistant message.
+- **Response anchors:** treat `response_container_locator` as a structural anchor, not a frozen frame. Runtime extraction should rank matching containers, group multi-`TextView` reply fragments into a single latest response block, prefer the latest valid block inside the best container, and persist `after_result_<n>.xml` plus container-matching logs for device regressions.
+- **Final manual smoke doc:** use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` for the final real-device verification run and result-report template.
+- **Tier 2 OCR runtime:** `rapidocr_onnxruntime` runs on CPU in this repo. OCR/stitching paths are marked `@pytest.mark.slow` and stay out of the fast suite.
+- **Tier 2 Android smoke:** 1. run a long-response app/profile with `method: ocr_only` or `ui_tree_then_ocr`; 2. verify stitched text spans more than one screen; 3. verify `pixel_stable` or `ui_tree_stable` completes without false positives.
+- **Profile Builder artifacts:** stored under `<data_root>/profile_builder/<session_id>/`.
+- **Profile Builder rule mode:** draft generation must keep working with no LLM config at all.
+- **Profile Builder smart mode:** Builder LLM output is constrained to `draft_overrides` plus `review_decisions`. Review decisions must only pick from surfaced review candidates; if any required field remains unresolved, keep `requires_manual_review=true` and do not pretend the draft is runnable.
+- **Profile LLM credentials:** Android profile YAMLs may contain plaintext `base_url`, `model`, and `api_key` for runtime LLM response extraction. Treat `data/profiles/*.yaml` as sensitive local secrets.
+- **Runtime LLM creds:** runtime LLM response extraction reads credentials only from the profile YAML. Global `VLMConfig` on the Config page is the default source for Builder draft enrichment and optional YAML injection, not the runtime source of truth.
+- **LLM connectivity checks:** `POST /api/v1/config/vlm/test` reports staged connectivity/auth/model/shape failures. `PUT /api/v1/config/vlm` now rejects non-empty invalid triples and only bypasses connectivity checks for a fully empty triple.
+- **Profile Builder connectivity:** reuse the existing `/api/v1/tests/sync` execution path (via shared backend helper), not a duplicate executor path.
 - **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.
 - **SSE progress:** `GET /api/v1/batches/{id}/events` is the live progress stream. Frontend `useBatchStream` reconciles updates via `seq`; WebSocket is not used.
 
@@ -74,10 +100,16 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 ```bash
 python3.11 -m pytest -q                # run all tests
 python3.11 -m pytest -q -m "not playwright"   # skip real-browser tests
+python3.11 -m pytest -q -m "not playwright and not android and not slow"   # fast backend suite
+python3.11 -m pytest -v -m android     # android real-device suite
 python3.11 -m pytest tests/unit -v     # unit only
 python3.11 -m ruff check .             # lint
 python3.11 -m ruff format .            # format
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7          # preview old logs/profile-builder artifacts
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply  # delete old logs/profile-builder artifacts
+python3.11 scripts/cleanup_runtime_artifacts.py --all --apply     # clear all logs/profile-builder artifacts
 python3.11 -m playwright install chromium     # one-time: download Chromium
+adb devices -l                         # verify adb sees local devices
 python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server
 cd web && pnpm dev                     # frontend dev server (5173)
 cd web && pnpm build                   # build UI into src/autoagent/static/
@@ -85,9 +117,11 @@ cd web && pnpm test                    # frontend unit tests
 cd web && pnpm lint                    # frontend lint
 ```
 
-Required env for running: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET` (>=32 chars). See `.env.example`.
+Environment for running:
+- **Defaults** (dev): `ADMIN_USERNAME=admin`, `ADMIN_PASSWORD=admin123456`, `JWT_SECRET=dev-secret-key-32-chars-minimum-length`. These are built into `src/autoagent/config/settings.py` for convenience; override via `.env` or env vars in production.
+- **Optional**: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
 
-Optional env: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
+ADB Keyboard APK is bundled at `src/autoagent/fixtures/ADBKeyboard.apk` (17 KB). The `/devices` page has one-click "Install ADB Keyboard" and toggle "Enable/Disable IME" buttons.
 
 ## When starting a new task in this repo
 
@@ -95,4 +129,6 @@ Optional env: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddlewar
 2. Consult `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md` for architecture intent.
 3. Match existing code style — most modules are small and single-purpose; prefer adding a new module over growing an existing one past ~200 lines.
 4. Plan 5 work should start with the "secrets + auth hardening" task (see "Deferred work").
-5. Plan 2 is complete and tagged `web-ui-v0.2.0`; the next active plan is Plan 3 (Web GUI Executor).
+5. If working on Plan 4 Android/Profile Builder, read `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md` before debugging or retesting.
+6. If working on LLM extraction behavior, also read `docs/superpowers/specs/2026-04-25-llm-response-extraction-design.md`.
+7. Plan 2 is complete and tagged `web-ui-v0.2.0`; the active implementation branch is Plan 4 until final Android verification and tagging complete.

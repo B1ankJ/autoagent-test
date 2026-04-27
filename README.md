@@ -4,7 +4,9 @@ Backend service for batch testing of conversational AI products via OpenAI-compa
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Verified status: backend full suite `128 passed` (Playwright cases require running outside the sandbox), backend fast suite `123 passed, 5 deselected`, frontend `pnpm test`, `pnpm lint`, `pnpm format:check`, and `pnpm build` all pass, and manual browser smoke passed end-to-end.
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder MVP. Remaining work is final manual verification on a real device + real app, then release tagging.
+
+Current Android/Profile Builder handoff, including the latest Qwen/Tongyi debugging status and open blockers, is tracked in `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`.
 
 ## Requirements
 
@@ -29,6 +31,74 @@ python3.11 -m playwright install chromium --with-deps
 ```
 
 Run once per machine. `--with-deps` installs OS libs on Linux and is a no-op on macOS.
+
+### Android executor prerequisite (Plan 4 Tier 1)
+
+Android mode requires:
+
+```bash
+brew install android-platform-tools   # macOS
+python3.11 -m pip install -e '.[dev]'
+adb devices
+```
+
+Tier 1 uses `uiautomator2` plus a connected emulator or real device. If you plan to use
+`input_method: adb_keyboard`, the repo now bundles `src/autoagent/fixtures/ADBKeyboard.apk` so the
+Devices page can offer one-click installation by default. Set `ADB_KEYBOARD_APK_PATH` only if you
+want to override that bundled APK. The executor auto-switches to
+`com.android.adbkeyboard/.AdbIME` for non-ASCII input and restores the previous IME afterwards.
+
+The optional Tier 1 fake-chat smoke target lives under `tests/fixtures/fake_chat_apk/`. Build its
+debug APK in Android Studio and place it at `tests/fixtures/fake_chat_apk/fake_chat-debug.apk`, or
+set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest -m android`.
+If you skip this fixture, final Android verification can be done directly on a real device + real
+target app via the Web UI.
+
+The current Android/Profile Builder handoff is tracked in
+`docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`. The final real-device
+checklist is tracked in `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
+
+### Profile Builder (Android MVP)
+
+Use `Profiles -> Build Profile` in the web UI to generate a draft Android profile from guided
+captures. The builder walks through idle and editing states, proposes candidate
+locators, surfaces `review_items` when confidence is low, and can run a connectivity check against
+the generated draft before you save anything as a normal profile.
+
+Capture expectations:
+
+- `idle`: manually send one short test message first, wait until the answer is visible, then stop on the target conversation page before the input is focused
+- `editing`: manually focus the input so the real editing controls are visible, then capture exactly that screen
+
+Builder behavior:
+
+- `Start Builder Session` enables `ADB Keyboard` once for the whole builder session and restores the previous IME after `Generate Draft`
+- `Capture Editing State` does not auto-tap into the input area and does not run an extra runtime probe; the draft is derived only from the manual `idle` and `editing` captures
+- Review generation now keeps raw candidates without destructive filtering for `input_locator`, `input_focus_action`, and `send_action`; backend recommendation only affects ordering, and every bounded node remains available in manual review
+- `send_action` review now also keeps non-clickable visual send controls when the XML exposes a tappable-looking send icon or label without `clickable="true"`, so manual review can still choose the correct tap target
+- `latest_bubble_match` review is now conditional: if the structural response anchor resolves to one clear latest response block, the builder can skip that review item; ambiguous containers or blocks still surface all evidence for manual choice
+- Android response extraction now treats `response_container_locator` as a structural anchor, not a single frozen bounds box. Runtime extraction ranks matching containers, groups multi-`TextView` reply fragments into one response block, and selects the latest valid block inside the best match.
+
+Builder artifacts are stored under `data/profile_builder/<session_id>/` and include
+`capture_<step>.*`, `candidates.json`, `review_items.json`, `draft_profile.yaml`, and
+`connectivity_result.json` after validation.
+
+Optional LLM settings:
+
+```bash
+export PROFILE_BUILDER_LLM_BASE_URL=...
+export PROFILE_BUILDER_LLM_MODEL=...
+export PROFILE_BUILDER_LLM_API_KEY=...
+export PROFILE_BUILDER_LLM_TIMEOUT_SEC=30
+```
+
+If those env vars are absent, the builder stays in deterministic rule-only mode.
+
+### Android OCR notes (Plan 4 Tier 2)
+
+- Tier 2 OCR uses `rapidocr_onnxruntime` on CPU.
+- Long responses may take several seconds because multiple frames are OCR'd and stitched.
+- `@pytest.mark.slow` covers OCR fixtures and is excluded from the fast suite.
 
 ## Run
 
@@ -102,6 +172,21 @@ pytest tests/unit   # unit only
 ruff check .        # lint
 ruff format .       # format
 ```
+
+### Runtime artifact cleanup
+
+Use the repo-local cleanup script to preview or delete old runtime artifacts under any `logs/`
+directory plus `data/profile_builder/`:
+
+```bash
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply
+python3.11 scripts/cleanup_runtime_artifacts.py --all --apply
+```
+
+The default mode is dry-run. Only `--apply` performs deletion. `--all --apply` clears all
+matched `logs/` and `data/profile_builder/` contents while keeping the root directories
+themselves.
 
 ## Web UI
 

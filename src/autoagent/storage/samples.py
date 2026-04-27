@@ -16,6 +16,8 @@ def _row_to_result(r: SampleRow) -> SampleResult:
         status=r.status,  # type: ignore[arg-type]
         prompts_sent=json.loads(r.prompts_sent_json or "[]"),
         responses=json.loads(r.responses_json or "[]"),
+        llm_responses=json.loads(r.llm_responses_json or "[]"),
+        llm_errors=json.loads(r.llm_errors_json or "[]"),
         duration_ms=r.duration_ms,
         attempt_count=r.attempt_count,
         mode=r.mode,  # type: ignore[arg-type]
@@ -43,6 +45,8 @@ async def upsert_sample(batch_id: str, result: SampleResult) -> None:
         existing.status = result.status
         existing.prompts_sent_json = json.dumps(result.prompts_sent)
         existing.responses_json = json.dumps(result.responses, ensure_ascii=False)
+        existing.llm_responses_json = json.dumps(result.llm_responses, ensure_ascii=False)
+        existing.llm_errors_json = json.dumps(result.llm_errors, ensure_ascii=False)
         existing.duration_ms = result.duration_ms
         existing.attempt_count = result.attempt_count
         existing.mode = result.mode

@@ -9,6 +9,7 @@ from httpx import ASGITransport
 from autoagent.auth.jwt import create_access_token
 from autoagent.config.settings import get_settings
 from autoagent.main import app
+from autoagent.models.api import SampleResult
 
 
 @pytest.fixture
@@ -21,6 +22,13 @@ def _seed(tmp_logs: Path, batch_id: str, sample_id: str) -> None:
     directory.mkdir(parents=True)
     (directory / "01_ready.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
     (directory / "02_filled.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+
+def _seed_android_style(tmp_logs: Path, batch_id: str, sample_id: str) -> None:
+    directory = tmp_logs / batch_id / sample_id
+    directory.mkdir(parents=True)
+    (directory / "before_input_1.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    (directory / "after_send_1.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
 
 
 async def test_list_screenshots(
@@ -40,6 +48,159 @@ async def test_list_screenshots(
         assert response.status_code == 200
         names = [item["name"] for item in response.json()]
         assert names == ["01_ready.png", "02_filled.png"]
+
+
+async def test_list_screenshots_accepts_android_style_names(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    logs = tmp_path / "logs"
+    _seed_android_style(logs, "b1", "s1")
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": logs}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == ["before_input_1.png", "after_send_1.png"]
+
+
+async def test_list_screenshots_uses_sample_logs_dir_when_it_is_absolute(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    actual_logs = tmp_path / "data" / "logs"
+    _seed_android_style(actual_logs, "b1", "s1")
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": tmp_path / "logs"}),
+    )
+    async def _fake_list_samples(_batch_id: str) -> list[SampleResult]:
+        return [
+            SampleResult(
+                id="s1",
+                status="done",
+                mode="gui_android",
+                target_profile="android_demo",
+                logs_dir=str((actual_logs / "b1" / "s1").resolve()),
+            )
+        ]
+
+    monkeypatch.setattr("autoagent.api.batches.list_samples_for_batch", _fake_list_samples)
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == ["before_input_1.png", "after_send_1.png"]
+
+
+async def test_list_screenshots_prefers_metadata_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    actual_logs = tmp_path / "data" / "logs"
+    sample_dir = actual_logs / "b1" / "s1"
+    sample_dir.mkdir(parents=True)
+    for name in [
+        "before_input_1.png",
+        "after_input_1.png",
+        "after_send_1.png",
+        "after_result_1.png",
+    ]:
+        (sample_dir / name).write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    async def _fake_list_samples(_batch_id: str) -> list[SampleResult]:
+        return [
+            SampleResult(
+                id="s1",
+                status="done",
+                mode="gui_android",
+                target_profile="android_demo",
+                logs_dir=str(sample_dir.resolve()),
+                metadata={
+                    "screenshots": [
+                        {"name": "before_input_1.png", "label": "before_input_1"},
+                        {"name": "after_input_1.png", "label": "after_input_1"},
+                        {"name": "after_send_1.png", "label": "after_send_1"},
+                        {"name": "after_result_1.png", "label": "after_result_1"},
+                    ]
+                },
+            )
+        ]
+
+    monkeypatch.setattr("autoagent.api.batches.list_samples_for_batch", _fake_list_samples)
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": tmp_path / "logs"}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == [
+            "before_input_1.png",
+            "after_input_1.png",
+            "after_send_1.png",
+            "after_result_1.png",
+        ]
+
+
+async def test_list_screenshots_uses_stage_order_when_metadata_order_is_stale(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    actual_logs = tmp_path / "data" / "logs"
+    sample_dir = actual_logs / "b1" / "s1"
+    sample_dir.mkdir(parents=True)
+    for name in [
+        "after_input_1.png",
+        "after_result_1.png",
+        "after_send_1.png",
+        "before_input_1.png",
+    ]:
+        (sample_dir / name).write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    async def _fake_list_samples(_batch_id: str) -> list[SampleResult]:
+        return [
+            SampleResult(
+                id="s1",
+                status="done",
+                mode="gui_android",
+                target_profile="android_demo",
+                logs_dir=str(sample_dir.resolve()),
+                metadata={
+                    "screenshots": [
+                        {"name": "01_done_1.png", "label": "done_1"},
+                    ]
+                },
+            )
+        ]
+
+    monkeypatch.setattr("autoagent.api.batches.list_samples_for_batch", _fake_list_samples)
+    monkeypatch.setattr(
+        "autoagent.api.batches.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": tmp_path / "logs"}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.get(
+            "/api/v1/batches/b1/samples/s1/screenshots",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()]
+        assert names == [
+            "before_input_1.png",
+            "after_input_1.png",
+            "after_send_1.png",
+            "after_result_1.png",
+        ]
 
 
 async def test_download_screenshot(
@@ -69,7 +230,6 @@ async def test_download_screenshot(
         "..%2f..%2fetc%2fpasswd",
         "01_ready.jpg",
         "01_READY.png",
-        "a.png",
     ],
 )
 async def test_download_rejects_invalid_names(

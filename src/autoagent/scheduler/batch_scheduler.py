@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.config.settings import get_settings
+from autoagent.devices.pool import DevicePool
 from autoagent.events.bus import get_event_bus
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Mode, Sample, SampleResult
@@ -30,8 +31,13 @@ def _resolve_concurrency(
     samples: list[Sample],
     profile_lookup: Callable[[str], Any],
     *,
+    available_devices: int | None = None,
     logger: logging.Logger = log,
 ) -> int:
+    if mode == "gui_android":
+        avail = max(1, available_devices or 1)
+        return max(1, min(requested, avail))
+
     if mode != "gui_pc_web" or not samples:
         return max(1, requested)
 
@@ -77,9 +83,11 @@ class BatchScheduler:
         self,
         executor_factory: Callable[[str], Executor],
         profile_lookup: Callable[[str], Any],
+        device_pool: DevicePool | None = None,
     ):
         self._executor_factory = executor_factory
         self._profile_lookup = profile_lookup
+        self._device_pool = device_pool
         self._states: dict[str, _RunState] = {}
         self._tasks: dict[str, asyncio.Task] = {}
 
@@ -93,7 +101,17 @@ class BatchScheduler:
         target_profile_default: str | None = None,
     ) -> str:
         batch_id = f"b_{int(time.time())}_{uuid.uuid4().hex[:6]}"
-        effective = _resolve_concurrency(concurrency, mode, samples, self._profile_lookup)
+        effective = _resolve_concurrency(
+            concurrency,
+            mode,
+            samples,
+            self._profile_lookup,
+            available_devices=(
+                self._device_pool.available_count_sync()
+                if mode == "gui_android" and self._device_pool
+                else None
+            ),
+        )
         state = _RunState(
             samples=samples,
             mode=mode,
@@ -172,14 +190,51 @@ class BatchScheduler:
                             if sample.mode == "api"
                             else settings.default_gui_timeout_sec
                         )
-                        ctx = ExecutorContext(verbose_logs=settings.default_verbose_logs)
-                        executor = self._executor_factory(sample.mode)
-                        result = await executor.run(
-                            sample,
-                            profile=profile,
-                            default_timeout_sec=default_timeout,
-                            ctx=ctx,
+                        ctx = ExecutorContext(
+                            logs_dir=batch_id,
+                            verbose_logs=settings.default_verbose_logs,
                         )
+                        executor = self._executor_factory(sample.mode)
+                        if sample.mode == "gui_android" and self._device_pool is not None:
+                            await bus.publish(
+                                batch_id,
+                                "sample_update",
+                                {
+                                    "sample_id": sample.id,
+                                    "status": "running",
+                                    "waiting_for_device": True,
+                                },
+                            )
+                            async with self._device_pool.acquire(
+                                getattr(profile, "serial", None), timeout_sec=60
+                            ) as serial:
+                                ctx.device_serial = serial
+                                ctx.action_replay_path = (
+                                    settings.logs_root / batch_id / sample.id / "actions.jsonl"
+                                )
+                                await bus.publish(
+                                    batch_id,
+                                    "sample_update",
+                                    {
+                                        "sample_id": sample.id,
+                                        "status": "running",
+                                        "waiting_for_device": False,
+                                        "device_serial": serial,
+                                    },
+                                )
+                                result = await executor.run(
+                                    sample,
+                                    profile=profile,
+                                    default_timeout_sec=default_timeout,
+                                    ctx=ctx,
+                                )
+                        else:
+                            result = await executor.run(
+                                sample,
+                                profile=profile,
+                                default_timeout_sec=default_timeout,
+                                ctx=ctx,
+                            )
 
                 writer.append(result)
                 try:
@@ -217,6 +272,8 @@ class BatchScheduler:
                                 "sample_id": sample.id,
                                 "status": result.status,
                                 "duration_ms": result.duration_ms,
+                                "device_serial": ctx.device_serial,
+                                "waiting_for_device": False,
                             },
                         )
                         await bus.publish(

@@ -46,6 +46,8 @@ async def test_sample_upsert_and_list():
         status="done",
         prompts_sent=["p"],
         responses=["r"],
+        llm_responses=["lr"],
+        llm_errors=[None],
         duration_ms=10,
         attempt_count=1,
         mode="api",
@@ -56,6 +58,8 @@ async def test_sample_upsert_and_list():
     assert len(rs) == 1
     assert rs[0].id == "t1"
     assert rs[0].status == "done"
+    assert rs[0].llm_responses == ["lr"]
+    assert rs[0].llm_errors == [None]
 
 
 async def test_update_progress():

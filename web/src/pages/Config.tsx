@@ -1,16 +1,35 @@
-import { App, Button, Card, Form, Input, InputNumber, Space, Switch, Typography } from 'antd'
-import { useEffect } from 'react'
-import { useDefaults, useSaveDefaults, useSaveVLM, useVLM } from '../api/config'
+import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { LLMCheckResult, useDefaults, useSaveDefaults, useSaveVLM, useTestLLM, useVLM } from '../api/config'
 import { GlobalDefaults, VLMConfig } from '../types/api'
+
+const STAGE_TEXT: Record<LLMCheckResult['stage'], string> = {
+  connect: '无法连接到该地址',
+  auth: '认证失败',
+  model_not_found: '模型不存在',
+  response_shape: '返回格式异常',
+  ok: '连通正常',
+}
+
+function saveErrorMessage(error: unknown): string {
+  const detail = (error as { response?: { data?: { detail?: LLMCheckResult } } })?.response?.data?.detail
+  if (detail?.stage) {
+    return `${STAGE_TEXT[detail.stage] ?? '未知错误'}：${detail.message}`
+  }
+  return (error as Error).message
+}
 
 export function ConfigPage() {
   const vlm = useVLM()
   const defaults = useDefaults()
   const saveVlm = useSaveVLM()
+  const testLlm = useTestLLM()
   const saveDefaults = useSaveDefaults()
   const [vlmForm] = Form.useForm<VLMConfig>()
   const [defaultsForm] = Form.useForm<GlobalDefaults>()
   const { message } = App.useApp()
+  const [llmTestMessage, setLlmTestMessage] = useState<string | null>(null)
+  const [llmTestOk, setLlmTestOk] = useState(false)
 
   useEffect(() => {
     if (vlm.data) {
@@ -23,6 +42,26 @@ export function ConfigPage() {
       defaultsForm.setFieldsValue(defaults.data)
     }
   }, [defaults.data, defaultsForm])
+
+  const handleTestLLM = async () => {
+    const values = vlmForm.getFieldsValue()
+    if (!values.base_url || !values.model || !values.api_key) {
+      setLlmTestOk(false)
+      setLlmTestMessage('请先填写完整的 Base URL、Model 和 API Key')
+      return
+    }
+    const result = await testLlm.mutateAsync({
+      base_url: values.base_url,
+      model: values.model,
+      api_key: values.api_key,
+    })
+    setLlmTestOk(result.ok)
+    setLlmTestMessage(
+      result.ok
+        ? `${STAGE_TEXT[result.stage]}（${result.latency_ms} ms）`
+        : `${STAGE_TEXT[result.stage]}：${result.message}`,
+    )
+  }
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -37,7 +76,7 @@ export function ConfigPage() {
               await saveVlm.mutateAsync(values)
               message.success('已保存')
             } catch (error) {
-              message.error((error as Error).message)
+              message.error(saveErrorMessage(error))
             }
           }}
         >
@@ -47,12 +86,25 @@ export function ConfigPage() {
           <Form.Item name="model" label="Model" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="api_key_env" label="API Key Env Var" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item name="api_key" label="API Key">
+            <Input.Password />
           </Form.Item>
-          <Button type="primary" htmlType="submit" loading={saveVlm.isPending}>
-            保存
-          </Button>
+          <Space>
+            <Button type="primary" htmlType="submit" loading={saveVlm.isPending}>
+              保存
+            </Button>
+            <Button onClick={() => void handleTestLLM()} loading={testLlm.isPending}>
+              测试连通性
+            </Button>
+          </Space>
+          {llmTestMessage ? (
+            <Alert
+              style={{ marginTop: 12 }}
+              type={llmTestOk ? 'success' : 'error'}
+              showIcon
+              message={llmTestMessage}
+            />
+          ) : null}
         </Form>
       </Card>
 

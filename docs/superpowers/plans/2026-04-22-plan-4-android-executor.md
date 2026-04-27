@@ -112,7 +112,7 @@ web/src/
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Write the failing baseline checks**
+- [x] **Step 1: Write the failing baseline checks**
 
 Add marker-aware commands to the plan and verify the repo does not yet know about Android-specific markers or dependencies.
 
@@ -128,7 +128,7 @@ PY
 ```
 Expected: pytest is green, but the import step fails with `ModuleNotFoundError: No module named 'uiautomator2'`.
 
-- [ ] **Step 2: Add deps and markers to `pyproject.toml`**
+- [x] **Step 2: Add deps and markers to `pyproject.toml`**
 
 Extend the dependency and pytest marker lists:
 
@@ -146,7 +146,7 @@ markers = [
 ]
 ```
 
-- [ ] **Step 3: Document the Android operator prerequisites**
+- [x] **Step 3: Document the Android operator prerequisites**
 
 Add a README section immediately after the Playwright prerequisite:
 
@@ -159,7 +159,7 @@ Android mode requires:
     python3.11 -m pip install -e '.[dev]'
     adb devices
 
-Tier 1 uses `uiautomator2` plus a connected emulator/real device. If you plan to use `input_method: adb_keyboard`, install `com.android.adbkeyboard` on the device manually; we do not bundle that APK in this repo.
+Tier 1 uses `uiautomator2` plus a connected emulator/real device. If you plan to use `input_method: adb_keyboard`, the repo now bundles `src/autoagent/fixtures/ADBKeyboard.apk` so the Devices page can install `com.android.adbkeyboard` by default; set `ADB_KEYBOARD_APK_PATH` only if you want to override that bundled APK.
 ```
 
 In `CLAUDE.md`, extend the common commands block and environment notes:
@@ -172,10 +172,10 @@ adb devices -l
 
 ```md
 - **Android verification:** real-device tests are marked `@pytest.mark.android` and are skipped in the fast suite.
-- **ADB Keyboard:** `input_method: adb_keyboard` expects `com.android.adbkeyboard` to be preinstalled; Plan 4 does not auto-install it.
+- **ADB Keyboard:** `input_method: adb_keyboard` relies on `com.android.adbkeyboard`. The device list reports install/enable status, the Devices page can install the bundled APK by default, `ADB_KEYBOARD_APK_PATH` can override it, and Android execution auto-switches/restores the IME for non-ASCII input.
 ```
 
-- [ ] **Step 4: Reinstall deps and verify the baseline remains green**
+- [x] **Step 4: Reinstall deps and verify the baseline remains green**
 
 Run:
 ```bash
@@ -186,7 +186,7 @@ python3.11 -m ruff format --check .
 ```
 Expected: install exits 0; pytest/ruff all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pyproject.toml README.md CLAUDE.md
@@ -203,7 +203,7 @@ git commit -m "chore(android): add uiautomator2 deps and markers"
 - Create: `src/autoagent/storage/devices.py`
 - Create: `tests/unit/test_device_storage.py`
 
-- [ ] **Step 1: Write the failing storage test**
+- [x] **Step 1: Write the failing storage test**
 
 `tests/unit/test_device_storage.py`:
 
@@ -241,7 +241,7 @@ async def test_upsert_and_patch_device() -> None:
     assert rows[0].online is True
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -249,7 +249,7 @@ python3.11 -m pytest tests/unit/test_device_storage.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.storage.devices'`.
 
-- [ ] **Step 3: Implement the ORM model and storage helpers**
+- [x] **Step 3: Implement the ORM model and storage helpers**
 
 In `src/autoagent/models/db.py`, add:
 
@@ -373,7 +373,7 @@ async def mark_missing_devices_offline(seen_serials: set[str]) -> None:
         await s.commit()
 ```
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -381,7 +381,7 @@ python3.11 -m pytest tests/unit/test_device_storage.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/models/db.py src/autoagent/models/api.py src/autoagent/storage/devices.py tests/unit/test_device_storage.py
@@ -397,7 +397,7 @@ git commit -m "feat(devices): add persistent device storage"
 - Create: `src/autoagent/devices/adb.py`
 - Create: `tests/unit/test_adb_wrapper.py`
 
-- [ ] **Step 1: Write the failing parser tests**
+- [x] **Step 1: Write the failing parser tests**
 
 `tests/unit/test_adb_wrapper.py`:
 
@@ -436,7 +436,7 @@ def test_list_devices_raises_on_non_zero(monkeypatch: pytest.MonkeyPatch) -> Non
         list_devices()
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -444,7 +444,7 @@ python3.11 -m pytest tests/unit/test_adb_wrapper.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.devices'`.
 
-- [ ] **Step 3: Implement `src/autoagent/devices/adb.py`**
+- [x] **Step 3: Implement `src/autoagent/devices/adb.py`**
 
 ```python
 from __future__ import annotations
@@ -509,7 +509,7 @@ def disconnect(target: str) -> None:
     _run_adb("disconnect", target)
 ```
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -517,7 +517,7 @@ python3.11 -m pytest tests/unit/test_adb_wrapper.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/devices/__init__.py src/autoagent/devices/adb.py tests/unit/test_adb_wrapper.py
@@ -532,7 +532,7 @@ git commit -m "feat(devices): add adb wrapper"
 - Create: `src/autoagent/devices/pool.py`
 - Create: `tests/unit/test_device_pool.py`
 
-- [ ] **Step 1: Write the failing pool tests**
+- [x] **Step 1: Write the failing pool tests**
 
 `tests/unit/test_device_pool.py`:
 
@@ -573,7 +573,7 @@ async def test_acquire_raises_when_device_disabled_mid_wait() -> None:
             await task
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -581,7 +581,7 @@ python3.11 -m pytest tests/unit/test_device_pool.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.devices.pool'`.
 
-- [ ] **Step 3: Implement `DevicePool`**
+- [x] **Step 3: Implement `DevicePool`**
 
 `src/autoagent/devices/pool.py`:
 
@@ -644,7 +644,7 @@ class DevicePool:
             await asyncio.sleep(0.1)
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -652,7 +652,7 @@ python3.11 -m pytest tests/unit/test_device_pool.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/devices/pool.py tests/unit/test_device_pool.py
@@ -669,7 +669,7 @@ git commit -m "feat(devices): add device pool locking"
 - Modify: `src/autoagent/main.py`
 - Create: `tests/unit/test_device_monitor.py`
 
-- [ ] **Step 1: Write the failing monitor test**
+- [x] **Step 1: Write the failing monitor test**
 
 `tests/unit/test_device_monitor.py`:
 
@@ -714,7 +714,7 @@ async def test_sync_once_upserts_and_marks_missing_offline(monkeypatch: pytest.M
     assert gone[-1] == []
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -722,7 +722,7 @@ python3.11 -m pytest tests/unit/test_device_monitor.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.devices.monitor'`.
 
-- [ ] **Step 3: Implement `DeviceMonitor` and singleton getters**
+- [x] **Step 3: Implement `DeviceMonitor` and singleton getters**
 
 Create `src/autoagent/devices/monitor.py`:
 
@@ -824,7 +824,7 @@ from autoagent.api._deps import get_device_monitor
             await monitor_task
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -832,7 +832,7 @@ python3.11 -m pytest tests/unit/test_device_monitor.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/devices/monitor.py src/autoagent/api/_deps.py src/autoagent/main.py tests/unit/test_device_monitor.py
@@ -847,7 +847,7 @@ git commit -m "feat(devices): add background device monitor"
 - Modify: `src/autoagent/api/devices.py`
 - Create: `tests/integration/test_devices_endpoint.py`
 
-- [ ] **Step 1: Write the failing endpoint tests**
+- [x] **Step 1: Write the failing endpoint tests**
 
 `tests/integration/test_devices_endpoint.py`:
 
@@ -877,7 +877,7 @@ async def test_patch_label_404(client):
     assert r.status_code == 404
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -885,7 +885,7 @@ python3.11 -m pytest tests/integration/test_devices_endpoint.py -v
 ```
 Expected: FAIL with `404` on `/devices/refresh` and `405` on `PATCH /devices/{serial}`.
 
-- [ ] **Step 3: Implement the endpoints**
+- [x] **Step 3: Implement the endpoints**
 
 Replace `src/autoagent/api/devices.py` with:
 
@@ -948,7 +948,7 @@ async def patch_label(serial: str, body: DeviceLabelUpdate) -> DeviceInfo:
     return row
 ```
 
-- [ ] **Step 4: Run the integration tests**
+- [x] **Step 4: Run the integration tests**
 
 Run:
 ```bash
@@ -956,7 +956,7 @@ python3.11 -m pytest tests/integration/test_devices_endpoint.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/api/devices.py tests/integration/test_devices_endpoint.py
@@ -975,7 +975,7 @@ git commit -m "feat(devices): implement devices endpoints"
 - Modify: `tests/unit/test_action_runner.py`
 - Modify: `tests/unit/test_screenshot_store.py`
 
-- [ ] **Step 1: Write the failing metadata/plumbing tests**
+- [x] **Step 1: Write the failing metadata/plumbing tests**
 
 Add to `tests/unit/test_screenshot_store.py`:
 
@@ -1009,7 +1009,7 @@ def test_expand_env_value_reads_shell(monkeypatch):
     assert expand_env_value("$CHAT_TOKEN") == "abc"
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -1017,7 +1017,7 @@ python3.11 -m pytest tests/unit/test_action_runner.py tests/unit/test_screenshot
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.utils.env_expand'` and missing `ScreenshotResult`.
 
-- [ ] **Step 3: Implement the shared abstractions**
+- [x] **Step 3: Implement the shared abstractions**
 
 Create `src/autoagent/utils/env_expand.py`:
 
@@ -1097,7 +1097,7 @@ class ScreenshotResult:
 
 In `src/autoagent/executors/action_runner.py`, keep the existing web behavior but import `expand_env_value` instead of duplicating regex logic.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1105,7 +1105,7 @@ python3.11 -m pytest tests/unit/test_action_runner.py tests/unit/test_screenshot
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/executors/base.py src/autoagent/executors/action_runner.py src/autoagent/executors/screenshot_store.py src/autoagent/utils/env_expand.py tests/unit/test_action_runner.py tests/unit/test_screenshot_store.py
@@ -1124,7 +1124,7 @@ git commit -m "refactor(executors): add shared android metadata plumbing"
 - Create: `tests/unit/test_android_input.py`
 - Modify: `tests/unit/test_profiles.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/unit/test_android_locator.py`:
 
@@ -1158,7 +1158,7 @@ assert p.input_method == "auto"
 assert p.serial is None
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -1166,7 +1166,7 @@ python3.11 -m pytest tests/unit/test_profiles.py tests/unit/test_android_locator
 ```
 Expected: FAIL because the new modules and `AndroidProfile` fields do not exist yet.
 
-- [ ] **Step 3: Implement schema + locator + input helpers**
+- [x] **Step 3: Implement schema + locator + input helpers**
 
 In `src/autoagent/profiles/schemas.py`, extend `AndroidProfile`:
 
@@ -1225,7 +1225,7 @@ def resolve_input_method(configured: str, prompt: str) -> str:
     return "adb_keyboard" if any(ord(ch) > 127 for ch in prompt) else "u2_send_keys"
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1233,7 +1233,7 @@ python3.11 -m pytest tests/unit/test_profiles.py tests/unit/test_android_locator
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/profiles/schemas.py src/autoagent/executors/android_locator.py src/autoagent/executors/android_input.py tests/unit/test_android_locator.py tests/unit/test_android_input.py tests/unit/test_profiles.py
@@ -1248,7 +1248,7 @@ git commit -m "feat(android): add profile schema, locator, and input helpers"
 - Create: `src/autoagent/executors/android_action_runner.py`
 - Create: `tests/unit/test_android_action_runner.py`
 
-- [ ] **Step 1: Write the failing action-runner tests**
+- [x] **Step 1: Write the failing action-runner tests**
 
 `tests/unit/test_android_action_runner.py`:
 
@@ -1277,7 +1277,7 @@ async def test_click_locator_dispatches_to_u2() -> None:
     assert runner.log[0]["action"] == "click_locator"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -1285,7 +1285,7 @@ python3.11 -m pytest tests/unit/test_android_action_runner.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'autoagent.executors.android_action_runner'`.
 
-- [ ] **Step 3: Implement the runner**
+- [x] **Step 3: Implement the runner**
 
 Create `src/autoagent/executors/android_action_runner.py`:
 
@@ -1351,7 +1351,7 @@ class AndroidActionRunner:
             raise ValueError(f"unknown android action: {step.action}")
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1359,7 +1359,7 @@ python3.11 -m pytest tests/unit/test_android_action_runner.py -v
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/executors/android_action_runner.py tests/unit/test_android_action_runner.py
@@ -1376,7 +1376,7 @@ git commit -m "feat(android): add android action runner"
 - Create: `tests/unit/test_response_extractor_ui_tree.py`
 - Create: `tests/unit/test_complete_detector_android.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/unit/test_response_extractor_ui_tree.py`:
 
@@ -1421,7 +1421,7 @@ async def test_wait_for_ui_tree_stable_returns_after_same_xml(monkeypatch):
     await wait_for_ui_tree_stable(Device(), stable_sec=0.0, max_wait_sec=0.2)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -1429,7 +1429,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ui_tree.py tests/unit/te
 ```
 Expected: FAIL with missing extractor module and missing `wait_for_ui_tree_stable`.
 
-- [ ] **Step 3: Implement Tier 1 extractor + detector**
+- [x] **Step 3: Implement Tier 1 extractor + detector**
 
 Create `src/autoagent/executors/response_extractor.py`:
 
@@ -1486,7 +1486,7 @@ async def wait_for_ui_tree_stable(
     raise TimeoutError(f"ui_tree_stable not reached within {max_wait_sec}s")
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1494,7 +1494,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ui_tree.py tests/unit/te
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/executors/response_extractor.py src/autoagent/executors/complete_detector.py tests/unit/test_response_extractor_ui_tree.py tests/unit/test_complete_detector_android.py
@@ -1511,7 +1511,7 @@ git commit -m "feat(android): add tier1 response extraction and completion detec
 - Modify: `tests/unit/test_executor_factory.py`
 - Create: `tests/unit/test_android_executor_unit.py`
 
-- [ ] **Step 1: Write the failing executor tests**
+- [x] **Step 1: Write the failing executor tests**
 
 Add to `tests/unit/test_executor_factory.py`:
 
@@ -1575,7 +1575,7 @@ async def test_execute_happy_path(monkeypatch, tmp_path):
     assert out == ["echo: hi"]
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -1583,7 +1583,7 @@ python3.11 -m pytest tests/unit/test_executor_factory.py tests/unit/test_android
 ```
 Expected: FAIL because `AndroidExecutor` is missing and `_build_executor("gui_android")` still raises.
 
-- [ ] **Step 3: Implement `AndroidExecutor` and wire factory dispatch**
+- [x] **Step 3: Implement `AndroidExecutor` and wire factory dispatch**
 
 Create `src/autoagent/executors/android_executor.py`:
 
@@ -1641,7 +1641,7 @@ def _build_executor(mode: str) -> Executor:
     raise ValueError(f"mode {mode} not supported")
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1649,7 +1649,7 @@ python3.11 -m pytest tests/unit/test_executor_factory.py tests/unit/test_android
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/executors/android_executor.py src/autoagent/api/_deps.py tests/unit/test_executor_factory.py tests/unit/test_android_executor_unit.py
@@ -1668,7 +1668,7 @@ git commit -m "feat(android): add android executor and factory dispatch"
 - Create: `tests/unit/test_scheduler_device_pool.py`
 - Create: `tests/integration/test_tests_sync_android.py`
 
-- [ ] **Step 1: Write the failing scheduler/API tests**
+- [x] **Step 1: Write the failing scheduler/API tests**
 
 `tests/unit/test_scheduler_device_pool.py`:
 
@@ -1713,7 +1713,7 @@ async def test_sync_android_uses_longer_timeout(client, monkeypatch):
     assert captured["timeout_sec"] == 210
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -1721,7 +1721,7 @@ python3.11 -m pytest tests/unit/test_scheduler_device_pool.py tests/integration/
 ```
 Expected: FAIL because `_resolve_concurrency` does not know about Android and `/tests/sync` still uses the generic timeout path.
 
-- [ ] **Step 3: Implement device-aware scheduler and replay endpoint**
+- [x] **Step 3: Implement device-aware scheduler and replay endpoint**
 
 In `src/autoagent/scheduler/batch_scheduler.py`, extend `_resolve_concurrency` and `run_one()`:
 
@@ -1777,7 +1777,7 @@ async def download_actions(batch_id: str, sample_id: str) -> FileResponse:
 
 Also update `list_screenshots()` to prefer `SampleResult.metadata["screenshots"]` so `is_sensitive` survives.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -1785,7 +1785,7 @@ python3.11 -m pytest tests/unit/test_scheduler_device_pool.py tests/integration/
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/autoagent/scheduler/batch_scheduler.py src/autoagent/api/tests.py src/autoagent/api/batches.py src/autoagent/storage/samples.py tests/unit/test_scheduler_device_pool.py tests/integration/test_tests_sync_android.py
@@ -1796,6 +1796,8 @@ git commit -m "feat(android): wire scheduler and batch api for devices"
 
 ### Task 13: Add the fake-chat APK fixture and real-device Tier 1 tests
 
+> Execution note (2026-04-23): the user chose to skip local `fake_chat-debug.apk` build/installation in this coding session. Keep the fixture source and `@pytest.mark.android` test in the repo, but treat APK-backed execution as deferred to final manual validation on a real device and real target app.
+
 **Files:**
 - Create: `tests/fixtures/fake_chat_apk/README.md`
 - Create: `tests/fixtures/fake_chat_apk/app/src/main/AndroidManifest.xml`
@@ -1803,7 +1805,7 @@ git commit -m "feat(android): wire scheduler and batch api for devices"
 - Create: `tests/fixtures/fake_chat_apk/app/src/main/res/layout/activity_main.xml`
 - Create: `tests/integration/test_android_executor_e2e.py`
 
-- [ ] **Step 1: Write the failing `@pytest.mark.android` test**
+- [x] **Step 1: Write the failing `@pytest.mark.android` test**
 
 `tests/integration/test_android_executor_e2e.py`:
 
@@ -1838,15 +1840,15 @@ async def test_fake_chat_apk_round_trip(android_profile, android_serial, tmp_pat
     assert result.responses == ["echo: hi", "echo: bb", "echo: ccc"]
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: FAIL because the fixture APK/profile are missing.
+Expected: FAIL/skip until a built APK artifact is supplied. In this session the test is allowed to skip when `AUTOAGENT_FAKE_CHAT_APK` is absent.
 
-- [ ] **Step 3: Add the fixture app and install flow**
+- [x] **Step 3: Add the fixture app and install flow**
 
 Use a minimal one-screen Android app. `MainActivity.kt`:
 
@@ -1888,9 +1890,9 @@ Run:
 ```bash
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: PASS on a machine with a connected device/emulator; deselect or skip in CI fast runs.
+Expected: PASS on a machine with a connected device/emulator and a built APK. Deferred from this session by user request; final validation will happen against a real device + real app.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/fixtures/fake_chat_apk tests/integration/test_android_executor_e2e.py
@@ -1906,7 +1908,7 @@ git commit -m "test(android): add fake chat apk fixture and tier1 e2e"
 - Create: `web/src/api/devices.ts`
 - Create: `web/src/api/devices.test.ts`
 
-- [ ] **Step 1: Write the failing frontend type/hook test**
+- [x] **Step 1: Write the failing frontend type/hook test**
 
 Create `web/src/api/devices.test.ts`:
 
@@ -1923,7 +1925,7 @@ describe('devices api', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -1931,7 +1933,7 @@ pnpm --dir web test -- src/api/devices.test.ts
 ```
 Expected: FAIL with `Cannot find module './devices'`.
 
-- [ ] **Step 3: Add the shared frontend types and hooks**
+- [x] **Step 3: Add the shared frontend types and hooks**
 
 In `web/src/types/api.ts`, add:
 
@@ -1978,7 +1980,7 @@ export function useRefreshDevices() {
 }
 ```
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -2003,7 +2005,7 @@ git commit -m "feat(web): add device api types and hooks"
 - Modify: `web/src/App.tsx`
 - Modify: `web/src/components/AppLayout.tsx`
 
-- [ ] **Step 1: Write the failing page test**
+- [x] **Step 1: Write the failing page test**
 
 `web/src/pages/Devices/Index.test.tsx`:
 
@@ -2034,7 +2036,7 @@ it('renders device rows', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2042,7 +2044,7 @@ pnpm --dir web test -- src/pages/Devices/Index.test.tsx
 ```
 Expected: FAIL with `Cannot find module './Index'`.
 
-- [ ] **Step 3: Implement the page and route**
+- [x] **Step 3: Implement the page and route**
 
 Create `web/src/pages/Devices/Index.tsx`:
 
@@ -2107,7 +2109,7 @@ import { DevicesPage } from './pages/Devices/Index'
 
 In `web/src/components/AppLayout.tsx`, add a `Devices` menu item.
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -2115,7 +2117,7 @@ pnpm --dir web test -- src/pages/Devices/Index.test.tsx
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/src/pages/Devices/Index.tsx web/src/pages/Devices/Index.test.tsx web/src/App.tsx web/src/components/AppLayout.tsx
@@ -2135,7 +2137,7 @@ git commit -m "feat(web): add devices management page"
 - Modify: `web/src/pages/Profiles/ConnectivityTestModal.tsx`
 - Modify: `web/src/pages/Profiles/Edit.test.tsx`
 
-- [ ] **Step 1: Write the failing UI tests**
+- [x] **Step 1: Write the failing UI tests**
 
 Extend `web/src/pages/Profiles/Edit.test.tsx`:
 
@@ -2149,7 +2151,7 @@ it('enables connectivity test for android profiles', async () => {
 
 Create `web/src/pages/Batches/New.test.tsx` and `web/src/pages/Tests/Quick.test.tsx` with assertions that the mode select includes `Android (GUI)` and filters profiles to `platform === 'android'`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2157,7 +2159,7 @@ pnpm --dir web test -- src/pages/Profiles/Edit.test.tsx src/pages/Batches/New.te
 ```
 Expected: FAIL because only API/Web are wired today.
 
-- [ ] **Step 3: Implement the UI changes**
+- [x] **Step 3: Implement the UI changes**
 
 In `web/src/pages/Profiles/Edit.tsx`, extend the `profileMode` detection:
 
@@ -2197,7 +2199,7 @@ Also add the helper text under concurrency in `BatchNew.tsx`:
 </Typography.Text>
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -2205,7 +2207,7 @@ pnpm --dir web test -- src/pages/Profiles/Edit.test.tsx src/pages/Batches/New.te
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web/src/pages/Batches/New.tsx web/src/pages/Batches/New.test.tsx web/src/pages/Tests/Quick.tsx web/src/pages/Tests/Quick.test.tsx web/src/pages/Profiles/Edit.tsx web/src/pages/Profiles/ConnectivityTestModal.tsx web/src/pages/Profiles/Edit.test.tsx
@@ -2223,7 +2225,7 @@ git commit -m "feat(web): add android mode and connectivity support"
 - Modify: `web/src/components/ScreenshotStrip.tsx`
 - Modify: `web/src/api/batches.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `web/src/hooks/useBatchStream.test.ts`:
 
@@ -2257,7 +2259,7 @@ expect(screen.getByText(/运行设备/i)).toBeInTheDocument()
 expect(screen.getByRole('button', { name: /下载回放/i })).toBeInTheDocument()
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2265,7 +2267,7 @@ pnpm --dir web test -- src/hooks/useBatchStream.test.ts src/pages/Batches/Sample
 ```
 Expected: FAIL because `applyEvent()` ignores `sample_update` and `SampleDetail` does not show Android metadata.
 
-- [ ] **Step 3: Implement sample-update merging and sample detail UI**
+- [x] **Step 3: Implement sample-update merging and sample detail UI**
 
 In `web/src/hooks/useBatchStream.ts`, add `sample_update` handling:
 
@@ -2305,7 +2307,7 @@ Add a replay download button:
 
 In `web/src/components/ScreenshotStrip.tsx`, render a locked placeholder when `shot.is_sensitive` is true.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -2324,6 +2326,8 @@ git commit -m "feat(web): show android sample metadata and replay download"
 
 ### Task 18: Tier 1 verification, docs, and release tag
 
+> Execution note (2026-04-23): final Tier 1 manual validation is now defined as user-run testing on a real device and real app. The fake-chat fixture remains optional scaffolding, not a gating requirement for this session.
+
 **Files:**
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
@@ -2337,9 +2341,10 @@ Add to `CLAUDE.md`:
 - Tier 1 Android smoke:
   1. `adb devices -l`
   2. `/devices` shows the device and it can be enabled
-  3. save a `platform: android` profile
+  3. save a `platform: android` profile for a real target app
   4. run `Tests / Quick` with `mode=gui_android`
   5. run a 3-sample Android batch and verify SSE/sample detail screenshots
+  6. optionally run the `fake_chat_apk` fixture if a built APK is available
 ```
 
 Update `README.md` project status to:
@@ -2361,16 +2366,16 @@ pnpm --dir web lint
 pnpm --dir web format:check
 pnpm --dir web build
 ```
-Expected: all pass; Android tests pass only on a prepared machine.
+Expected: all non-Android checks pass. Android real-device checks are optional in-session and may be skipped until the user performs final validation on a prepared machine.
 
 - [ ] **Step 3: Execute the manual Tier 1 smoke**
 
-Use the browser UI to verify:
+Use the browser UI to verify on a real device and real target app:
 
 ```text
 1. /devices can refresh and show the connected device
 2. enable the device if needed
-3. create an android profile for fake_chat.apk
+3. create an android profile for the real target app
 4. run Tests / Quick with prompt "hi"
 5. create a 3-sample gui_android batch
 6. watch BatchDetail update via SSE
@@ -2402,7 +2407,7 @@ git tag -a android-executor-tier1-v0.4.0 -m "Plan 4 Tier 1 complete: Android Exe
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Write the failing import check**
+- [x] **Step 1: Write the failing import check**
 
 Run:
 ```bash
@@ -2414,7 +2419,7 @@ PY
 ```
 Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 2: Add the OCR dependency**
+- [x] **Step 2: Add the OCR dependency**
 
 In `pyproject.toml`, append:
 
@@ -2422,7 +2427,7 @@ In `pyproject.toml`, append:
 "rapidocr_onnxruntime>=1.4,<2.0",
 ```
 
-- [ ] **Step 3: Document Tier 2 runtime expectations**
+- [x] **Step 3: Document Tier 2 runtime expectations**
 
 Add to `README.md` and `CLAUDE.md`:
 
@@ -2432,7 +2437,7 @@ Add to `README.md` and `CLAUDE.md`:
 - `@pytest.mark.slow` covers OCR fixtures and is excluded from the fast suite.
 ```
 
-- [ ] **Step 4: Install deps and verify fast suites stay green**
+- [x] **Step 4: Install deps and verify fast suites stay green**
 
 Run:
 ```bash
@@ -2457,7 +2462,7 @@ git commit -m "chore(android): add rapidocr dependency"
 - Modify: `src/autoagent/executors/response_extractor.py`
 - Create: `tests/unit/test_response_extractor_ocr.py`
 
-- [ ] **Step 1: Write the failing OCR tests**
+- [x] **Step 1: Write the failing OCR tests**
 
 `tests/unit/test_response_extractor_ocr.py`:
 
@@ -2472,7 +2477,7 @@ def test_is_suspect_detects_short_or_truncated_text() -> None:
     assert not _is_suspect("完整回答")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2480,7 +2485,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -v
 ```
 Expected: FAIL because `_is_suspect` and OCR classes do not exist.
 
-- [ ] **Step 3: Implement the OCR engine and extractors**
+- [x] **Step 3: Implement the OCR engine and extractors**
 
 Create `src/autoagent/executors/ocr.py`:
 
@@ -2537,7 +2542,7 @@ class HybridExtractor:
         self.ocr = ocr
 ```
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -2561,7 +2566,7 @@ git commit -m "feat(android): add ocr engine and hybrid extractor scaffolding"
 - Create: `tests/unit/test_scroll_stitcher.py`
 - Modify: `src/autoagent/executors/response_extractor.py`
 
-- [ ] **Step 1: Write the failing stitcher tests**
+- [x] **Step 1: Write the failing stitcher tests**
 
 `tests/unit/test_scroll_stitcher.py`:
 
@@ -2577,7 +2582,7 @@ def test_stitch_lines_dedupes_overlap() -> None:
     assert stitch_lines(frames) == "第一行\n第二行\n第三行\n第四行\n第五行"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2585,7 +2590,7 @@ python3.11 -m pytest tests/unit/test_scroll_stitcher.py -v
 ```
 Expected: FAIL because the stitcher module does not exist.
 
-- [ ] **Step 3: Implement the stitcher**
+- [x] **Step 3: Implement the stitcher**
 
 Create `src/autoagent/executors/scroll_stitcher.py`:
 
@@ -2608,7 +2613,7 @@ def stitch_lines(frames: list[list[str]]) -> str:
 
 Update `OcrExtractor.extract()` in `response_extractor.py` to use `stitch_lines()` on OCR frame outputs.
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run:
 ```bash
@@ -2633,7 +2638,7 @@ git commit -m "feat(android): add scroll stitcher for long responses"
 - Modify: `tests/unit/test_complete_detector_android.py`
 - Modify: `tests/unit/test_android_executor_unit.py`
 
-- [ ] **Step 1: Write the failing `pixel_stable` tests**
+- [x] **Step 1: Write the failing `pixel_stable` tests**
 
 Extend `tests/unit/test_complete_detector_android.py`:
 
@@ -2654,7 +2659,7 @@ async def test_wait_for_pixel_stable_hashes_same_frames(monkeypatch):
     await wait_for_pixel_stable(Device(), stable_sec=0.0, max_wait_sec=0.2)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 ```bash
@@ -2662,7 +2667,7 @@ python3.11 -m pytest tests/unit/test_complete_detector_android.py tests/unit/tes
 ```
 Expected: FAIL because `wait_for_pixel_stable` does not exist and the executor does not select Tier 2 strategies.
 
-- [ ] **Step 3: Implement `pixel_stable` and strategy dispatch**
+- [x] **Step 3: Implement `pixel_stable` and strategy dispatch**
 
 In `src/autoagent/executors/complete_detector.py`, add:
 
@@ -2698,7 +2703,7 @@ async def wait_for_pixel_stable(
 
 In `src/autoagent/executors/android_executor.py`, dispatch by `profile.response_extraction.method` and `profile.complete_detection.type`, raising `NotImplementedError` for OCR modes before Tier 2 and using the new OCR/pixel helpers afterwards.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 ```bash
@@ -2717,6 +2722,8 @@ git commit -m "feat(android): add pixel stable and tier2 executor wiring"
 
 ### Task 23: Add Tier 2 screenshot fixtures and slow OCR coverage
 
+> Execution note (2026-04-23): the slow OCR fixture coverage is implemented and verified in-session. The optional Android real-device Tier 2 e2e remains deferred to final manual validation on a real device + real app.
+
 **Files:**
 - Create: `tests/fixtures/android_screenshots/README.md`
 - Create: `tests/fixtures/android_screenshots/*.png`
@@ -2724,7 +2731,7 @@ git commit -m "feat(android): add pixel stable and tier2 executor wiring"
 - Modify: `tests/unit/test_response_extractor_ocr.py`
 - Modify: `tests/integration/test_android_executor_e2e.py`
 
-- [ ] **Step 1: Write the failing OCR fixture test**
+- [x] **Step 1: Write the failing OCR fixture test**
 
 Extend `tests/unit/test_response_extractor_ocr.py`:
 
@@ -2747,7 +2754,7 @@ async def test_ocr_fixture_matches_expected() -> None:
     assert result.text.strip() == expected
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 ```bash
@@ -2755,7 +2762,7 @@ python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -m slow -v
 ```
 Expected: FAIL because fixture files and `extract_from_paths()` do not exist yet.
 
-- [ ] **Step 3: Add OCR fixtures and slow-path tests**
+- [x] **Step 3: Add OCR fixtures and slow-path tests**
 
 Create the screenshot fixture directory with a README that records:
 
@@ -2783,7 +2790,7 @@ Run:
 python3.11 -m pytest tests/unit/test_response_extractor_ocr.py -m slow -v
 python3.11 -m pytest tests/integration/test_android_executor_e2e.py -m android -v
 ```
-Expected: PASS on a prepared machine.
+Expected: slow OCR tests pass in-session; Android real-device verification remains optional and deferred until final manual validation.
 
 - [ ] **Step 5: Commit**
 
@@ -2796,20 +2803,22 @@ git commit -m "test(android): add tier2 ocr fixtures and coverage"
 
 ### Task 24: Tier 2 verification, docs, and final tag
 
+> Execution note (2026-04-23): code-side Tier 2 implementation and non-Android verification are complete in-session. By user request, the final real-device/manual smoke will be run later against a real device + real target app, so this task tracks a "code-complete, pending manual verification" state instead of prematurely marking Plan 4 done.
+
 **Files:**
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/specs/2026-04-22-plan-4-android-executor-design.md`
 
-- [ ] **Step 1: Update docs to mark Plan 4 complete**
+- [x] **Step 1: Update docs to mark the repo as code-complete pending final manual verification**
 
-Set the repo status lines to:
+Set the repo status lines to reflect that Plan 4 implementation is in the repo but final release remains pending manual validation:
 
 ```md
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 complete.**
+**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.**
 ```
 
-In `CLAUDE.md`, add the Tier 2 smoke checklist:
+In `CLAUDE.md`, add the Tier 2 smoke checklist and note that the branch is code-complete pending real-device verification:
 
 ```md
 - Tier 2 Android smoke:
@@ -2818,12 +2827,11 @@ In `CLAUDE.md`, add the Tier 2 smoke checklist:
   3. verify `pixel_stable` or `ui_tree_stable` completes without false positives
 ```
 
-- [ ] **Step 2: Run the full Plan 4 verification matrix**
+- [x] **Step 2: Run the code-side Plan 4 verification matrix**
 
 Run:
 ```bash
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
-python3.11 -m pytest -v -m android
 python3.11 -m pytest -v -m slow
 python3.11 -m ruff check .
 python3.11 -m ruff format --check .
@@ -2832,7 +2840,7 @@ pnpm --dir web lint
 pnpm --dir web format:check
 pnpm --dir web build
 ```
-Expected: all pass.
+Expected: all listed commands pass. `python3.11 -m pytest -v -m android` remains deferred to the final manual verification round on a real device.
 
 - [ ] **Step 3: Run the final manual smoke**
 
@@ -2846,6 +2854,8 @@ Verify end to end:
 5. SampleDetail shows screenshots, action log, device serial, and replay download
 6. disabling one device mid-run only fails the in-flight sample on that device
 ```
+
+Use `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md` as the operator checklist and result template for this final verification round.
 
 - [ ] **Step 4: Commit the completion docs**
 

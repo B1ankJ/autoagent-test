@@ -32,6 +32,12 @@ def test_load_csv():
     assert samples[1].metadata == {"tag": "multi"}
 
 
+def test_load_csv_defaults_new_session_to_false_when_column_missing():
+    samples = load_csv("id,prompts,mode,target_profile\n" "t1,hello,api,p\n")
+    assert len(samples) == 1
+    assert samples[0].new_session is False
+
+
 def test_load_jsonl_empty_raises():
     with pytest.raises(ValueError):
         load_jsonl("")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -42,6 +42,8 @@ class Sample(Base):
     )  # queued|running|done|failed|timeout|extraction_failed|cancelled
     prompts_sent_json = Column(Text, nullable=True)
     responses_json = Column(Text, nullable=True)
+    llm_responses_json = Column(Text, nullable=True)
+    llm_errors_json = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     attempt_count = Column(Integer, nullable=False, default=0)
     mode = Column(String, nullable=False)
@@ -51,6 +53,20 @@ class Sample(Base):
     logs_dir = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
+
+
+class Device(Base):
+    __tablename__ = "devices"
+    serial = Column(String, primary_key=True)
+    label = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    android_version = Column(String, nullable=True)
+    adb_keyboard_installed = Column(Boolean, nullable=True)
+    adb_keyboard_enabled = Column(Boolean, nullable=True)
+    online = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    last_seen_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class ConfigKV(Base):

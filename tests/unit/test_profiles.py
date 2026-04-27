@@ -20,7 +20,7 @@ def test_parse_api_profile():
             "api": {
                 "base_url": "https://api.openai.com/v1",
                 "model": "gpt-4o",
-                "api_key_env": "OPENAI_KEY",
+                "api_key": "OPENAI_KEY",
             },
         }
     )
@@ -65,6 +65,8 @@ def test_parse_android_profile():
         }
     )
     assert isinstance(p, AndroidProfile)
+    assert p.input_method == "auto"
+    assert p.serial is None
 
 
 def test_invalid_platform_rejected():
@@ -77,7 +79,7 @@ def _api_yaml(name="openai_gpt4") -> str:
         {
             "name": name,
             "platform": "api",
-            "api": {"base_url": "https://x", "model": "m", "api_key_env": "K"},
+            "api": {"base_url": "https://x", "model": "m", "api_key": "K"},
         }
     )
 

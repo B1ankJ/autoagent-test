@@ -1,10 +1,25 @@
-from fastapi import APIRouter, Depends
+from dataclasses import asdict
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
+from autoagent.executors.llm_checker import check_llm_api
 from autoagent.models.api import DefaultsConfig, VLMConfig
 from autoagent.storage.configs import get_config, put_config
 
 router = APIRouter(prefix="/config", tags=["config"], dependencies=[Depends(require_user)])
+
+
+class _LLMTestRequest(BaseModel):
+    base_url: str
+    model: str
+    api_key: str
+
+
+@router.post("/vlm/test")
+async def test_vlm_connectivity(body: _LLMTestRequest) -> dict:
+    return asdict(await check_llm_api(body.base_url, body.model, body.api_key))
 
 
 @router.get("/vlm", response_model=VLMConfig | None)
@@ -17,6 +32,16 @@ async def get_vlm() -> VLMConfig | None:
 
 @router.put("/vlm", response_model=VLMConfig)
 async def put_vlm(body: VLMConfig) -> VLMConfig:
+    triple = [body.base_url, body.model, body.api_key]
+    if any(value is not None for value in triple):
+        if not all(value is not None for value in triple):
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "vlm_config_incomplete"},
+            )
+        check = await check_llm_api(body.base_url, body.model, body.api_key)
+        if not check.ok:
+            raise HTTPException(status_code=400, detail=asdict(check))
     await put_config("vlm", body.model_dump())
     return body
 

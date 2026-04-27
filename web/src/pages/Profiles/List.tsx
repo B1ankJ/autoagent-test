@@ -1,4 +1,4 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { App, Button, Empty, Popconfirm, Space, Table, Tabs, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
@@ -74,6 +74,9 @@ export function ProfileList() {
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/profiles/new')}>
           新建
+        </Button>
+        <Button icon={<ThunderboltOutlined />} onClick={() => navigate('/profiles/builder')}>
+          Build Profile
         </Button>
       </Space>
       <Tabs
