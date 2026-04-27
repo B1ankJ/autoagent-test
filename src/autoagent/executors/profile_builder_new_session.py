@@ -48,12 +48,19 @@ def _request_payload(
     vlm: VLMConfig,
 ) -> dict[str, Any]:
     prompt = {
-        "task": "Recommend the best tap point for the next step of Android app new-session authoring.",
+        "task": (
+            "Recommend the best tap point for the next step of creating a brand-new "
+            "conversation thread in an Android chat app."
+        ),
         "step_index": step_index,
         "step_count": step_count,
         "requirements": [
+            "A new session means a brand-new conversation thread, not continuing the current chat.",
             "Return exactly one tap point that advances the new-session flow.",
             "Ground the recommendation in the screenshot and XML only.",
+            "Do not choose the current message input box unless it is clearly the control that creates a new conversation.",
+            "Prefer controls that open navigation drawers, chat history, overflow menus, compose buttons, or explicit new conversation actions.",
+            "For early steps in a multi-step flow, prefer entry points that reveal a new-conversation action instead of the existing input area.",
             "Keep the reason short and concrete.",
         ],
         "xml": xml_text,
@@ -65,7 +72,9 @@ def _request_payload(
             {
                 "role": "system",
                 "content": (
-                    "You analyze Android UI captures and return only JSON matching the schema."
+                    "You analyze Android UI captures and return only JSON matching the schema. "
+                    "A new session means creating a brand-new conversation thread, not focusing the "
+                    "existing message input box."
                 ),
             },
             {
