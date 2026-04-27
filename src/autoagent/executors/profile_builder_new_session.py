@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ import httpx
 from autoagent.models.api import VLMConfig
 
 _RECOMMEND_TIMEOUT_SEC = 30.0
+logger = logging.getLogger(__name__)
 
 
 class RecommendationProviderError(RuntimeError):
@@ -126,6 +128,19 @@ def recommend_tap_point(
     try:
         response = httpx.post(url, headers=headers, json=payload, timeout=_RECOMMEND_TIMEOUT_SEC)
         response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        response_text = exc.response.text.strip()
+        if len(response_text) > 500:
+            response_text = response_text[:500] + "..."
+        logger.warning(
+            "new-session recommendation request failed: status=%s body=%s",
+            status_code,
+            response_text or "<empty>",
+        )
+        raise RecommendationProviderError(
+            f"http {status_code}: {response_text or exc}"
+        ) from exc
     except httpx.HTTPError as exc:
         raise RecommendationProviderError(str(exc)) from exc
     try:

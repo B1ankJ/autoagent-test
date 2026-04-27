@@ -319,10 +319,24 @@ def _classify_recommendation_error(message: str) -> str:
     lower = message.lower()
     if "401" in lower or "403" in lower or "auth" in lower:
         return "auth_error"
-    if "timeout" in lower:
+    if "timeout" in lower or "timed out" in lower or "connection" in lower or "connect" in lower:
         return "connect_error"
-    if "404" in lower or "model" in lower:
+    if (
+        ("image" in lower or "vision" in lower or "multimodal" in lower)
+        and ("support" in lower or "unsupported" in lower or "not support" in lower)
+    ):
+        return "image_input_unsupported"
+    if (
+        "json_schema" in lower
+        or "response_format" in lower
+        or "structured output" in lower
+        or ("schema" in lower and ("support" in lower or "unsupported" in lower))
+    ):
+        return "structured_output_unsupported"
+    if "404" in lower or ("model" in lower and "support image" not in lower):
         return "model_error"
+    if "400" in lower or "bad request" in lower or "invalid" in lower:
+        return "request_invalid"
     return "response_shape_error"
 
 

@@ -220,8 +220,14 @@ function formatRecommendationError(error: string | null | undefined): string {
       return '认证失败'
     case 'connect_error':
       return '连接失败'
+    case 'image_input_unsupported':
+      return '模型不支持图像输入'
+    case 'structured_output_unsupported':
+      return '模型不支持结构化输出'
     case 'model_error':
       return '模型不可用'
+    case 'request_invalid':
+      return '请求参数无效'
     case 'response_shape_error':
       return '返回格式异常'
     default:
