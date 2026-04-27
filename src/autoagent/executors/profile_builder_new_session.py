@@ -5,6 +5,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import httpx
 
@@ -24,9 +25,11 @@ _RECOMMEND_SCHEMA: dict[str, Any] = {
     "properties": {
         "x": {"type": "integer", "minimum": 0},
         "y": {"type": "integer", "minimum": 0},
+        "target_text": {"type": "string"},
+        "target_hint": {"type": "string"},
         "reason": {"type": "string"},
     },
-    "required": ["x", "y", "reason"],
+    "required": ["reason"],
 }
 
 
@@ -61,6 +64,8 @@ def _request_payload(
             "Do not choose the current message input box unless it is clearly the control that creates a new conversation.",
             "Prefer controls that open navigation drawers, chat history, overflow menus, compose buttons, or explicit new conversation actions.",
             "For early steps in a multi-step flow, prefer entry points that reveal a new-conversation action instead of the existing input area.",
+            "Prefer returning target_text for the exact control label so the tap point can be calibrated from XML bounds.",
+            "Only return x/y when the XML does not expose a usable target label for calibration.",
             "Keep the reason short and concrete.",
         ],
         "xml": xml_text,
@@ -108,6 +113,95 @@ def _content_to_text(content: Any) -> str:
         if combined:
             return combined
     raise ValueError("new-session recommendation response content missing text")
+
+
+def _parse_bounds(raw: str | None) -> tuple[int, int, int, int] | None:
+    if not raw or not raw.startswith("["):
+        return None
+    normalized = raw.replace("][", ",").replace("[", "").replace("]", "")
+    parts = normalized.split(",")
+    if len(parts) != 4:
+        return None
+    try:
+        return tuple(int(part) for part in parts)  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _normalize_match_text(raw: str | None) -> str:
+    return " ".join((raw or "").split()).strip().lower()
+
+
+def _node_strings(node: ElementTree.Element) -> list[str]:
+    return [
+        _normalize_match_text(node.attrib.get("text")),
+        _normalize_match_text(node.attrib.get("content-desc")),
+        _normalize_match_text(node.attrib.get("resource-id")),
+    ]
+
+
+def _center_from_bounds(bounds: tuple[int, int, int, int]) -> tuple[int, int]:
+    x1, y1, x2, y2 = bounds
+    return ((x1 + x2) // 2, (y1 + y2) // 2)
+
+
+def _best_tap_node(
+    node: ElementTree.Element,
+    parents: dict[ElementTree.Element, ElementTree.Element],
+) -> ElementTree.Element | None:
+    current: ElementTree.Element | None = node
+    fallback: ElementTree.Element | None = None
+    while current is not None:
+        if _parse_bounds(current.attrib.get("bounds")) is not None and fallback is None:
+            fallback = current
+        if current.attrib.get("clickable") == "true" and _parse_bounds(current.attrib.get("bounds")):
+            return current
+        current = parents.get(current)
+    return fallback
+
+
+def _calibrate_tap_point_from_xml(
+    xml_text: str,
+    *,
+    target_text: str | None,
+    target_hint: str | None,
+) -> tuple[int, int] | None:
+    candidates = [
+        text for text in (
+            _normalize_match_text(target_text),
+            _normalize_match_text(target_hint),
+        ) if text
+    ]
+    if not candidates:
+        return None
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError:
+        return None
+
+    parents = {child: parent for parent in root.iter() for child in parent}
+
+    exact_matches: list[ElementTree.Element] = []
+    fuzzy_matches: list[ElementTree.Element] = []
+    for node in root.iter():
+        strings = [value for value in _node_strings(node) if value]
+        if not strings:
+            continue
+        if any(candidate == value for candidate in candidates for value in strings):
+            exact_matches.append(node)
+            continue
+        if any(candidate in value or value in candidate for candidate in candidates for value in strings):
+            fuzzy_matches.append(node)
+
+    for matches in (exact_matches, fuzzy_matches):
+        for node in matches:
+            tap_node = _best_tap_node(node, parents)
+            if tap_node is None:
+                continue
+            bounds = _parse_bounds(tap_node.attrib.get("bounds"))
+            if bounds is not None:
+                return _center_from_bounds(bounds)
+    return None
 
 
 def recommend_tap_point(
@@ -158,16 +252,26 @@ def recommend_tap_point(
         parsed = json.loads(_content_to_text(content))
         if not isinstance(parsed, dict):
             raise ValueError("new-session recommendation must decode to an object")
-        if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
-            raise ValueError("new-session recommendation requires integer x/y")
         if not isinstance(parsed.get("reason"), str) or not parsed["reason"].strip():
             raise ValueError("new-session recommendation requires reason")
+        calibrated_point = _calibrate_tap_point_from_xml(
+            xml_text,
+            target_text=parsed.get("target_text") if isinstance(parsed.get("target_text"), str) else None,
+            target_hint=parsed.get("target_hint") if isinstance(parsed.get("target_hint"), str) else None,
+        )
+        if calibrated_point is not None:
+            x, y = calibrated_point
+        else:
+            if not isinstance(parsed.get("x"), int) or not isinstance(parsed.get("y"), int):
+                raise ValueError("new-session recommendation requires target_text or integer x/y")
+            x = parsed["x"]
+            y = parsed["y"]
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RecommendationProviderError(
             f"malformed new-session recommendation response: {exc}"
         ) from exc
     return {
-        "x": parsed["x"],
-        "y": parsed["y"],
+        "x": x,
+        "y": y,
         "reason": parsed["reason"].strip(),
     }
