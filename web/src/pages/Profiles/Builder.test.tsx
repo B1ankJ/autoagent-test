@@ -1671,6 +1671,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+    await userEvent.click(await screen.findByRole('button', { name: '展开图片' }))
     await waitFor(() => {
       expect(fetchArtifactBlobUrlMock).toHaveBeenCalledWith('pb_1', 'new_session_step_0.png')
     })
@@ -1877,6 +1878,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+    await userEvent.click(await screen.findByRole('button', { name: '展开图片' }))
 
     const img = await screen.findByRole('img', { name: 'step 1 screenshot' })
     Object.defineProperty(img, 'naturalWidth', { configurable: true, value: 1080 })
@@ -1884,6 +1886,88 @@ describe('Builder', () => {
     fireEvent.load(img)
 
     expect(await screen.findByLabelText('New Session Step 1 recommended point')).toBeInTheDocument()
+  })
+
+  it('toggles new session step preview visibility', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
+    })
+    configureNewSessionMock.mockResolvedValue({
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_profile_yaml: '', draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: 'new_session_step_0.xml', screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: null, reason: null, status: 'failed' },
+          confirmed_tap: null, source: null },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+
+    expect(screen.getByRole('button', { name: '展开图片' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('New Session Step 1 preview')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '展开图片' }))
+    expect(await screen.findByLabelText('New Session Step 1 preview')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '收回图片' }))
+    expect(screen.queryByLabelText('New Session Step 1 preview')).not.toBeInTheDocument()
+  })
+
+  it('collapses the preview after confirming a recommended point', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    createSessionMock.mockResolvedValue({
+      id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+      status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
+    })
+    const draftWithRecommendation = {
+      session: { id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
+        status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [] },
+      candidates: { input_locator: [], input_focus_action: [], send_action: [], latest_bubble_match: [] },
+      review_items: [], draft_profile_yaml: '', draft_mode: 'rule', requires_manual_review: true,
+      applied_review_choices: {}, pending_review_fields: [], auto_review_source: 'manual',
+      new_session_strategy: 'guided_tap_sequence',
+      new_session_steps: [
+        { step_index: 0, xml_artifact: 'new_session_step_0.xml', screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: { x: 111, y: 222 }, reason: 'start chat', status: 'ready' },
+          confirmed_tap: null, source: null },
+      ],
+    }
+    configureNewSessionMock.mockResolvedValue(draftWithRecommendation)
+    confirmNewSessionStepMock.mockResolvedValue({
+      ...draftWithRecommendation,
+      new_session_steps: [
+        { step_index: 0, xml_artifact: 'new_session_step_0.xml', screenshot_artifact: 'new_session_step_0.png',
+          recommended_tap: { point: { x: 111, y: 222 }, reason: 'start chat', status: 'ready' },
+          confirmed_tap: { x: 111, y: 222 }, source: 'recommended' },
+      ],
+    })
+
+    renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
+
+    await userEvent.click(screen.getByRole('button', { name: '展开图片' }))
+    expect(await screen.findByLabelText('New Session Step 1 preview')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '接受推荐' }))
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('New Session Step 1 preview')).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: '展开图片' })).toBeInTheDocument()
   })
 
   it('allows manual override on the step image', async () => {

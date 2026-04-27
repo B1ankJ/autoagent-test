@@ -304,6 +304,7 @@ export default function Builder() {
   const [newSessionStepPreviewSizes, setNewSessionStepPreviewSizes] = useState<
     Record<string, { width: number; height: number }>
   >({})
+  const [expandedNewSessionPreviews, setExpandedNewSessionPreviews] = useState<Record<number, boolean>>({})
   const [appliedReviewChoices, setAppliedReviewChoices] = useState<Record<string, string>>({})
   const [expandedReviewItems, setExpandedReviewItems] = useState<Record<string, boolean>>({})
   const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
@@ -638,6 +639,7 @@ export default function Builder() {
       const result = await configureNewSession.mutateAsync({ sessionId: session.id, strategy, stepCount: newSessionStepCount })
       setDraft(result)
       setManualTapStepIndex(null)
+      setExpandedNewSessionPreviews({})
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -650,6 +652,11 @@ export default function Builder() {
       const result = await configureNewSession.mutateAsync({ sessionId: session.id, strategy: 'guided_tap_sequence', stepCount })
       setDraft(result)
       setManualTapStepIndex(null)
+      setExpandedNewSessionPreviews((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([key]) => Number(key) < stepCount),
+        ),
+      )
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -660,6 +667,7 @@ export default function Builder() {
     try {
       const result = await captureNewSessionStep.mutateAsync({ sessionId: session.id, stepIndex })
       setDraft(result)
+      setExpandedNewSessionPreviews((current) => ({ ...current, [stepIndex]: true }))
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -677,6 +685,7 @@ export default function Builder() {
       })
       setDraft(result as ProfileBuilderDraftResponse)
       setManualTapStepIndex(null)
+      setExpandedNewSessionPreviews((current) => ({ ...current, [step.step_index]: false }))
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -698,6 +707,7 @@ export default function Builder() {
       const result = await confirmNewSessionStep.mutateAsync({ sessionId: session.id, stepIndex, x, y, source: 'manual' })
       setDraft(result as ProfileBuilderDraftResponse)
       setManualTapStepIndex(null)
+      setExpandedNewSessionPreviews((current) => ({ ...current, [stepIndex]: false }))
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -990,7 +1000,24 @@ export default function Builder() {
               key={step.step_index}
               size="small"
               title={`New Session Step ${step.step_index + 1}`}
-              extra={step.confirmed_tap ? <Tag color="green">已确认</Tag> : <Tag>待确认</Tag>}
+              extra={(
+                <Space size="small">
+                  {step.screenshot_artifact ? (
+                    <Button
+                      size="small"
+                      type="text"
+                      onClick={() =>
+                        setExpandedNewSessionPreviews((current) => ({
+                          ...current,
+                          [step.step_index]: !current[step.step_index],
+                        }))}
+                    >
+                      {expandedNewSessionPreviews[step.step_index] ? '收回图片' : '展开图片'}
+                    </Button>
+                  ) : null}
+                  {step.confirmed_tap ? <Tag color="green">已确认</Tag> : <Tag>待确认</Tag>}
+                </Space>
+              )}
             >
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Space>
@@ -1011,9 +1038,17 @@ export default function Builder() {
                   </Button>
                   <Button
                     size="small"
-                    onClick={() => setManualTapStepIndex(
-                      manualTapStepIndex === step.step_index ? null : step.step_index
-                    )}
+                    onClick={() => {
+                      const nextManualTapStepIndex =
+                        manualTapStepIndex === step.step_index ? null : step.step_index
+                      setManualTapStepIndex(nextManualTapStepIndex)
+                      if (nextManualTapStepIndex !== null) {
+                        setExpandedNewSessionPreviews((current) => ({
+                          ...current,
+                          [step.step_index]: true,
+                        }))
+                      }
+                    }}
                     disabled={!step.screenshot_artifact}
                   >
                     {manualTapStepIndex === step.step_index ? '取消点选' : '重新点选'}
@@ -1032,7 +1067,7 @@ export default function Builder() {
                 {manualTapStepIndex === step.step_index && (
                   <Typography.Text type="warning">点击下方截图选择 tap 点</Typography.Text>
                 )}
-                {step.screenshot_artifact && (
+                {step.screenshot_artifact && expandedNewSessionPreviews[step.step_index] && (
                   <div
                     aria-label={`New Session Step ${step.step_index + 1} preview`}
                     style={{
