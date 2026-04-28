@@ -102,6 +102,7 @@ export function useGenerateWebProfile(sessionId: string) {
       profile_url?: string
       stable_sec?: number
       ready_timeout_sec?: number
+      inject_llm?: boolean
     }) =>
       (
         await client.post<{ yaml: string }>(
