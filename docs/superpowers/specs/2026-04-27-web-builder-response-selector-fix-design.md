@@ -104,7 +104,9 @@ Adjustment:
 - before giving up on persistent-context launch, the executor now checks for broken `Singleton*` symlinks under `user_data_dir`
 - if such links are present, it removes only the broken symlinks and retries launch once
 - it does not remove live sockets or other profile files
+- if `channel=chromium` is used with a Google Chrome style profile directory and launch still fails, the executor retries once with `channel=chrome`
 
 Coverage:
 
 - `tests/unit/test_web_executor_unit.py` verifies stale singleton cleanup and one retry path
+- `tests/unit/test_web_executor_unit.py` also verifies fallback from `channel=chromium` to `channel=chrome` for Google profile directories

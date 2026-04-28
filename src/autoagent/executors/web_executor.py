@@ -51,26 +51,38 @@ class WebExecutor(Executor):
     async def _launch_context(self, profile: WebProfile) -> Any:
         pw = await self._ensure_playwright()
         if profile.browser.user_data_dir:
+            launch_kwargs = {
+                "user_data_dir": profile.browser.user_data_dir,
+                "channel": profile.browser.channel,
+                "headless": profile.browser.headless,
+            }
             try:
-                context = await pw.chromium.launch_persistent_context(
-                    user_data_dir=profile.browser.user_data_dir,
-                    channel=profile.browser.channel,
-                    headless=profile.browser.headless,
-                )
+                context = await pw.chromium.launch_persistent_context(**launch_kwargs)
                 return context, None
             except Exception:
                 cleaned = _cleanup_stale_singleton_artifacts(profile.browser.user_data_dir)
-                if not cleaned:
-                    raise
-                _log.warning(
-                    "web_executor: cleaned stale singleton artifacts under %s and retrying",
+                if cleaned:
+                    _log.warning(
+                        "web_executor: cleaned stale singleton artifacts under %s and retrying",
+                        profile.browser.user_data_dir,
+                    )
+                    context = await pw.chromium.launch_persistent_context(**launch_kwargs)
+                    return context, None
+
+                fallback_channel = _persistent_channel_fallback(
+                    profile.browser.channel,
                     profile.browser.user_data_dir,
                 )
-                context = await pw.chromium.launch_persistent_context(
-                    user_data_dir=profile.browser.user_data_dir,
-                    channel=profile.browser.channel,
-                    headless=profile.browser.headless,
+                if fallback_channel is None:
+                    raise
+                _log.warning(
+                    "web_executor: persistent launch failed for channel=%s under %s; retrying with channel=%s",
+                    profile.browser.channel,
+                    profile.browser.user_data_dir,
+                    fallback_channel,
                 )
+                launch_kwargs["channel"] = fallback_channel
+                context = await pw.chromium.launch_persistent_context(**launch_kwargs)
                 return context, None
         browser = await pw.chromium.launch(
             channel=profile.browser.channel,
@@ -242,3 +254,10 @@ def _cleanup_stale_singleton_artifacts(user_data_dir: str) -> bool:
         path.unlink(missing_ok=True)
         cleaned = True
     return cleaned
+
+
+def _persistent_channel_fallback(channel: str, user_data_dir: str) -> str | None:
+    normalized = user_data_dir.lower()
+    if channel == "chromium" and "/google/" in normalized:
+        return "chrome"
+    return None

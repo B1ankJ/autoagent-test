@@ -194,6 +194,55 @@ async def test_persistent_context_retries_after_cleaning_stale_singleton_symlink
     assert not (user_data_dir / "SingletonSocket").exists()
 
 
+async def test_persistent_context_falls_back_to_system_chrome_for_google_profile_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    page = AsyncMock()
+    page.goto = AsyncMock()
+    page.wait_for_selector = AsyncMock()
+    page.fill = AsyncMock()
+    page.click = AsyncMock()
+    page.keyboard = AsyncMock()
+    page.keyboard.press = AsyncMock()
+    page.screenshot = AsyncMock()
+    page.inner_text = AsyncMock(side_effect=["echo: hi", "echo: hi", "echo: hi"])
+    page.is_disabled = AsyncMock(return_value=False)
+    page.evaluate = AsyncMock(side_effect=NotImplementedError("mock: use inner_text"))
+
+    context = AsyncMock()
+    context.new_page = AsyncMock(return_value=page)
+    context.close = AsyncMock()
+
+    user_data_dir = tmp_path / "Library" / "Application Support" / "Google" / "ChromePlaywright"
+    user_data_dir.mkdir(parents=True)
+
+    chromium = AsyncMock()
+    chromium.launch = AsyncMock()
+    chromium.launch_persistent_context = AsyncMock(
+        side_effect=[RuntimeError("TargetClosedError: BrowserType.launch_persistent_context"), context]
+    )
+
+    pw = AsyncMock()
+    pw.chromium = chromium
+    pw.stop = AsyncMock()
+
+    playwright_handle = MagicMock()
+    playwright_handle.start = AsyncMock(return_value=pw)
+
+    from autoagent.executors import web_executor as we
+
+    monkeypatch.setattr(we, "async_playwright", lambda: playwright_handle)
+
+    executor = WebExecutor(screenshots_root=tmp_path)
+    ctx = ExecutorContext(verbose_logs=False)
+    out = await executor.execute(_sample(["hi"]), _profile(user_data_dir=str(user_data_dir)), ctx)
+
+    assert out == ["echo: hi"]
+    assert chromium.launch_persistent_context.await_count == 2
+    assert chromium.launch_persistent_context.await_args_list[0].kwargs["channel"] == "chromium"
+    assert chromium.launch_persistent_context.await_args_list[1].kwargs["channel"] == "chrome"
+
+
 async def test_click_button_send_method(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     page = _patch_playwright(monkeypatch)
     prof = _profile().model_copy(
