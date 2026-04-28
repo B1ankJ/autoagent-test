@@ -1,4 +1,3 @@
-import pytest
 from autoagent.profiles.schemas import WebProfile
 
 
