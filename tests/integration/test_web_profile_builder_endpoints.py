@@ -119,6 +119,83 @@ async def test_web_builder_response_pick_promotes_to_latest_message_container(
     assert close.status_code == 200
 
 
+async def test_web_builder_input_pick_promotes_to_textbox_container(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    fixture = tmp_path / "web_builder_textbox_fixture.html"
+    fixture.write_text(
+        """<!doctype html>
+<html lang="en">
+<body>
+  <div role="textbox" contenteditable="true" aria-label="Chat input">
+    <p><span>Type here</span></p>
+  </div>
+  <button id="send">Send</button>
+  <div class="answerItem">
+    <div class="qk-markdown">reply</div>
+  </div>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+    headers = await _login(client)
+    create = await client.post(
+        "/api/v1/web-profile-builder/sessions",
+        json={"url": fixture.resolve().as_uri(), "headless": True},
+        headers=headers,
+    )
+    assert create.status_code == 200, create.text
+    session_id = create.json()["id"]
+
+    from autoagent.api import web_profile_builder as builder_mod
+
+    page = builder_mod._sessions[session_id]["page"]
+    input_box = await page.locator('[role="textbox"] > p > span').bounding_box()
+    send_box = await page.locator("#send").bounding_box()
+    response_box = await page.locator(".qk-markdown").bounding_box()
+
+    assert input_box is not None
+    assert send_box is not None
+    assert response_box is not None
+
+    for field, box in (
+        ("input", input_box),
+        ("send", send_box),
+        ("response", response_box),
+    ):
+        pick = await client.post(
+            f"/api/v1/web-profile-builder/sessions/{session_id}/pick",
+            json={
+                "field": field,
+                "x": box["x"] + box["width"] / 2,
+                "y": box["y"] + box["height"] / 2,
+            },
+            headers=headers,
+        )
+        assert pick.status_code == 200, pick.text
+
+    generated = await client.post(
+        f"/api/v1/web-profile-builder/sessions/{session_id}/generate",
+        json={"name": "textbox_fixture"},
+        headers=headers,
+    )
+    assert generated.status_code == 200, generated.text
+    profile = yaml.safe_load(generated.json()["yaml"])
+
+    assert profile["input_selector"].startswith('[role="textbox"]')
+    assert "nth-of-type" not in profile["input_selector"]
+    assert "> p" not in profile["input_selector"]
+    assert profile["ready_check"]["selector"] == profile["input_selector"]
+
+    close = await client.delete(
+        f"/api/v1/web-profile-builder/sessions/{session_id}",
+        headers=headers,
+    )
+    assert close.status_code == 200
+
+
 async def test_web_builder_response_pick_avoids_leaf_text_selector_in_nested_qwen_like_dom(
     client: AsyncClient, tmp_path: Path
 ) -> None:

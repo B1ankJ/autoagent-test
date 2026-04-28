@@ -59,6 +59,13 @@ The selector generator now also avoids low-value fallbacks:
 - no acceptance of repeated class selectors as unique selectors
 - stable class names such as `qk-markdown` remain usable
 
+For control fields, the builder also uses semantic promotion before selector generation:
+
+- `input` and `ready_check` prefer the nearest input-like ancestor such as `role="textbox"`, `contenteditable="true"`, `textarea`, or `input`
+- `send` and `new_session` prefer clickable ancestors such as `button`, `a`, or `role="button"`
+
+This avoids regressions where clicking inside a rich-text editor produced selectors like `> p > span` instead of the editor container itself.
+
 ### Executor response extraction
 
 Completion detection can still observe the full matched DOM set to determine when output has stabilized.
@@ -74,6 +81,7 @@ Added regression coverage for both failure modes:
 - `tests/integration/test_web_profile_builder_endpoints.py`
   - verifies clicking the second paragraph of the latest reply produces `.answerItem:last-child .qk-markdown`
   - verifies Qwen-like DOMs promote past a single `.qk-md-text` wrapper to the markdown container
+  - verifies clicking inside a nested rich-text textbox promotes to the textbox container instead of a `p > span` leaf path
 - `tests/integration/test_web_executor_e2e.py`
   - verifies a reused session with a multi-match selector returns only the latest reply
 

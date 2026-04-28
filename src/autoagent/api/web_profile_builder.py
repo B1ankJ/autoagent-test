@@ -59,6 +59,33 @@ _SELECTOR_JS = """
         return out;
     }
 
+    function isInputLike(node) {
+        if (!node) return false;
+        const tag = node.tagName.toLowerCase();
+        const role = (node.getAttribute('role') || '').toLowerCase();
+        return (
+            tag === 'textarea' ||
+            tag === 'input' ||
+            node.getAttribute('contenteditable') === 'true' ||
+            role === 'textbox' ||
+            role === 'searchbox' ||
+            role === 'combobox'
+        );
+    }
+
+    function isClickableLike(node) {
+        if (!node) return false;
+        const tag = node.tagName.toLowerCase();
+        const role = (node.getAttribute('role') || '').toLowerCase();
+        return (
+            tag === 'button' ||
+            tag === 'a' ||
+            role === 'button' ||
+            role === 'link' ||
+            node.getAttribute('aria-haspopup') !== null
+        );
+    }
+
     function isUniqueMatch(root, node, sel) {
         try {
             const matches = root.querySelectorAll(sel);
@@ -164,6 +191,22 @@ _SELECTOR_JS = """
         return candidate;
     }
 
+    function promoteFieldNode(node, field) {
+        if (field === 'response') return promotedResponseNode(node);
+
+        let cur = node;
+        for (let depth = 0; depth < 6 && cur && cur !== document.body; depth += 1) {
+            if ((field === 'input' || field === 'ready_check') && isInputLike(cur)) {
+                return cur;
+            }
+            if ((field === 'send' || field === 'new_session') && isClickableLike(cur)) {
+                return cur;
+            }
+            cur = cur.parentElement;
+        }
+        return node;
+    }
+
     function findRepeatedItem(node) {
         let cur = node;
         for (let depth = 0; depth < 6 && cur && cur !== document.body; depth += 1) {
@@ -188,7 +231,7 @@ _SELECTOR_JS = """
     }
 
     if (field === 'response') {
-        const textNode = promotedResponseNode(el);
+        const textNode = promoteFieldNode(el, field);
         const itemNode = findRepeatedItem(textNode) || findRepeatedItem(el);
         if (itemNode) {
             const itemSelector = repeatedItemSelector(itemNode);
@@ -200,7 +243,7 @@ _SELECTOR_JS = """
         return uniqueSelectorFor(textNode);
     }
 
-    return uniqueSelectorFor(el);
+    return uniqueSelectorFor(promoteFieldNode(el, field));
 }
 """
 
