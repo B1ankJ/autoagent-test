@@ -15,6 +15,10 @@ from autoagent.executors.complete_detector import (
     wait_for_complete,
 )
 from autoagent.executors.screenshot_store import ScreenshotStore
+from autoagent.executors.web_response_llm_extractor import (
+    LLMExtractionResult,
+    extract_web_response_via_llm,
+)
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import WebProfile, WebSendMethodClick, WebSendMethodKeyboard
 
@@ -166,14 +170,39 @@ class WebExecutor(Executor):
                             response_selector=profile.response_container_selector,
                             send_button_selector=_send_button_selector(profile.send_method),
                         )
-                        text = await _collect_latest_text(
-                            page, profile.response_container_selector
-                        )
+                        text = await _collect_latest_text(page, profile.response_container_selector)
                         if not text:
                             text = stable_text or await _collect_text(
                                 page, profile.response_container_selector
                             )
                         responses.append(text)
+                        if profile.llm_response_enabled():
+                            try:
+                                html = await _capture_html(
+                                    page, profile.response_container_selector
+                                )
+                                llm_res = await extract_web_response_via_llm(
+                                    prompt=prompt,
+                                    html=html,
+                                    base_url=profile.base_url,
+                                    model=profile.model,
+                                    api_key=profile.api_key,
+                                )
+                            except Exception:  # noqa: BLE001
+                                llm_res = LLMExtractionResult(
+                                    text="", error="connect", latency_ms=0
+                                )
+                            ctx.llm_responses.append(llm_res.text)
+                            ctx.llm_errors.append(llm_res.error)
+                            _log.debug(
+                                "web sample %s prompt %s llm extraction: "
+                                "error=%s latency_ms=%s text=%r",
+                                sample.id,
+                                idx,
+                                llm_res.error,
+                                llm_res.latency_ms,
+                                llm_res.text,
+                            )
                         await self._screenshot(page, store, f"done_{idx}", verbose=True)
                     except Exception:
                         await self._screenshot(page, store, f"error_{idx}", verbose=True)
@@ -230,6 +259,16 @@ class WebExecutor(Executor):
             except Exception:
                 pass
             self._pw = None
+
+
+async def _capture_html(page: Any, selector: str) -> str:
+    html = await page.evaluate(
+        "(sel) => { const el = document.querySelector(sel); return el ? el.outerHTML : null; }",
+        selector,
+    )
+    if html is None:
+        html = await page.evaluate("() => document.body.outerHTML")
+    return html or ""
 
 
 def _send_button_selector(method: Any) -> str | None:
