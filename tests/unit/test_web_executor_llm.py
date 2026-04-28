@@ -1,11 +1,9 @@
 """Unit test for web executor LLM integration (mocks Playwright page)."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-
-from autoagent.executors.web_response_llm_extractor import LLMExtractionResult
 
 
 @pytest.mark.asyncio
