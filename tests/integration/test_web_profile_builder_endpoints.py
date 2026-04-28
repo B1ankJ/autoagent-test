@@ -196,6 +196,89 @@ async def test_web_builder_input_pick_promotes_to_textbox_container(
     assert close.status_code == 200
 
 
+async def test_web_builder_chat_like_response_pick_prefers_message_container_over_deep_div_path(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    fixture = tmp_path / "web_builder_chat_like_fixture.html"
+    fixture.write_text(
+        """<!doctype html>
+<html lang="en">
+<body>
+  <main>
+    <div role="textbox" contenteditable="true" aria-label="Chat input">
+      <p><span>Type here</span></p>
+    </div>
+    <div class="segment-assistant">
+      <div class="toolbar">copy regen</div>
+      <div class="message-shell">
+        <div class="markdown">older answer</div>
+      </div>
+    </div>
+    <div class="segment-assistant">
+      <div class="toolbar">copy regen</div>
+      <div class="message-shell">
+        <div class="markdown">latest answer paragraph</div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+    headers = await _login(client)
+    create = await client.post(
+        "/api/v1/web-profile-builder/sessions",
+        json={"url": fixture.resolve().as_uri(), "headless": True},
+        headers=headers,
+    )
+    assert create.status_code == 200, create.text
+    session_id = create.json()["id"]
+
+    from autoagent.api import web_profile_builder as builder_mod
+
+    page = builder_mod._sessions[session_id]["page"]
+    input_box = await page.locator('[role="textbox"] > p > span').bounding_box()
+    response_box = await page.locator(".segment-assistant:last-of-type .markdown").bounding_box()
+
+    assert input_box is not None
+    assert response_box is not None
+
+    for field, box in (
+        ("input", input_box),
+        ("response", response_box),
+    ):
+        pick = await client.post(
+            f"/api/v1/web-profile-builder/sessions/{session_id}/pick",
+            json={
+                "field": field,
+                "x": box["x"] + box["width"] / 2,
+                "y": box["y"] + box["height"] / 2,
+            },
+            headers=headers,
+        )
+        assert pick.status_code == 200, pick.text
+
+    session = await client.get(
+        f"/api/v1/web-profile-builder/sessions/{session_id}",
+        headers=headers,
+    )
+    assert session.status_code == 200, session.text
+    body = session.json()
+
+    assert body["selections"]["input"]["selector"].startswith('[role="textbox"]')
+    assert body["selections"]["response"]["selector"].startswith(".segment-assistant:last-child")
+    assert ".markdown" in body["selections"]["response"]["selector"]
+    assert "nth-of-type" not in body["selections"]["response"]["selector"]
+
+    close = await client.delete(
+        f"/api/v1/web-profile-builder/sessions/{session_id}",
+        headers=headers,
+    )
+    assert close.status_code == 200
+
+
 async def test_web_builder_response_pick_avoids_leaf_text_selector_in_nested_qwen_like_dom(
     client: AsyncClient, tmp_path: Path
 ) -> None:
@@ -328,7 +411,11 @@ async def test_web_builder_response_pick_uses_markdown_container_when_repeated_i
     page = builder_mod._sessions[session_id]["page"]
     input_box = await page.locator("#input").bounding_box()
     send_box = await page.locator("#send").bounding_box()
-    response_box = await page.locator(".content-MqQgCb > div > div:last-child .qk-md-text").nth(2).bounding_box()
+    response_box = (
+        await page.locator(".content-MqQgCb > div > div:last-child .qk-md-text")
+        .nth(2)
+        .bounding_box()
+    )
 
     assert input_box is not None
     assert send_box is not None
@@ -418,7 +505,11 @@ async def test_web_builder_response_pick_promotes_past_single_text_wrapper_to_ma
     page = builder_mod._sessions[session_id]["page"]
     input_box = await page.locator("#input").bounding_box()
     send_box = await page.locator("#send").bounding_box()
-    response_box = await page.locator(".content-MqQgCb > div > div:last-child .qk-md-text > div").nth(2).bounding_box()
+    response_box = (
+        await page.locator(".content-MqQgCb > div > div:last-child .qk-md-text > div")
+        .nth(2)
+        .bounding_box()
+    )
 
     assert input_box is not None
     assert send_box is not None
@@ -456,3 +547,121 @@ async def test_web_builder_response_pick_promotes_past_single_text_wrapper_to_ma
         headers=headers,
     )
     assert close.status_code == 200
+
+
+# ── inject_llm tests ──────────────────────────────────────────────────────────
+
+_FAKE_SESSION_SELECTIONS = {
+    "input": {"selector": "[role='textbox']", "info": {}},
+    "send": {
+        "selector": "[role='textbox']",
+        "info": {},
+        "send_type": "keyboard",
+        "keyboard_key": "Enter",
+    },
+    "response": {"selector": ".reply", "info": {}},
+}
+
+
+def _make_fake_session(sid: str) -> dict:
+    return {
+        "id": sid,
+        "url": "https://example.com",
+        "channel": "chromium",
+        "headless": False,
+        "user_data_dir": None,
+        "pw": None,
+        "context": None,
+        "page": None,
+        "selections": dict(_FAKE_SESSION_SELECTIONS),
+    }
+
+
+@pytest.mark.asyncio
+async def test_generate_inject_llm_false_omits_llm_fields(client: AsyncClient) -> None:
+    """inject_llm=False (default) → YAML has no LLM fields."""
+    import uuid
+
+    from autoagent.api.web_profile_builder import _sessions
+    from autoagent.storage.configs import put_config
+
+    await put_config("vlm", {"base_url": "https://api/v1", "model": "m", "api_key": "k"})
+
+    headers = await _login(client)
+    sid = str(uuid.uuid4())[:8]
+    _sessions[sid] = _make_fake_session(sid)
+
+    try:
+        resp = await client.post(
+            f"/api/v1/web-profile-builder/sessions/{sid}/generate",
+            json={"name": "test_profile", "inject_llm": False},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        import yaml as yaml_lib
+
+        profile = yaml_lib.safe_load(resp.json()["yaml"])
+        assert "base_url" not in profile
+        assert "model" not in profile
+        assert "api_key" not in profile
+    finally:
+        _sessions.pop(sid, None)
+
+
+@pytest.mark.asyncio
+async def test_generate_inject_llm_true_includes_llm_fields(client: AsyncClient) -> None:
+    """inject_llm=True with complete VLMConfig → YAML contains all three LLM fields."""
+    import uuid
+
+    from autoagent.api.web_profile_builder import _sessions
+    from autoagent.storage.configs import put_config
+
+    await put_config(
+        "vlm", {"base_url": "https://api/v1", "model": "my-model", "api_key": "sk-test"}
+    )
+
+    headers = await _login(client)
+    sid = str(uuid.uuid4())[:8]
+    _sessions[sid] = _make_fake_session(sid)
+
+    try:
+        resp = await client.post(
+            f"/api/v1/web-profile-builder/sessions/{sid}/generate",
+            json={"name": "test_profile", "inject_llm": True},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        import yaml as yaml_lib
+
+        profile = yaml_lib.safe_load(resp.json()["yaml"])
+        assert profile["base_url"] == "https://api/v1"
+        assert profile["model"] == "my-model"
+        assert profile["api_key"] == "sk-test"
+    finally:
+        _sessions.pop(sid, None)
+
+
+@pytest.mark.asyncio
+async def test_generate_inject_llm_true_incomplete_vlm_returns_400(client: AsyncClient) -> None:
+    """inject_llm=True with missing VLMConfig → 400 llm_config_incomplete."""
+    import uuid
+
+    from autoagent.api.web_profile_builder import _sessions
+    from autoagent.storage.configs import put_config
+
+    await put_config("vlm", {"base_url": None, "model": None, "api_key": None})
+
+    headers = await _login(client)
+    sid = str(uuid.uuid4())[:8]
+    _sessions[sid] = _make_fake_session(sid)
+
+    try:
+        resp = await client.post(
+            f"/api/v1/web-profile-builder/sessions/{sid}/generate",
+            json={"name": "test_profile", "inject_llm": True},
+            headers=headers,
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "llm_config_incomplete"
+    finally:
+        _sessions.pop(sid, None)

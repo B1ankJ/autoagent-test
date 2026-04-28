@@ -13,6 +13,8 @@ from playwright.async_api import async_playwright
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
+from autoagent.models.api import VLMConfig
+from autoagent.storage.configs import get_config
 
 _log = logging.getLogger(__name__)
 
@@ -40,6 +42,12 @@ _SELECTOR_JS = """
             (cls) => cls.length > 2 && !(cls.match(/^[a-z]+-[a-zA-Z0-9]{6,}$/) && /\\d/.test(cls))
         );
     const classSummary = (node) => meaningfulClasses(node).join(' ').toLowerCase();
+    const semanticContentSummary = (summary) =>
+        summary.includes('markdown') ||
+        summary.includes('content') ||
+        summary.includes('message') ||
+        summary.includes('answer') ||
+        summary.includes('reply');
 
     function simpleCandidates(node) {
         const out = [];
@@ -177,13 +185,7 @@ _SELECTOR_JS = """
         let container = candidate;
         for (let depth = 0; depth < 3 && container.parentElement; depth += 1) {
             const summary = classSummary(container);
-            if (
-                summary.includes('markdown') ||
-                summary.includes('message') ||
-                summary.includes('answer') ||
-                summary.includes('reply') ||
-                summary.includes('content')
-            ) {
+            if (semanticContentSummary(summary)) {
                 return container;
             }
             container = container.parentElement;
@@ -230,13 +232,25 @@ _SELECTOR_JS = """
         return suffix || '';
     }
 
+    function preferredResponseNodeWithin(itemNode, originNode, fallbackNode) {
+        let cur = originNode;
+        while (cur && cur !== itemNode) {
+            if (semanticContentSummary(classSummary(cur))) {
+                return cur;
+            }
+            cur = cur.parentElement;
+        }
+        return fallbackNode;
+    }
+
     if (field === 'response') {
         const textNode = promoteFieldNode(el, field);
         const itemNode = findRepeatedItem(textNode) || findRepeatedItem(el);
         if (itemNode) {
             const itemSelector = repeatedItemSelector(itemNode);
             if (itemSelector) {
-                const rel = relativeSelectorWithin(itemNode, textNode);
+                const preferredNode = preferredResponseNodeWithin(itemNode, el, textNode);
+                const rel = relativeSelectorWithin(itemNode, preferredNode);
                 return rel ? `${itemSelector} ${rel}` : itemSelector;
             }
         }
@@ -297,6 +311,7 @@ class GenerateRequest(BaseModel):
     profile_url: str | None = None  # override if navigated away
     stable_sec: float = 3.0
     ready_timeout_sec: float = 15.0
+    inject_llm: bool = False
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -453,6 +468,15 @@ async def generate_yaml(session_id: str, req: GenerateRequest) -> dict[str, str]
     }
     if s["user_data_dir"]:
         profile["browser"]["user_data_dir"] = s["user_data_dir"]
+
+    if req.inject_llm:
+        raw_vlm = await get_config("vlm")
+        vlm = VLMConfig.model_validate(raw_vlm) if raw_vlm else VLMConfig()
+        if not (vlm.base_url and vlm.model and vlm.api_key):
+            raise HTTPException(status_code=400, detail={"error": "llm_config_incomplete"})
+        profile["base_url"] = vlm.base_url
+        profile["model"] = vlm.model
+        profile["api_key"] = vlm.api_key
 
     return {"yaml": yaml.safe_dump(profile, sort_keys=False, allow_unicode=True)}
 
