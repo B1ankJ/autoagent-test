@@ -80,7 +80,8 @@ class WebExecutor(Executor):
                 if fallback_channel is None:
                     raise
                 _log.warning(
-                    "web_executor: persistent launch failed for channel=%s under %s; retrying with channel=%s",
+                    "web_executor: persistent launch failed for channel=%s under %s;"
+                    " retrying with channel=%s",
                     profile.browser.channel,
                     profile.browser.user_data_dir,
                     fallback_channel,
