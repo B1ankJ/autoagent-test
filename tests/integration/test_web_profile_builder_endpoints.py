@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
 import yaml
 from httpx import ASGITransport, AsyncClient
 
+from autoagent.api.web_profile_builder import _sessions
 from autoagent.auth.passwords import hash_password
+from autoagent.storage.configs import put_config
 from autoagent.storage.database import init_db
 from autoagent.storage.users import upsert_user
 
@@ -577,18 +580,12 @@ def _make_fake_session(sid: str) -> dict:
     }
 
 
-@pytest.mark.asyncio
 async def test_generate_inject_llm_false_omits_llm_fields(client: AsyncClient) -> None:
     """inject_llm=False (default) → YAML has no LLM fields."""
-    import uuid
-
-    from autoagent.api.web_profile_builder import _sessions
-    from autoagent.storage.configs import put_config
-
     await put_config("vlm", {"base_url": "https://api/v1", "model": "m", "api_key": "k"})
 
     headers = await _login(client)
-    sid = str(uuid.uuid4())[:8]
+    sid = str(uuid.uuid4())
     _sessions[sid] = _make_fake_session(sid)
 
     try:
@@ -598,9 +595,7 @@ async def test_generate_inject_llm_false_omits_llm_fields(client: AsyncClient) -
             headers=headers,
         )
         assert resp.status_code == 200
-        import yaml as yaml_lib
-
-        profile = yaml_lib.safe_load(resp.json()["yaml"])
+        profile = yaml.safe_load(resp.json()["yaml"])
         assert "base_url" not in profile
         assert "model" not in profile
         assert "api_key" not in profile
@@ -608,20 +603,14 @@ async def test_generate_inject_llm_false_omits_llm_fields(client: AsyncClient) -
         _sessions.pop(sid, None)
 
 
-@pytest.mark.asyncio
 async def test_generate_inject_llm_true_includes_llm_fields(client: AsyncClient) -> None:
     """inject_llm=True with complete VLMConfig → YAML contains all three LLM fields."""
-    import uuid
-
-    from autoagent.api.web_profile_builder import _sessions
-    from autoagent.storage.configs import put_config
-
     await put_config(
         "vlm", {"base_url": "https://api/v1", "model": "my-model", "api_key": "sk-test"}
     )
 
     headers = await _login(client)
-    sid = str(uuid.uuid4())[:8]
+    sid = str(uuid.uuid4())
     _sessions[sid] = _make_fake_session(sid)
 
     try:
@@ -631,9 +620,7 @@ async def test_generate_inject_llm_true_includes_llm_fields(client: AsyncClient)
             headers=headers,
         )
         assert resp.status_code == 200
-        import yaml as yaml_lib
-
-        profile = yaml_lib.safe_load(resp.json()["yaml"])
+        profile = yaml.safe_load(resp.json()["yaml"])
         assert profile["base_url"] == "https://api/v1"
         assert profile["model"] == "my-model"
         assert profile["api_key"] == "sk-test"
@@ -641,18 +628,12 @@ async def test_generate_inject_llm_true_includes_llm_fields(client: AsyncClient)
         _sessions.pop(sid, None)
 
 
-@pytest.mark.asyncio
 async def test_generate_inject_llm_true_incomplete_vlm_returns_400(client: AsyncClient) -> None:
     """inject_llm=True with missing VLMConfig → 400 llm_config_incomplete."""
-    import uuid
-
-    from autoagent.api.web_profile_builder import _sessions
-    from autoagent.storage.configs import put_config
-
     await put_config("vlm", {"base_url": None, "model": None, "api_key": None})
 
     headers = await _login(client)
-    sid = str(uuid.uuid4())[:8]
+    sid = str(uuid.uuid4())
     _sessions[sid] = _make_fake_session(sid)
 
     try:
