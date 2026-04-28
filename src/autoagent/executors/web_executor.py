@@ -51,11 +51,27 @@ class WebExecutor(Executor):
     async def _launch_context(self, profile: WebProfile) -> Any:
         pw = await self._ensure_playwright()
         if profile.browser.user_data_dir:
-            return await pw.chromium.launch_persistent_context(
-                user_data_dir=profile.browser.user_data_dir,
-                channel=profile.browser.channel,
-                headless=profile.browser.headless,
-            ), None
+            try:
+                context = await pw.chromium.launch_persistent_context(
+                    user_data_dir=profile.browser.user_data_dir,
+                    channel=profile.browser.channel,
+                    headless=profile.browser.headless,
+                )
+                return context, None
+            except Exception:
+                cleaned = _cleanup_stale_singleton_artifacts(profile.browser.user_data_dir)
+                if not cleaned:
+                    raise
+                _log.warning(
+                    "web_executor: cleaned stale singleton artifacts under %s and retrying",
+                    profile.browser.user_data_dir,
+                )
+                context = await pw.chromium.launch_persistent_context(
+                    user_data_dir=profile.browser.user_data_dir,
+                    channel=profile.browser.channel,
+                    headless=profile.browser.headless,
+                )
+                return context, None
         browser = await pw.chromium.launch(
             channel=profile.browser.channel,
             headless=profile.browser.headless,
@@ -208,3 +224,21 @@ def _send_button_selector(method: Any) -> str | None:
     if isinstance(method, WebSendMethodClick):
         return method.selector
     return None
+
+
+def _cleanup_stale_singleton_artifacts(user_data_dir: str) -> bool:
+    root = Path(user_data_dir)
+    cleaned = False
+    for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+        path = root / name
+        if not path.is_symlink():
+            continue
+        try:
+            target_exists = path.exists()
+        except OSError:
+            target_exists = False
+        if target_exists:
+            continue
+        path.unlink(missing_ok=True)
+        cleaned = True
+    return cleaned

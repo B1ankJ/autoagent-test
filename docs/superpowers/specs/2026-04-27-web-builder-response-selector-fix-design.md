@@ -89,3 +89,22 @@ Validated with:
 - no redesign of the Web Builder UX
 - no changes to profile schema
 - no automatic migration of previously generated YAML files
+
+## Follow-up: Persistent Chrome Profile Recovery
+
+On 2026-04-28 a separate failure mode was observed for web profiles that set `browser.user_data_dir`.
+
+Symptom:
+
+- `launch_persistent_context(...)` failed before navigation
+- the Chrome profile directory contained broken `SingletonLock`, `SingletonCookie`, or `SingletonSocket` links from a previous crashed Playwright launch
+
+Adjustment:
+
+- before giving up on persistent-context launch, the executor now checks for broken `Singleton*` symlinks under `user_data_dir`
+- if such links are present, it removes only the broken symlinks and retries launch once
+- it does not remove live sockets or other profile files
+
+Coverage:
+
+- `tests/unit/test_web_executor_unit.py` verifies stale singleton cleanup and one retry path
