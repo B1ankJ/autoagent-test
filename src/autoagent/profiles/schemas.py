@@ -106,6 +106,12 @@ class WebProfile(BaseModel):
     response_container_selector: str
     new_session_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+    def llm_response_enabled(self) -> bool:
+        return bool(self.base_url and self.model and self.api_key)
 
 
 # ---- Android profile ----
