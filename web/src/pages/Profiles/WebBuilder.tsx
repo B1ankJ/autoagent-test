@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Form,
   Input,
@@ -18,6 +19,7 @@ import {
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { client } from '../../api/client'
+import { useVLM } from '../../api/config'
 import {
   useCloseWebBuilderSession,
   useClearSelection,
@@ -73,6 +75,9 @@ export default function WebBuilder() {
   const clearSel = useClearSelection(sessionId ?? '')
   const generateProfile = useGenerateWebProfile(sessionId ?? '')
   const closeSession = useCloseWebBuilderSession()
+  const { data: vlm } = useVLM()
+  const vlmReady = !!(vlm?.base_url && vlm?.model && vlm?.api_key)
+  const [injectLlm, setInjectLlm] = useState(false)
 
   async function handleStart(values: { url: string; channel: string; user_data_dir?: string }) {
     try {
@@ -122,6 +127,7 @@ export default function WebBuilder() {
         name: profileName.trim(),
         stable_sec: 5,
         ready_timeout_sec: 15,
+        inject_llm: injectLlm,
       })
       setGeneratedYaml(result.yaml)
     } catch (e: unknown) {
@@ -323,6 +329,17 @@ export default function WebBuilder() {
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
                 />
+                <div>
+                  <Tooltip title={vlmReady ? '' : '请先在「配置」页填写完整 VLM 凭据'}>
+                    <Checkbox
+                      checked={injectLlm}
+                      disabled={!vlmReady}
+                      onChange={(e) => setInjectLlm(e.target.checked)}
+                    >
+                      生成时注入 LLM 响应抽取配置
+                    </Checkbox>
+                  </Tooltip>
+                </div>
                 <Button
                   type="primary"
                   block
