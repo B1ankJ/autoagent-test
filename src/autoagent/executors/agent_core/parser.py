@@ -65,6 +65,11 @@ def _parse_do_action(text: str) -> dict[str, Any] | None:
     action = values.get("action")
     if not isinstance(action, str) or not action.strip():
         return None
+    if action.strip().lower() == "finish":
+        message = values.get("message")
+        if isinstance(message, str):
+            return {"_metadata": "finish", "message": message}
+        return None
 
     payload = {"_metadata": "do"}
     payload.update(values)

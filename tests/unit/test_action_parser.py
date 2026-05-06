@@ -36,6 +36,11 @@ def test_parse_do_type() -> None:
     assert result == {"_metadata": "do", "action": "Type", "text": "hello world"}
 
 
+def test_parse_do_finish_canonicalizes_to_finish() -> None:
+    result = parse_action('do(action="Finish", message="done")')
+    assert result == {"_metadata": "finish", "message": "done"}
+
+
 def test_parse_do_scroll() -> None:
     result = parse_action('do(action="Scroll", direction="down", clicks=5)')
     assert result == {
@@ -146,6 +151,11 @@ def test_compatibility_shim_degrades_invalid_scroll_clicks_float_string_to_noop(
     assert result == {"_type": "noop"}
 
 
+def test_compatibility_shim_degrades_boolean_scroll_clicks_to_noop() -> None:
+    result = parse_legacy_action('do(action="Scroll", direction="down", clicks=True)')
+    assert result == {"_type": "noop"}
+
+
 def test_compatibility_shim_degrades_invalid_wait_to_noop() -> None:
     result = parse_legacy_action('do(action="Wait", duration="soon")')
     assert result == {"_type": "noop"}
@@ -153,6 +163,11 @@ def test_compatibility_shim_degrades_invalid_wait_to_noop() -> None:
 
 def test_compatibility_shim_degrades_invalid_tap_coordinates_to_noop() -> None:
     result = parse_legacy_action('do(action="Tap", element=["a", "b"])')
+    assert result == {"_type": "noop"}
+
+
+def test_compatibility_shim_degrades_boolean_tap_coordinate_to_noop() -> None:
+    result = parse_legacy_action('do(action="Tap", element=[True, 2])')
     assert result == {"_type": "noop"}
 
 
@@ -169,6 +184,11 @@ def test_compatibility_shim_maps_double_tap() -> None:
 def test_compatibility_shim_maps_long_press() -> None:
     result = parse_legacy_action('do(action="Long Press", element=[320, 640], duration_ms=800)')
     assert result == {"_type": "long_press", "x": 320, "y": 640, "duration_ms": 800}
+
+
+def test_compatibility_shim_degrades_non_integral_long_press_duration_to_noop() -> None:
+    result = parse_legacy_action('do(action="Long Press", element=[10, 20], duration_ms=3.9)')
+    assert result == {"_type": "noop"}
 
 
 def test_compatibility_shim_maps_hotkey() -> None:

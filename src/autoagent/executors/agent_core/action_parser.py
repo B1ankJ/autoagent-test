@@ -111,10 +111,9 @@ def _coerce_point(value: Any) -> tuple[int, int] | None:
 
 
 def _coerce_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if type(value) is not int:
         return None
+    return value
 
 
 def _parse_wait_seconds(value: object) -> float | None:
