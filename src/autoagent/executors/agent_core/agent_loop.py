@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from autoagent.executors.agent_core.action_parser import parse_action
@@ -12,10 +12,21 @@ _log = logging.getLogger(__name__)
 
 
 @dataclass
+class AgentStepRecord:
+    step: int
+    raw: str
+    action: dict[str, Any]
+
+    def to_metadata(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class AgentResult:
     finished: bool
     finish_message: str
     step_count: int
+    steps: list[AgentStepRecord] = field(default_factory=list)
 
 
 class AgentLoop:
@@ -33,6 +44,7 @@ class AgentLoop:
 
     def run(self, task: str) -> AgentResult:
         context: list[dict[str, Any]] = []
+        steps: list[AgentStepRecord] = []
         for step in range(1, self._max_steps + 1):
             screenshot = self._device.capture()
             messages = self._build_messages(task, screenshot, context, step)
@@ -40,12 +52,14 @@ class AgentLoop:
             _log.debug("agent_loop step=%d raw=%r", step, raw[:200])
             action = parse_action(raw)
             context.append({"step": step, "action_text": raw})
+            steps.append(AgentStepRecord(step=step, raw=raw, action=action))
 
             if action["_type"] == "finish":
                 return AgentResult(
                     finished=True,
                     finish_message=action.get("message", ""),
                     step_count=step,
+                    steps=steps,
                 )
             if action["_type"] != "noop":
                 self._device.execute_action(action)
@@ -54,6 +68,7 @@ class AgentLoop:
             finished=False,
             finish_message="max_steps reached",
             step_count=self._max_steps,
+            steps=steps,
         )
 
     def _build_messages(

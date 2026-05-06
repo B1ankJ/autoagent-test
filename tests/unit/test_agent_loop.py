@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from unittest.mock import MagicMock
 
 from autoagent.executors.agent_core.agent_loop import AgentLoop
@@ -7,7 +8,11 @@ from autoagent.executors.agent_core.device import Screenshot
 
 
 def _screenshot() -> Screenshot:
-    return Screenshot(base64_data="abc123==", width=1920, height=1080)
+    return Screenshot(
+        base64_data=base64.b64encode(b"fake-png-bytes").decode(),
+        width=1920,
+        height=1080,
+    )
 
 
 def test_loop_finishes_on_finish_action() -> None:
@@ -27,6 +32,10 @@ def test_loop_finishes_on_finish_action() -> None:
     assert result.step_count == 3
     assert result.finish_message == "done"
     assert device.execute_action.call_count == 2
+    assert len(result.steps) == 3
+    assert result.steps[0].action["_type"] == "click"
+    assert result.steps[2].action["_type"] == "finish"
+    assert result.steps[0].raw == "Action: click(100, 200)"
 
 
 def test_loop_stops_at_max_steps() -> None:
@@ -42,6 +51,7 @@ def test_loop_stops_at_max_steps() -> None:
     assert result.step_count == 3
     assert result.finish_message == "max_steps reached"
     assert device.execute_action.call_count == 3
+    assert len(result.steps) == 3
 
 
 def test_loop_skips_noop_but_counts_step() -> None:
@@ -59,3 +69,4 @@ def test_loop_skips_noop_but_counts_step() -> None:
     assert result.finished is True
     assert result.step_count == 2
     assert device.execute_action.call_count == 0
+    assert result.steps[0].action["_type"] == "noop"
