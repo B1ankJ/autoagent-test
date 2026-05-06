@@ -78,7 +78,7 @@ def _parse_finish_action(text: str) -> dict[str, Any] | None:
         if isinstance(message, str):
             return {"_metadata": "finish", "message": message}
 
-    fallback = re.fullmatch(r"finish\s*\(\s*message\s*=\s*([^()]+?)\s*\)", text, re.DOTALL)
+    fallback = re.fullmatch(r"finish\s*\(\s*message\s*=\s*(.+)\s*\)", text, re.DOTALL)
     if fallback is None:
         return None
     return {"_metadata": "finish", "message": _unquote(fallback.group(1))}

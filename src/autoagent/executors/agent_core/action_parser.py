@@ -33,6 +33,9 @@ def _to_legacy_action(action: dict[str, Any]) -> dict[str, Any]:
     if action_name == "type":
         return {"_type": "type", "text": str(action.get("text", ""))}
 
+    if action_name == "finish":
+        return {"_type": "finish", "message": str(action.get("message", ""))}
+
     if action_name == "press":
         return {"_type": "press", "key": str(action.get("key", "")).lower()}
 
