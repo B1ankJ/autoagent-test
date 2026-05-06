@@ -36,6 +36,7 @@ def test_loop_finishes_on_finish_action() -> None:
     assert result.steps[0].action["_type"] == "click"
     assert result.steps[2].action["_type"] == "finish"
     assert result.steps[0].raw == "Action: click(100, 200)"
+    assert result.steps[0].screenshot.base64_data == _screenshot().base64_data
 
 
 def test_loop_stops_at_max_steps() -> None:

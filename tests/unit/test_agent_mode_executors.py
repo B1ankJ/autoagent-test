@@ -54,6 +54,11 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
                         step=1,
                         raw='Action: click(10, 20)',
                         action={"_type": "click", "x": 10, "y": 20},
+                        screenshot=Screenshot(
+                            base64_data=base64.b64encode(b"pc-step-shot").decode(),
+                            width=100,
+                            height=50,
+                        ),
                     )
                 ],
             )
@@ -107,6 +112,7 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-1" / "s1").resolve())
     assert any(isinstance(item, ScreenshotResult) for item in ctx.screenshot_index)
+    assert (tmp_path / "batch-1" / "s1" / "step_1_1.png").is_file()
     assert (tmp_path / "batch-1" / "s1" / "final_1.png").is_file()
     assert (tmp_path / "batch-1" / "s1" / "loop_trace_1.json").is_file()
     assert (tmp_path / "batch-1" / "s1" / "extract_1.json").is_file()
@@ -155,6 +161,11 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
                         step=1,
                         raw='Action: press(back)',
                         action={"_type": "press", "key": "back"},
+                        screenshot=Screenshot(
+                            base64_data=base64.b64encode(b"android-step-shot").decode(),
+                            width=50,
+                            height=100,
+                        ),
                     )
                 ],
             )
@@ -210,6 +221,7 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
         }
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-2" / "s1").resolve())
+    assert (tmp_path / "batch-2" / "s1" / "step_1_1.png").is_file()
     assert (tmp_path / "batch-2" / "s1" / "final_1.png").is_file()
     assert (tmp_path / "batch-2" / "s1" / "loop_trace_1.json").is_file()
     assert (tmp_path / "batch-2" / "s1" / "extract_1.json").is_file()

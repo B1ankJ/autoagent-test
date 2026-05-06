@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.executors.agent_core.action_parser import parse_action
@@ -16,9 +16,14 @@ class AgentStepRecord:
     step: int
     raw: str
     action: dict[str, Any]
+    screenshot: Screenshot
 
     def to_metadata(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "step": self.step,
+            "raw": self.raw,
+            "action": self.action,
+        }
 
 
 @dataclass
@@ -52,7 +57,7 @@ class AgentLoop:
             _log.debug("agent_loop step=%d raw=%r", step, raw[:200])
             action = parse_action(raw)
             context.append({"step": step, "action_text": raw})
-            steps.append(AgentStepRecord(step=step, raw=raw, action=action))
+            steps.append(AgentStepRecord(step=step, raw=raw, action=action, screenshot=screenshot))
 
             if action["_type"] == "finish":
                 return AgentResult(
