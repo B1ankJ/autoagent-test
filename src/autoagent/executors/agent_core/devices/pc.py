@@ -9,7 +9,6 @@ import mss
 import mss.tools
 import pyautogui
 
-from autoagent.executors.agent_core.action_parser import parse_action as parse_legacy_action
 from autoagent.executors.agent_core.device import Device, Screenshot
 
 _log = logging.getLogger(__name__)
@@ -55,9 +54,7 @@ class PcDeviceAdapter(Device):
         pyautogui.scroll(delta if direction == "up" else -delta)
 
     def execute_action(self, action: dict[str, Any]) -> None:
-        legacy_action = action
-        if action.get("_metadata") is not None:
-            legacy_action = parse_legacy_action(str(action))
+        legacy_action = _coerce_legacy_action(action)
         action_type = legacy_action.get("_type")
         if action_type == "click":
             self.tap(legacy_action["x"], legacy_action["y"])
@@ -83,3 +80,55 @@ class PcDeviceAdapter(Device):
             return
         else:
             _log.warning("pc_device: unknown action %r", action_type)
+
+
+def _coerce_legacy_action(action: dict[str, Any]) -> dict[str, Any]:
+    action_type = action.get("_type")
+    if isinstance(action_type, str):
+        return action
+
+    metadata = action.get("_metadata")
+    if metadata != "do":
+        return {"_type": "finish" if metadata == "finish" else "noop"}
+
+    action_name = str(action.get("action", "")).strip().lower()
+    if action_name in {"tap", "click"}:
+        return {"_type": "click", "x": int(action["element"][0]), "y": int(action["element"][1])}
+    if action_name == "double tap":
+        return {
+            "_type": "double_click",
+            "x": int(action["element"][0]),
+            "y": int(action["element"][1]),
+        }
+    if action_name == "long press":
+        return {
+            "_type": "long_press",
+            "x": int(action["element"][0]),
+            "y": int(action["element"][1]),
+            "duration_ms": int(action.get("duration_ms", 800)),
+        }
+    if action_name == "type":
+        return {"_type": "type", "text": str(action.get("text", ""))}
+    if action_name == "scroll":
+        return {
+            "_type": "scroll",
+            "direction": str(action.get("direction", "down")).lower(),
+            "amount": int(action.get("clicks", 3)),
+        }
+    if action_name == "press":
+        return {"_type": "press", "key": str(action.get("key", "")).lower()}
+    if action_name == "back":
+        return {"_type": "press", "key": "back"}
+    if action_name == "home":
+        return {"_type": "press", "key": "home"}
+    if action_name == "hotkey":
+        return {"_type": "hotkey", "keys": [str(key).lower() for key in action.get("keys", [])]}
+    if action_name == "wait":
+        duration = action.get("duration", action.get("seconds", 1))
+        if isinstance(duration, (int, float)) and not isinstance(duration, bool):
+            seconds = float(duration)
+        else:
+            text = str(duration).strip().lower().replace("seconds", "").replace("second", "")
+            seconds = float(text.strip() or "1")
+        return {"_type": "wait", "seconds": seconds}
+    return {"_type": "noop"}

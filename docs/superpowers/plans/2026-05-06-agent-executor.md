@@ -8,6 +8,9 @@ Status snapshot as of 2026-05-06 after implementation and verification:
 
 - Completed: Task 1 `Profile Schema`, Task 2 `Device Abstraction + PC Device`, Task 3 `Android Device`, Task 4 `Model Client + Action Parser`, Task 5 `Agent Loop + Prompts`, Task 6 `Screenshot Response Extractor`, Task 7 `AgentPcExecutor`, Task 8 `AgentAndroidExecutor`, Task 9 `Executor Registration`.
 - Verification: `python3.11 -m pytest -q -m "not playwright and not android and not slow"` => `363 passed, 1 skipped, 18 deselected`; targeted new-module suite => `19 passed`; targeted `ruff check` on changed files => clean.
+- Follow-up refactor: the original implementation now runs on a unified `agent_core` runtime split into `parser.py`, `result.py`, `runtime.py`, `handlers/`, and `devices/`, while `AgentPcExecutor` and `AgentAndroidExecutor` keep the same outer API and artifact layout.
+- Reference alignment: the runtime semantics were tightened against the mature action/device patterns in `/Users/b1ankj/Desktop/2026/q2/apa_llm/` and `/Users/b1ankj/Desktop/2026/q2/Open-AutoGLM/`, but only for the AutoAgent action subset needed by `agent_pc` and `agent_android`.
+- Current verification after the unification refactor: `python3.11 -m pytest -q -m "not playwright and not android and not slow"` => `408 passed, 1 skipped, 18 deselected`; targeted unified-agent suite => `74 passed`; targeted `ruff check` on unified runtime files => clean.
 
 Implementation deviations already present in the repo:
 

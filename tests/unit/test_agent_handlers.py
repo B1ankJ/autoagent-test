@@ -10,7 +10,11 @@ def test_pc_handler_executes_tap() -> None:
     device = Mock()
     handler = PcActionHandler(device=device)
 
-    result = handler.execute({"_metadata": "do", "action": "Tap", "element": [100, 200]}, 1920, 1080)
+    result = handler.execute(
+        {"_metadata": "do", "action": "Tap", "element": [100, 200]},
+        1920,
+        1080,
+    )
 
     device.tap.assert_called_once_with(100, 200)
     assert result.success is True

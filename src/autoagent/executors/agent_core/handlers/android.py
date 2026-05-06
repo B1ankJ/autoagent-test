@@ -32,7 +32,10 @@ class AndroidActionHandler:
                 end_x, end_y = _point(action.get("end"))
                 self._device.swipe(start_x, start_y, end_x, end_y)
             elif action_name == "Scroll":
-                self._device.scroll(str(action.get("direction", "down")).lower(), int(action.get("clicks", 3)))
+                self._device.scroll(
+                    str(action.get("direction", "down")).lower(),
+                    int(action.get("clicks", 3)),
+                )
             elif action_name == "Press":
                 self._device.press_key(str(action.get("key", "enter")).lower())
             elif action_name == "Back":

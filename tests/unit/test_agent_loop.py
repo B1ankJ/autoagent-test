@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from unittest.mock import MagicMock
 
-from autoagent.executors.agent_core.agent_loop import AgentLoop, AgentResult, AgentStepRecord
+from autoagent.executors.agent_core.agent_loop import AgentResult, AgentStepRecord
 from autoagent.executors.agent_core.device import Screenshot
 from autoagent.executors.agent_core.result import ActionResult, AgentRunResult
 from autoagent.executors.agent_core.runtime import AgentRuntime
@@ -50,7 +49,13 @@ def test_runtime_stops_on_finish_action() -> None:
     client = FakeClient(['finish(message="done")'])
     handler = FakeHandler([ActionResult(success=True, should_finish=True, message="done")])
 
-    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="x", max_steps=3)
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="x",
+        max_steps=3,
+    )
     result = runtime.run("task")
 
     assert result.finished is True
@@ -77,7 +82,13 @@ def test_runtime_records_execution_result() -> None:
         ]
     )
 
-    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="x", max_steps=3)
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="x",
+        max_steps=3,
+    )
     result = runtime.run("task")
 
     assert result.finished is True
@@ -91,7 +102,9 @@ def test_runtime_records_execution_result() -> None:
 
 def test_runtime_stops_at_max_steps() -> None:
     device = FakeDevice()
-    client = FakeClient(["Action: click(100, 200)", "Action: click(100, 200)", "Action: click(100, 200)"])
+    client = FakeClient(
+        ["Action: click(100, 200)", "Action: click(100, 200)", "Action: click(100, 200)"]
+    )
     handler = FakeHandler(
         [
             ActionResult(success=True, should_finish=False),
@@ -100,7 +113,13 @@ def test_runtime_stops_at_max_steps() -> None:
         ]
     )
 
-    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="sys", max_steps=3)
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+    )
     result = runtime.run("do something")
 
     assert result.finished is False
@@ -116,7 +135,13 @@ def test_runtime_skips_noop_but_counts_step() -> None:
     client = FakeClient(["gibberish output", 'finish(message="ok")'])
     handler = FakeHandler([ActionResult(success=True, should_finish=False)])
 
-    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="sys", max_steps=10)
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=10,
+    )
     result = runtime.run("task")
 
     assert result.finished is True

@@ -653,7 +653,7 @@ git commit -m "refactor: wire executors to unified agent runtime"
 - Optional plan status sync:
   - `docs/superpowers/plans/2026-05-06-agent-executor.md`
 
-- [ ] **Step 1: Remove dead code paths only after passing tests**
+- [x] **Step 1: Remove dead code paths only after passing tests**
 
 If the shims no longer add value, delete them and update imports directly to:
 
@@ -666,7 +666,7 @@ from autoagent.executors.agent_core.devices.android import AndroidDeviceAdapter
 
 If the shims are still useful for compatibility, keep them but ensure they stay one-line re-exports only.
 
-- [ ] **Step 2: Run fast regression suite**
+- [x] **Step 2: Run fast regression suite**
 
 Run:
 
@@ -676,7 +676,7 @@ python3.11 -m pytest -q -m "not playwright and not android and not slow"
 
 Expected: the existing fast suite stays green.
 
-- [ ] **Step 3: Run `ruff` on the changed files**
+- [x] **Step 3: Run `ruff` on the changed files**
 
 Run:
 
@@ -697,6 +697,8 @@ Expected: `All checks passed!`
 
 - [ ] **Step 4: Do one real `agent_pc` smoke run and inspect traces**
 
+Current status: still pending. The refactor has passed fast regression, targeted unified-agent tests, and `ruff`, but a fresh live `agent_pc` smoke run after unification still needs an opt-in interactive desktop session because it will drive the current GUI and call the configured remote VLM profile.
+
 Run a real batch after the test suite passes, then inspect:
 
 ```bash
@@ -711,11 +713,11 @@ Expected evidence:
 - `loop_trace_1.json` includes `action`, `execution`, and `stop_reason`
 - the model output prefers `do(...)`
 
-- [ ] **Step 5: Sync the existing plan status**
+- [x] **Step 5: Sync the existing plan status**
 
 Update `docs/superpowers/plans/2026-05-06-agent-executor.md` so its status section mentions that the original plan was implemented first and then internally refactored into a unified runtime derived from the reference projects.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 

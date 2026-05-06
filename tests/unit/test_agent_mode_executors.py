@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import pytest
 
 from autoagent.executors.agent_core.agent_loop import AgentResult, AgentStepRecord
+from autoagent.executors.agent_core.result import ActionResult
 from autoagent.executors.base import ExecutorContext
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
-from autoagent.executors.agent_core.result import ActionResult
 from autoagent.executors.screenshot_store import ScreenshotResult
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import AgentAndroidProfile, AgentPcProfile
@@ -205,7 +205,10 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
         )
 
     monkeypatch.setattr("autoagent.executors.agent_android_executor.AndroidDevice", FakeDevice)
-    monkeypatch.setattr("autoagent.executors.agent_android_executor.AndroidActionHandler", FakeHandler)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_android_executor.AndroidActionHandler",
+        FakeHandler,
+    )
     monkeypatch.setattr("autoagent.executors.agent_android_executor.ModelClient", FakeClient)
     monkeypatch.setattr("autoagent.executors.agent_android_executor.AgentLoop", FakeLoop)
     monkeypatch.setattr(
