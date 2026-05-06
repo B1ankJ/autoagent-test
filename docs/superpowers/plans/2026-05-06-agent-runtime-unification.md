@@ -13,6 +13,7 @@ Latest follow-up status:
 - The shared PC/Android handlers now interpret `element` / `start` / `end` coordinates using the same 0-1000 relative coordinate contract used by `apa_llm` and `Open-AutoGLM`, then convert them to absolute screen pixels with `screen_width` / `screen_height`.
 - Runtime conversation storage also avoids double-wrapping existing `<answer>...</answer>` outputs, so replayed assistant context stays clean.
 - The system prompts now explicitly tell the model that `element` / `start` / `end` must use 0-1000 relative coordinates rather than raw pixels, so the model-side coordinate contract matches the handler-side conversion.
+- The desktop prompt also now explicitly warns the model not to confuse the bottom toolbar blank area or the send / voice / attachment controls with the real text input region; when focusing input, it should target the placeholder text or the interior of the input box.
 - The PC `Type` implementation now follows the reference desktop runtimes more closely: clipboard copy plus system paste shortcut, instead of `pyautogui.typewrite()`, so non-ASCII text entry is reliable.
 - The shared runtime can now use a multimodal response observer before accepting `finish(...)` after send-like actions, so agent runs do not stop merely because the policy model claims the message was sent; they stop only after the screenshot-based verifier sees a reply matching `response_hint`.
 
