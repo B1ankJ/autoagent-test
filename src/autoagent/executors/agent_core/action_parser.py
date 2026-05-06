@@ -77,7 +77,7 @@ def _to_legacy_action(action: dict[str, Any]) -> dict[str, Any]:
 
     if action_name == "long press":
         point = _coerce_point(action.get("element"))
-        duration_ms = _coerce_int(action.get("duration_ms", 800))
+        duration_ms = _coerce_non_negative_int(action.get("duration_ms", 800))
         if point is not None and duration_ms is not None:
             return {
                 "_type": "long_press",
@@ -116,15 +116,26 @@ def _coerce_int(value: Any) -> int | None:
     return value
 
 
+def _coerce_non_negative_int(value: Any) -> int | None:
+    result = _coerce_int(value)
+    if result is None or result < 0:
+        return None
+    return result
+
+
 def _parse_wait_seconds(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
     if isinstance(value, (int, float)):
-        return float(value)
+        seconds = float(value)
+        return seconds if seconds >= 0 else None
 
     text = str(value).strip().lower()
     match = re.search(r"-?\d+(?:\.\d+)?", text)
     if not match:
         return None
-    return float(match.group(0))
+    seconds = float(match.group(0))
+    return seconds if seconds >= 0 else None
 
 
 __all__ = ["parse_action", "parse_unified_action"]

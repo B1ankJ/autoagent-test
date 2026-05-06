@@ -141,6 +141,16 @@ def test_compatibility_shim_handles_unified_wait() -> None:
     assert result == {"_type": "wait", "seconds": 3.0}
 
 
+def test_compatibility_shim_degrades_boolean_wait_duration_to_noop() -> None:
+    result = parse_legacy_action('do(action="Wait", duration=True)')
+    assert result == {"_type": "noop"}
+
+
+def test_compatibility_shim_degrades_negative_wait_duration_to_noop() -> None:
+    result = parse_legacy_action('do(action="Wait", duration=-1)')
+    assert result == {"_type": "noop"}
+
+
 def test_compatibility_shim_degrades_invalid_scroll_clicks_alpha_to_noop() -> None:
     result = parse_legacy_action('do(action="Scroll", direction="down", clicks="abc")')
     assert result == {"_type": "noop"}
@@ -184,6 +194,11 @@ def test_compatibility_shim_maps_double_tap() -> None:
 def test_compatibility_shim_maps_long_press() -> None:
     result = parse_legacy_action('do(action="Long Press", element=[320, 640], duration_ms=800)')
     assert result == {"_type": "long_press", "x": 320, "y": 640, "duration_ms": 800}
+
+
+def test_compatibility_shim_degrades_negative_long_press_duration_to_noop() -> None:
+    result = parse_legacy_action('do(action="Long Press", element=[10, 20], duration_ms=-5)')
+    assert result == {"_type": "noop"}
 
 
 def test_compatibility_shim_degrades_non_integral_long_press_duration_to_noop() -> None:

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from autoagent.executors.agent_core.action_parser import parse_action as parse_legacy_action
 from autoagent.executors.agent_core.agent_loop import AgentResult, AgentStepRecord
 from autoagent.executors.base import ExecutorContext
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
@@ -45,6 +46,7 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
 
         def run(self, task: str) -> AgentResult:
             seen["task"] = task
+            raw_action = 'do(action="Tap", element=[10, 20])'
             return AgentResult(
                 finished=True,
                 finish_message="done",
@@ -52,8 +54,8 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
                 steps=[
                     AgentStepRecord(
                         step=1,
-                        raw='Action: click(10, 20)',
-                        action={"_type": "click", "x": 10, "y": 20},
+                        raw=raw_action,
+                        action=parse_legacy_action(raw_action),
                         screenshot=Screenshot(
                             base64_data=base64.b64encode(b"pc-step-shot").decode(),
                             width=100,
@@ -106,7 +108,7 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
     assert ctx.action_log == [
         {
             "step": 1,
-            "raw": 'Action: click(10, 20)',
+            "raw": 'do(action="Tap", element=[10, 20])',
             "action": {"_type": "click", "x": 10, "y": 20},
         }
     ]
