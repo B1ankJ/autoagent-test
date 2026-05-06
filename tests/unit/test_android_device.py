@@ -66,6 +66,14 @@ def test_execute_action_type():
     mock_adb.assert_called_once_with(["shell", "input", "text", "'hello'"])
 
 
+def test_execute_action_type_non_ascii():
+    with patch.object(AndroidDevice, "_adb_run") as mock_adb:
+        AndroidDevice().execute_action({"_type": "type", "text": "你好"})
+    mock_adb.assert_called_once_with(
+        ["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT", "--es", "msg", "'你好'"]
+    )
+
+
 def test_execute_action_press_enter():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
         AndroidDevice().execute_action({"_type": "press", "key": "enter"})
@@ -75,9 +83,16 @@ def test_execute_action_press_enter():
 def test_execute_action_scroll_down():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
         AndroidDevice().execute_action({"_type": "scroll", "direction": "down", "amount": 3})
+    # amount=3, dist=900; swipe from y=1200 up to y=1200-900=300
     mock_adb.assert_called_once_with(
-        ["shell", "input", "swipe", "540", "400", "540", "1200", "300"]
+        ["shell", "input", "swipe", "540", "1200", "540", "300", "300"]
     )
+
+
+def test_execute_action_finish_does_not_crash():
+    with patch.object(AndroidDevice, "_adb_run") as mock_adb:
+        AndroidDevice().execute_action({"_type": "finish", "message": "done"})
+    mock_adb.assert_not_called()
 
 
 def test_execute_action_unknown_logs_warning(caplog):

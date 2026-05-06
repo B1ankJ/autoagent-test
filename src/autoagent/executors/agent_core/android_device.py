@@ -32,13 +32,35 @@ class AndroidDevice(Device):
         if t == "click":
             self._adb_run(["shell", "input", "tap", str(action["x"]), str(action["y"])])
         elif t == "type":
-            text = action["text"].replace("'", "'\\''")
-            self._adb_run(["shell", "input", "text", f"'{text}'"])
-        elif t == "scroll":
-            if action.get("direction") == "up":
-                self._adb_run(["shell", "input", "swipe", "540", "1200", "540", "400", "300"])
+            text = action["text"]
+            escaped = text.replace("'", "'\\''")
+            if text.isascii():
+                self._adb_run(["shell", "input", "text", f"'{escaped}'"])
             else:
-                self._adb_run(["shell", "input", "swipe", "540", "400", "540", "1200", "300"])
+                self._adb_run(
+                    # ADB Keyboard broadcast for non-ASCII text
+                    [
+                        "shell",
+                        "am",
+                        "broadcast",
+                        "-a",
+                        "ADB_INPUT_TEXT",
+                        "--es",
+                        "msg",
+                        f"'{escaped}'",
+                    ]
+                )
+        elif t == "scroll":
+            amount = action.get("amount", 3)
+            dist = amount * 300
+            if action.get("direction") == "up":
+                # finger swipes down → content moves up
+                y_end = 400 + dist
+                self._adb_run(["shell", "input", "swipe", "540", "400", "540", str(y_end), "300"])
+            else:
+                # finger swipes up → content moves down
+                y_end = 1200 - dist
+                self._adb_run(["shell", "input", "swipe", "540", "1200", "540", str(y_end), "300"])
         elif t == "press":
             key_map = {"enter": "KEYCODE_ENTER", "back": "KEYCODE_BACK", "home": "KEYCODE_HOME"}
             keycode = key_map.get(action["key"], action["key"].upper())
