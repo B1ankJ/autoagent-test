@@ -2,6 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Current Status
+
+Status snapshot as of 2026-05-06, synchronized to the repository state before continuing implementation:
+
+- Completed: Task 1 `Profile Schema`, Task 2 `Device Abstraction + PC Device`, Task 3 `Android Device`.
+- Partially completed: Task 4 `Model Client + Action Parser`.
+- Not started: Task 5 `Agent Loop + Prompts`, Task 6 `Screenshot Response Extractor`, Task 7 `AgentPcExecutor`, Task 8 `AgentAndroidExecutor`, Task 9 `Executor Registration`.
+
+Implementation deviations already present in the repo:
+
+- `src/autoagent/executors/agent_core/model_client.py` uses synchronous `httpx.post(...)` against `/chat/completions` instead of the `openai` SDK wrapper shown below.
+- `src/autoagent/executors/agent_core/action_parser.py` currently parses `Action: click(...)`-style outputs instead of the `<answer>do(...)` protocol in the original draft plan.
+- `tests/unit/test_android_device.py` exists and covers `AndroidDevice`, even though it is not listed in the original file table.
+
+Execution rule for the remainder of this plan:
+
+- Finish the feature against the code as it actually exists in this branch.
+- Preserve working completed pieces unless a later integration step proves they must change.
+- Update this status section and the task checkboxes as remaining work lands.
+
 **Goal:** Add `agent_pc` and `agent_android` executor modes that use a VLM-driven agent loop to automate any desktop app or Android app without pre-annotated selectors.
 
 **Architecture:** A shared `agent_core` module holds the device abstraction, model client, action parser, and agent loop. `AgentPcExecutor` and `AgentAndroidExecutor` each wrap the loop in an async executor, then call a screenshot-based LLM extractor to read the response text. Both executors are registered in `_deps.py` alongside the existing three modes.
@@ -42,7 +62,7 @@
 - Modify: `src/autoagent/models/api.py`
 - Create: `tests/unit/test_agent_profile_schema.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_agent_profile_schema.py
@@ -120,14 +140,14 @@ def test_agent_pc_missing_task_template_raises():
         })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_agent_profile_schema.py -v
 ```
 Expected: ImportError or collection errors — `AgentPcProfile` not defined yet.
 
-- [ ] **Step 3: Add profiles to `schemas.py`**
+- [x] **Step 3: Add profiles to `schemas.py`**
 
 Open `src/autoagent/profiles/schemas.py`. After the `AndroidProfile` class and before the `# ---- Union + parser ----` comment, add:
 
@@ -174,7 +194,7 @@ Profile = Annotated[
 _profile_adapter: TypeAdapter[Profile] = TypeAdapter(Profile)
 ```
 
-- [ ] **Step 4: Extend `Mode` in `models/api.py`**
+- [x] **Step 4: Extend `Mode` in `models/api.py`**
 
 In `src/autoagent/models/api.py`, change:
 
@@ -188,7 +208,7 @@ to:
 Mode = Literal["api", "gui_pc_web", "gui_android", "agent_pc", "agent_android"]
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 python3.11 -m pytest tests/unit/test_agent_profile_schema.py -v
