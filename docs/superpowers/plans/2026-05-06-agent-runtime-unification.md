@@ -12,6 +12,7 @@ Latest follow-up status:
 - Executor traces now persist `conversation` alongside `steps`, `execution`, and `stop_reason` for post-run diagnosis.
 - The shared PC/Android handlers now interpret `element` / `start` / `end` coordinates using the same 0-1000 relative coordinate contract used by `apa_llm` and `Open-AutoGLM`, then convert them to absolute screen pixels with `screen_width` / `screen_height`.
 - Runtime conversation storage also avoids double-wrapping existing `<answer>...</answer>` outputs, so replayed assistant context stays clean.
+- The system prompts now explicitly tell the model that `element` / `start` / `end` must use 0-1000 relative coordinates rather than raw pixels, so the model-side coordinate contract matches the handler-side conversion.
 
 **Tech Stack:** Python 3.11, `httpx`, `mss`, `pyautogui`, `adb`, `pytest`, `ruff`.
 
