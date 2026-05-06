@@ -1,14 +1,13 @@
 # Agent Executor (agent_pc + agent_android) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 ## Current Status
 
-Status snapshot as of 2026-05-06, synchronized to the repository state before continuing implementation:
+Status snapshot as of 2026-05-06 after implementation and verification:
 
-- Completed: Task 1 `Profile Schema`, Task 2 `Device Abstraction + PC Device`, Task 3 `Android Device`.
-- Partially completed: Task 4 `Model Client + Action Parser`.
-- Not started: Task 5 `Agent Loop + Prompts`, Task 6 `Screenshot Response Extractor`, Task 7 `AgentPcExecutor`, Task 8 `AgentAndroidExecutor`, Task 9 `Executor Registration`.
+- Completed: Task 1 `Profile Schema`, Task 2 `Device Abstraction + PC Device`, Task 3 `Android Device`, Task 4 `Model Client + Action Parser`, Task 5 `Agent Loop + Prompts`, Task 6 `Screenshot Response Extractor`, Task 7 `AgentPcExecutor`, Task 8 `AgentAndroidExecutor`, Task 9 `Executor Registration`.
+- Verification: `python3.11 -m pytest -q -m "not playwright and not android and not slow"` => `363 passed, 1 skipped, 18 deselected`; targeted new-module suite => `19 passed`; targeted `ruff check` on changed files => clean.
 
 Implementation deviations already present in the repo:
 
@@ -16,11 +15,11 @@ Implementation deviations already present in the repo:
 - `src/autoagent/executors/agent_core/action_parser.py` currently parses `Action: click(...)`-style outputs instead of the `<answer>do(...)` protocol in the original draft plan.
 - `tests/unit/test_android_device.py` exists and covers `AndroidDevice`, even though it is not listed in the original file table.
 
-Execution rule for the remainder of this plan:
+Execution notes:
 
 - Finish the feature against the code as it actually exists in this branch.
 - Preserve working completed pieces unless a later integration step proves they must change.
-- Update this status section and the task checkboxes as remaining work lands.
+- Update this status section and the task checkboxes when follow-up fixes land.
 
 **Goal:** Add `agent_pc` and `agent_android` executor modes that use a VLM-driven agent loop to automate any desktop app or Android app without pre-annotated selectors.
 
@@ -215,14 +214,14 @@ python3.11 -m pytest tests/unit/test_agent_profile_schema.py -v
 ```
 Expected: 7 passed.
 
-- [ ] **Step 6: Run full fast suite to check no regressions**
+- [x] **Step 6: Run full fast suite to check no regressions**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
 ```
 Expected: all previously passing tests still pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/autoagent/profiles/schemas.py src/autoagent/models/api.py tests/unit/test_agent_profile_schema.py
@@ -239,7 +238,7 @@ git commit -m "feat: add AgentPcProfile and AgentAndroidProfile schemas"
 - Create: `src/autoagent/executors/agent_core/pc_device.py`
 - Modify: `pyproject.toml`
 
-- [ ] **Step 1: Add new dependencies to `pyproject.toml`**
+- [x] **Step 1: Add new dependencies to `pyproject.toml`**
 
 In `pyproject.toml`, inside the `dependencies` list, add after `"rapidocr_onnxruntime>=1.4,<2.0",`:
 
@@ -254,7 +253,7 @@ Then install:
 uv pip install mss pyautogui
 ```
 
-- [ ] **Step 2: Create package init**
+- [x] **Step 2: Create package init**
 
 ```bash
 mkdir -p src/autoagent/executors/agent_core
@@ -265,7 +264,7 @@ Create `src/autoagent/executors/agent_core/__init__.py` with empty content:
 ```python
 ```
 
-- [ ] **Step 3: Create `device.py`**
+- [x] **Step 3: Create `device.py`**
 
 ```python
 # src/autoagent/executors/agent_core/device.py
@@ -291,7 +290,7 @@ class Device(ABC):
         """Execute a parsed action dict. Raises on hard failure."""
 ```
 
-- [ ] **Step 4: Create `pc_device.py`**
+- [x] **Step 4: Create `pc_device.py`**
 
 ```python
 # src/autoagent/executors/agent_core/pc_device.py
@@ -339,14 +338,14 @@ class PcDevice(Device):
             _log.warning("pc_device: unknown action %r", t)
 ```
 
-- [ ] **Step 5: Verify imports work**
+- [x] **Step 5: Verify imports work**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_core.pc_device import PcDevice; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pyproject.toml src/autoagent/executors/agent_core/
@@ -360,7 +359,7 @@ git commit -m "feat: add agent_core device abstraction and PcDevice"
 **Files:**
 - Create: `src/autoagent/executors/agent_core/android_device.py`
 
-- [ ] **Step 1: Create `android_device.py`**
+- [x] **Step 1: Create `android_device.py`**
 
 ```python
 # src/autoagent/executors/agent_core/android_device.py
@@ -435,14 +434,14 @@ class AndroidDevice(Device):
             _log.warning("android_device: unknown action %r", t)
 ```
 
-- [ ] **Step 2: Verify imports**
+- [x] **Step 2: Verify imports**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_core.android_device import AndroidDevice; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_core/android_device.py
@@ -458,7 +457,7 @@ git commit -m "feat: add AndroidDevice for agent_core"
 - Create: `src/autoagent/executors/agent_core/action_parser.py`
 - Create: `tests/unit/test_action_parser.py`
 
-- [ ] **Step 1: Write failing action parser tests**
+- [x] **Step 1: Write failing action parser tests**
 
 ```python
 # tests/unit/test_action_parser.py
@@ -519,14 +518,14 @@ def test_parse_empty_returns_noop():
     assert parse_action("") == {"_type": "noop"}
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_action_parser.py -v
 ```
 Expected: ImportError — module not created yet.
 
-- [ ] **Step 3: Create `action_parser.py`**
+- [x] **Step 3: Create `action_parser.py`**
 
 ```python
 # src/autoagent/executors/agent_core/action_parser.py
@@ -613,14 +612,14 @@ def _parse_do(action_name: str, text: str) -> dict[str, Any]:
     return {"_type": "noop"}
 ```
 
-- [ ] **Step 4: Run action parser tests**
+- [x] **Step 4: Run action parser tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_action_parser.py -v
 ```
 Expected: 10 passed.
 
-- [ ] **Step 5: Create `model_client.py`**
+- [x] **Step 5: Create `model_client.py`**
 
 ```python
 # src/autoagent/executors/agent_core/model_client.py
@@ -665,14 +664,14 @@ class ModelClient:
         return response.choices[0].message.content or ""
 ```
 
-- [ ] **Step 6: Verify import**
+- [x] **Step 6: Verify import**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_core.model_client import ModelClient, ModelConfig; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_core/model_client.py src/autoagent/executors/agent_core/action_parser.py tests/unit/test_action_parser.py
@@ -688,7 +687,7 @@ git commit -m "feat: add agent_core model client and action parser"
 - Create: `src/autoagent/executors/agent_core/agent_loop.py`
 - Create: `tests/unit/test_agent_loop.py`
 
-- [ ] **Step 1: Write failing agent loop tests**
+- [x] **Step 1: Write failing agent loop tests**
 
 ```python
 # tests/unit/test_agent_loop.py
@@ -748,14 +747,14 @@ def test_loop_skips_noop_but_counts_step():
     assert device.execute_action.call_count == 0  # noop not executed
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 python3.11 -m pytest tests/unit/test_agent_loop.py -v
 ```
 Expected: ImportError.
 
-- [ ] **Step 3: Create `prompts.py`**
+- [x] **Step 3: Create `prompts.py`**
 
 ```python
 # src/autoagent/executors/agent_core/prompts.py
@@ -809,7 +808,7 @@ ANDROID_SYSTEM_PROMPT = """你是一个Android手机自动化助手。你会看�
 """
 ```
 
-- [ ] **Step 4: Create `agent_loop.py`**
+- [x] **Step 4: Create `agent_loop.py`**
 
 ```python
 # src/autoagent/executors/agent_core/agent_loop.py
@@ -899,21 +898,21 @@ class AgentLoop:
         return messages
 ```
 
-- [ ] **Step 5: Run agent loop tests**
+- [x] **Step 5: Run agent loop tests**
 
 ```bash
 python3.11 -m pytest tests/unit/test_agent_loop.py -v
 ```
 Expected: 3 passed.
 
-- [ ] **Step 6: Run full fast suite**
+- [x] **Step 6: Run full fast suite**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
 ```
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_core/agent_loop.py src/autoagent/executors/agent_core/prompts.py tests/unit/test_agent_loop.py
@@ -929,7 +928,7 @@ git commit -m "feat: add agent_loop and system prompts"
 
 No new unit tests: this module is structurally identical to `web_response_llm_extractor.py` (same httpx call pattern, same `LLMExtractionResult` return). The web extractor tests cover the pattern.
 
-- [ ] **Step 1: Create `agent_screenshot_extractor.py`**
+- [x] **Step 1: Create `agent_screenshot_extractor.py`**
 
 ```python
 # src/autoagent/executors/agent_screenshot_extractor.py
@@ -1027,14 +1026,14 @@ async def extract_response_from_screenshot(
         return LLMExtractionResult(text="", error="connect", latency_ms=latency_ms)
 ```
 
-- [ ] **Step 2: Verify import**
+- [x] **Step 2: Verify import**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_screenshot_extractor import extract_response_from_screenshot; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_screenshot_extractor.py
@@ -1048,7 +1047,7 @@ git commit -m "feat: add agent_screenshot_extractor for VLM response extraction 
 **Files:**
 - Create: `src/autoagent/executors/agent_pc_executor.py`
 
-- [ ] **Step 1: Create `agent_pc_executor.py`**
+- [x] **Step 1: Create `agent_pc_executor.py`**
 
 ```python
 # src/autoagent/executors/agent_pc_executor.py
@@ -1118,14 +1117,14 @@ class AgentPcExecutor(Executor):
         return responses
 ```
 
-- [ ] **Step 2: Verify import**
+- [x] **Step 2: Verify import**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_pc_executor import AgentPcExecutor; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_pc_executor.py
@@ -1139,7 +1138,7 @@ git commit -m "feat: add AgentPcExecutor"
 **Files:**
 - Create: `src/autoagent/executors/agent_android_executor.py`
 
-- [ ] **Step 1: Create `agent_android_executor.py`**
+- [x] **Step 1: Create `agent_android_executor.py`**
 
 ```python
 # src/autoagent/executors/agent_android_executor.py
@@ -1209,14 +1208,14 @@ class AgentAndroidExecutor(Executor):
         return responses
 ```
 
-- [ ] **Step 2: Verify import**
+- [x] **Step 2: Verify import**
 
 ```bash
 python3.11 -c "from autoagent.executors.agent_android_executor import AgentAndroidExecutor; print('ok')"
 ```
 Expected: `ok`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/autoagent/executors/agent_android_executor.py
@@ -1232,7 +1231,7 @@ git commit -m "feat: add AgentAndroidExecutor"
 
 `Mode` in `models/api.py` was already updated in Task 1.
 
-- [ ] **Step 1: Update `_deps.py`**
+- [x] **Step 1: Update `_deps.py`**
 
 In `src/autoagent/api/_deps.py`, add imports after the existing executor imports (lines 8-11):
 
@@ -1270,21 +1269,21 @@ def _build_executor(mode: str) -> Executor:
     return _executors[mode]
 ```
 
-- [ ] **Step 2: Run full fast suite**
+- [x] **Step 2: Run full fast suite**
 
 ```bash
 python3.11 -m pytest -q -m "not playwright and not android and not slow"
 ```
 Expected: all previously passing tests still pass (all new executor tests now included).
 
-- [ ] **Step 3: Check ruff**
+- [x] **Step 3: Check ruff**
 
 ```bash
 python3.11 -m ruff check src/autoagent/executors/agent_core/ src/autoagent/executors/agent_pc_executor.py src/autoagent/executors/agent_android_executor.py src/autoagent/executors/agent_screenshot_extractor.py src/autoagent/api/_deps.py
 ```
 Expected: no errors. Fix any that appear before committing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/autoagent/api/_deps.py

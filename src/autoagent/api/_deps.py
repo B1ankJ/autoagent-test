@@ -5,6 +5,8 @@ from typing import Any
 from autoagent.devices.adb import list_devices as adb_list_devices
 from autoagent.devices.monitor import DeviceMonitor
 from autoagent.devices.pool import DevicePool
+from autoagent.executors.agent_android_executor import AgentAndroidExecutor
+from autoagent.executors.agent_pc_executor import AgentPcExecutor
 from autoagent.executors.android_executor import AndroidExecutor
 from autoagent.executors.api_executor import ApiExecutor
 from autoagent.executors.base import Executor
@@ -33,6 +35,10 @@ def _build_executor(mode: str) -> Executor:
             _executors[mode] = WebExecutor()
         elif mode == "gui_android":
             _executors[mode] = AndroidExecutor()
+        elif mode == "agent_pc":
+            _executors[mode] = AgentPcExecutor()
+        elif mode == "agent_android":
+            _executors[mode] = AgentAndroidExecutor()
         else:
             raise ValueError(f"mode {mode} not supported in this build")
     return _executors[mode]

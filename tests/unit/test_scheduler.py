@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 
 import pytest
 
@@ -61,3 +62,41 @@ async def test_concurrency_limits_parallelism():
     batch_id = await sch.submit(name="b", mode="api", concurrency=2, samples=samples)
     await sch.wait_done(batch_id, timeout_sec=5)
     assert max_seen[0] <= 2
+
+
+async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
+    seen: dict[str, object] = {}
+
+    class DeviceAwareExecutor(Executor):
+        async def execute(self, sample, profile, ctx: ExecutorContext):  # noqa: ANN001
+            seen["device_serial"] = ctx.device_serial
+            return ["ok"]
+
+    class FakePool:
+        def available_count_sync(self) -> int:
+            return 1
+
+        @asynccontextmanager
+        async def acquire(self, preferred: str | None, timeout_sec: float = 60):
+            seen["preferred"] = preferred
+            seen["timeout_sec"] = timeout_sec
+            yield "emulator-5554"
+
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: DeviceAwareExecutor(),
+        profile_lookup=lambda _name: type("P", (), {"serial": None})(),
+        device_pool=FakePool(),
+    )
+    sample = Sample(id="s1", prompts=["x"], mode="agent_android", target_profile="p")
+
+    batch_id = await scheduler.submit(
+        name="b",
+        mode="agent_android",
+        concurrency=3,
+        samples=[sample],
+    )
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    assert seen["device_serial"] == "emulator-5554"
+    assert seen["preferred"] is None

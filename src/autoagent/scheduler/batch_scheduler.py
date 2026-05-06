@@ -34,7 +34,7 @@ def _resolve_concurrency(
     available_devices: int | None = None,
     logger: logging.Logger = log,
 ) -> int:
-    if mode == "gui_android":
+    if mode in {"gui_android", "agent_android"}:
         avail = max(1, available_devices or 1)
         return max(1, min(requested, avail))
 
@@ -106,9 +106,9 @@ class BatchScheduler:
             mode,
             samples,
             self._profile_lookup,
-            available_devices=(
-                self._device_pool.available_count_sync()
-                if mode == "gui_android" and self._device_pool
+                available_devices=(
+                    self._device_pool.available_count_sync()
+                if mode in {"gui_android", "agent_android"} and self._device_pool
                 else None
             ),
         )
@@ -195,7 +195,10 @@ class BatchScheduler:
                             verbose_logs=settings.default_verbose_logs,
                         )
                         executor = self._executor_factory(sample.mode)
-                        if sample.mode == "gui_android" and self._device_pool is not None:
+                        if (
+                            sample.mode in {"gui_android", "agent_android"}
+                            and self._device_pool is not None
+                        ):
                             await bus.publish(
                                 batch_id,
                                 "sample_update",
