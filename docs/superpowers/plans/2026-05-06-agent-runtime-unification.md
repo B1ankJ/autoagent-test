@@ -14,6 +14,7 @@ Latest follow-up status:
 - Runtime conversation storage also avoids double-wrapping existing `<answer>...</answer>` outputs, so replayed assistant context stays clean.
 - The system prompts now explicitly tell the model that `element` / `start` / `end` must use 0-1000 relative coordinates rather than raw pixels, so the model-side coordinate contract matches the handler-side conversion.
 - The PC `Type` implementation now follows the reference desktop runtimes more closely: clipboard copy plus system paste shortcut, instead of `pyautogui.typewrite()`, so non-ASCII text entry is reliable.
+- The shared runtime can now use a multimodal response observer before accepting `finish(...)` after send-like actions, so agent runs do not stop merely because the policy model claims the message was sent; they stop only after the screenshot-based verifier sees a reply matching `response_hint`.
 
 **Tech Stack:** Python 3.11, `httpx`, `mss`, `pyautogui`, `adb`, `pytest`, `ruff`.
 

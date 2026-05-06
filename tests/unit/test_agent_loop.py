@@ -47,6 +47,16 @@ class FakeHandler:
         return self._results[len(self.calls) - 1]
 
 
+class FakeResponseObserver:
+    def __init__(self, outcomes: list[tuple[bool, str]]) -> None:
+        self._outcomes = outcomes
+        self.calls: list[tuple[str, str, int]] = []
+
+    def __call__(self, task: str, response_hint: str, screenshot: Screenshot) -> tuple[bool, str]:
+        self.calls.append((task, response_hint, screenshot.width))
+        return self._outcomes[len(self.calls) - 1]
+
+
 def test_runtime_stops_on_finish_action() -> None:
     device = FakeDevice()
     client = FakeClient(['finish(message="done")'])
@@ -233,3 +243,53 @@ def test_runtime_skips_noop_but_counts_step() -> None:
     assert result.stop_reason == "finish"
     assert len(handler.calls) == 0
     assert result.steps[0].action["_metadata"] == "noop"
+
+
+def test_runtime_requires_response_observer_confirmation_before_finish() -> None:
+    device = FakeDevice()
+    client = FakeClient(
+        [
+            'do(action="Press", key="enter")',
+            'finish(message="done")',
+            'finish(message="done")',
+        ]
+    )
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
+    observer = FakeResponseObserver([(False, ""), (True, "assistant reply")])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=4,
+        response_hint="latest assistant reply",
+        response_observer=observer,
+    )
+    result = runtime.run("task")
+
+    assert result.finished is True
+    assert result.stop_reason == "finish"
+    assert result.finish_message == "assistant reply"
+    assert result.step_count == 3
+    assert observer.calls[0][1] == "latest assistant reply"
+    assert result.steps[1].action == {"_metadata": "noop", "raw": 'finish(message="done")'}
+
+
+def test_runtime_finish_without_observer_keeps_existing_behavior() -> None:
+    device = FakeDevice()
+    client = FakeClient(['finish(message="done")'])
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+    )
+    result = runtime.run("task")
+
+    assert result.finished is True
+    assert result.finish_message == "done"
+    assert result.step_count == 1

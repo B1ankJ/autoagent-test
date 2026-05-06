@@ -8,6 +8,7 @@ from typing import Any
 
 from autoagent.executors.agent_core.agent_loop import AgentLoop
 from autoagent.executors.agent_core.android_device import AndroidDevice
+from autoagent.executors.agent_core.device import Screenshot
 from autoagent.executors.agent_core.handlers.android import AndroidActionHandler
 from autoagent.executors.agent_core.model_client import ModelClient, ModelConfig
 from autoagent.executors.agent_core.prompts import ANDROID_SYSTEM_PROMPT
@@ -47,9 +48,34 @@ class AgentAndroidExecutor(Executor):
             )
         )
         handler = AndroidActionHandler(device=device)
-        agent_loop = AgentLoop(device, client, handler, ANDROID_SYSTEM_PROMPT, profile.max_steps)
         loop = asyncio.get_running_loop()
         responses: list[str] = []
+
+        def response_observer(
+            task: str,
+            response_hint: str,
+            screenshot: Screenshot,
+        ) -> tuple[bool, str]:
+            extraction = asyncio.run(
+                extract_response_from_screenshot(
+                    screenshot=screenshot,
+                    response_hint=response_hint,
+                    base_url=profile.base_url,
+                    model=profile.model,
+                    api_key=profile.api_key,
+                )
+            )
+            return bool(extraction.text.strip()), extraction.text
+
+        agent_loop = AgentLoop(
+            device,
+            client,
+            handler,
+            ANDROID_SYSTEM_PROMPT,
+            profile.max_steps,
+            response_hint=profile.response_hint,
+            response_observer=response_observer,
+        )
 
         for prompt in sample.prompts:
             template = (

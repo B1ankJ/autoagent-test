@@ -44,11 +44,22 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
             seen["handler_device"] = device
 
     class FakeLoop:
-        def __init__(self, device, client, handler, system_prompt, max_steps) -> None:  # noqa: ANN001
+        def __init__(
+            self,
+            device,
+            client,
+            handler,
+            system_prompt,
+            max_steps,
+            response_hint=None,
+            response_observer=None,
+        ) -> None:  # noqa: ANN001
             seen["loop_device"] = device
             seen["loop_handler"] = handler
             seen["loop_prompt"] = system_prompt
             seen["loop_max_steps"] = max_steps
+            seen["loop_response_hint"] = response_hint
+            seen["loop_response_observer"] = response_observer
 
         def run(self, task: str) -> AgentResult:
             seen["task"] = task
@@ -150,6 +161,8 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
     assert seen["task"] == "reset then do hello"
     assert seen["response_hint"] == "latest assistant reply"
     assert seen["loop_max_steps"] == 7
+    assert seen["loop_response_hint"] == "latest assistant reply"
+    assert seen["loop_response_observer"] is not None
     assert seen["handler_device"] is seen["loop_device"]
     assert seen["loop_handler"] is not None
 
@@ -184,9 +197,20 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
             seen["handler_device"] = device
 
     class FakeLoop:
-        def __init__(self, device, client, handler, system_prompt, max_steps) -> None:  # noqa: ANN001
+        def __init__(
+            self,
+            device,
+            client,
+            handler,
+            system_prompt,
+            max_steps,
+            response_hint=None,
+            response_observer=None,
+        ) -> None:  # noqa: ANN001
             seen["loop_handler"] = handler
             seen["loop_max_steps"] = max_steps
+            seen["loop_response_hint"] = response_hint
+            seen["loop_response_observer"] = response_observer
 
         def run(self, task: str) -> AgentResult:
             seen["task"] = task
@@ -286,4 +310,6 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
     assert seen["serial"] == "ctx-serial"
     assert seen["task"] == "tap and send hello"
     assert seen["loop_max_steps"] == 9
+    assert seen["loop_response_hint"] == "latest reply bubble"
+    assert seen["loop_response_observer"] is not None
     assert seen["loop_handler"] is not None

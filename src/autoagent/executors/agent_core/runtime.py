@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from autoagent.executors.agent_core.device import Device, Screenshot
@@ -19,17 +20,22 @@ class AgentRuntime:
         handler: Any,
         system_prompt: str,
         max_steps: int,
+        response_hint: str | None = None,
+        response_observer: Callable[[str, str, Screenshot], tuple[bool, str]] | None = None,
     ) -> None:
         self._device = device
         self._client = client
         self._handler = handler
         self._system_prompt = system_prompt
         self._max_steps = max_steps
+        self._response_hint = response_hint
+        self._response_observer = response_observer
 
     def run(self, task: str) -> AgentRunResult:
         context: list[dict[str, Any]] = []
         steps: list[AgentStepRecord] = []
         conversation: list[dict[str, Any]] = []
+        response_pending = False
 
         for step in range(1, self._max_steps + 1):
             screenshot = self._device.capture()
@@ -39,6 +45,34 @@ class AgentRuntime:
             action = parse_action(raw)
             user_message = self._strip_images(messages[-1])
             conversation.append(user_message)
+
+            if action.get("_metadata") == "finish":
+                if response_pending and self._response_observer is not None and self._response_hint:
+                    ready, extracted = self._response_observer(
+                        task,
+                        self._response_hint,
+                        screenshot,
+                    )
+                    if not ready:
+                        action = {"_metadata": "noop", "raw": raw}
+                    else:
+                        finish_message = extracted or str(action.get("message", ""))
+                        record = AgentStepRecord(
+                            step=step,
+                            raw=raw,
+                            action={"_metadata": "finish", "message": finish_message},
+                            screenshot=screenshot,
+                        )
+                        steps.append(record)
+                        conversation.append(self._assistant_message(raw))
+                        return AgentRunResult(
+                            True,
+                            finish_message,
+                            step,
+                            "finish",
+                            steps,
+                            conversation,
+                        )
 
             if action.get("_metadata") == "finish":
                 record = AgentStepRecord(step=step, raw=raw, action=action, screenshot=screenshot)
@@ -67,6 +101,7 @@ class AgentRuntime:
                 assistant_message = self._assistant_message(raw)
                 context.extend([user_message, assistant_message])
                 conversation.append(assistant_message)
+                response_pending = response_pending or self._is_response_trigger_action(action)
                 if execution.should_finish:
                     return AgentRunResult(
                         True,
@@ -185,6 +220,14 @@ class AgentRuntime:
                 "Only repeat it if the screenshot clearly changed and the action is still needed."
             )
         return ""
+
+    def _is_response_trigger_action(self, action: dict[str, Any]) -> bool:
+        if action.get("_metadata") != "do":
+            return False
+        action_name = str(action.get("action", "")).strip().lower()
+        if action_name == "press" and str(action.get("key", "")).strip().lower() == "enter":
+            return True
+        return action_name == "tap"
 
     def _assistant_message(self, raw: str) -> dict[str, Any]:
         text = raw.strip()
