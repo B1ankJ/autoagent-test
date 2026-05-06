@@ -54,83 +54,58 @@ def test_capture_no_serial():
     assert "-s" not in cmd
 
 
-def test_execute_action_click():
+def test_tap():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "click", "x": 540, "y": 960})
+        AndroidDevice().tap(540, 960)
     mock_adb.assert_called_once_with(["shell", "input", "tap", "540", "960"])
 
 
-def test_execute_action_type():
+def test_type_text():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "type", "text": "hello"})
+        AndroidDevice().type_text("hello")
     mock_adb.assert_called_once_with(["shell", "input", "text", "hello"])
 
 
-def test_execute_action_type_non_ascii():
+def test_type_text_non_ascii():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "type", "text": "你好"})
+        AndroidDevice().type_text("你好")
     mock_adb.assert_called_once_with(
         ["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT", "--es", "msg", "你好"]
     )
 
 
-def test_execute_action_press_enter():
+def test_press_key_back():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "press", "key": "enter"})
-    mock_adb.assert_called_once_with(["shell", "input", "keyevent", "KEYCODE_ENTER"])
+        AndroidDevice().press_key("back")
+    mock_adb.assert_called_once_with(["shell", "input", "keyevent", "KEYCODE_BACK"])
 
 
-def test_execute_action_scroll_down():
+def test_scroll_down():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "scroll", "direction": "down", "amount": 3})
-    # amount=3, dist=900; swipe from y=1200 up to y=1200-900=300
+        AndroidDevice().scroll("down", 3)
     mock_adb.assert_called_once_with(
         ["shell", "input", "swipe", "540", "1200", "540", "300", "300"]
     )
 
 
-def test_execute_action_scroll_up():
+def test_scroll_up():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "scroll", "direction": "up", "amount": 3})
-    # amount=3, dist=900; swipe from y=400 down to y=400+900=1300
+        AndroidDevice().scroll("up", 3)
     mock_adb.assert_called_once_with(
         ["shell", "input", "swipe", "540", "400", "540", "1300", "300"]
     )
 
 
-def test_execute_action_double_click():
+def test_double_tap():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "double_click", "x": 540, "y": 960})
+        AndroidDevice().double_tap(540, 960)
     assert mock_adb.call_count == 2
     mock_adb.assert_any_call(["shell", "input", "tap", "540", "960"])
 
 
-def test_execute_action_long_press():
+def test_long_press():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action(
-            {"_type": "long_press", "x": 540, "y": 960, "duration_ms": 800}
-        )
+        AndroidDevice().long_press(540, 960, duration_ms=800)
     mock_adb.assert_called_once_with(
         ["shell", "input", "swipe", "540", "960", "540", "960", "800"]
     )
-
-
-def test_execute_action_wait():
-    with patch("autoagent.executors.agent_core.android_device.time.sleep") as mock_sleep:
-        AndroidDevice().execute_action({"_type": "wait", "seconds": 1.5})
-    mock_sleep.assert_called_once_with(1.5)
-
-
-def test_execute_action_finish_does_not_crash():
-    with patch.object(AndroidDevice, "_adb_run") as mock_adb:
-        AndroidDevice().execute_action({"_type": "finish", "message": "done"})
-    mock_adb.assert_not_called()
-
-
-def test_execute_action_unknown_logs_warning(caplog):
-    import logging
-
-    with caplog.at_level(logging.WARNING, logger="autoagent.executors.agent_core.android_device"):
-        with patch.object(AndroidDevice, "_adb_run"):
-            AndroidDevice().execute_action({"_type": "noop"})
-    assert "unknown action" in caplog.text
