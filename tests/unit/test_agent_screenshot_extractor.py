@@ -4,7 +4,10 @@ import httpx
 import pytest
 
 from autoagent.executors.agent_core.device import Screenshot
-from autoagent.executors.agent_screenshot_extractor import extract_response_from_screenshot
+from autoagent.executors.agent_screenshot_extractor import (
+    extract_response_from_screenshot,
+    verify_text_entry_in_screenshot,
+)
 
 
 def _mock(handler):
@@ -84,3 +87,36 @@ async def test_extract_connect_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.text == ""
     assert result.error == "connect"
+
+
+@pytest.mark.asyncio
+async def test_verify_text_entry_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"present": true, "reason": "text visible in input field"}'
+                        }
+                    }
+                ]
+            },
+        )
+
+    async def _f(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+
+    monkeypatch.setattr("autoagent.executors.agent_screenshot_extractor._make_client", _f)
+
+    result = await verify_text_entry_in_screenshot(
+        screenshot=_shot(),
+        expected_text="hello",
+        base_url="https://api.example.com/v1",
+        model="m",
+        api_key="k",
+    )
+
+    assert result.matched is True
+    assert result.message == "text visible in input field"

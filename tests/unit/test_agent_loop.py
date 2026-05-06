@@ -57,6 +57,16 @@ class FakeResponseObserver:
         return self._outcomes[len(self.calls) - 1]
 
 
+class FakeActionObserver:
+    def __init__(self, outcomes: list[tuple[bool, str] | None]) -> None:
+        self._outcomes = outcomes
+        self.calls: list[tuple[str, dict, int]] = []
+
+    def __call__(self, task: str, action: dict, screenshot: Screenshot) -> tuple[bool, str] | None:
+        self.calls.append((task, action, screenshot.width))
+        return self._outcomes[len(self.calls) - 1]
+
+
 def test_runtime_stops_on_finish_action() -> None:
     device = FakeDevice()
     client = FakeClient(['finish(message="done")'])
@@ -293,3 +303,27 @@ def test_runtime_finish_without_observer_keeps_existing_behavior() -> None:
     assert result.finished is True
     assert result.finish_message == "done"
     assert result.step_count == 1
+
+
+def test_runtime_marks_type_failed_when_multimodal_input_check_rejects_it() -> None:
+    device = FakeDevice()
+    client = FakeClient(['do(action="Type", text="hello")', 'finish(message="done")'])
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
+    observer = FakeActionObserver([(False, "typed text not visible in input field")])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+        action_observer=observer,
+    )
+    result = runtime.run("task")
+
+    assert result.steps[0].execution is not None
+    assert result.steps[0].execution.success is False
+    assert result.steps[0].execution.message == "typed text not visible in input field"
+    second_call_text = client.calls[1][-1]["content"][1]["text"]
+    assert "failed: typed text not visible in input field" in second_call_text
+    assert observer.calls[0][1]["action"] == "Type"

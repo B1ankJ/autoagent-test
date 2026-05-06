@@ -12,7 +12,10 @@ from autoagent.executors.agent_core.device import Screenshot
 from autoagent.executors.agent_core.handlers.android import AndroidActionHandler
 from autoagent.executors.agent_core.model_client import ModelClient, ModelConfig
 from autoagent.executors.agent_core.prompts import ANDROID_SYSTEM_PROMPT
-from autoagent.executors.agent_screenshot_extractor import extract_response_from_screenshot
+from autoagent.executors.agent_screenshot_extractor import (
+    extract_response_from_screenshot,
+    verify_text_entry_in_screenshot,
+)
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
@@ -67,6 +70,24 @@ class AgentAndroidExecutor(Executor):
             )
             return bool(extraction.text.strip()), extraction.text
 
+        def action_observer(
+            task: str,
+            action: dict[str, Any],
+            screenshot: Screenshot,
+        ) -> tuple[bool, str] | None:
+            if str(action.get("action", "")).strip().lower() != "type":
+                return None
+            verification = asyncio.run(
+                verify_text_entry_in_screenshot(
+                    screenshot=screenshot,
+                    expected_text=str(action.get("text", "")),
+                    base_url=profile.base_url,
+                    model=profile.model,
+                    api_key=profile.api_key,
+                )
+            )
+            return verification.matched, verification.message
+
         agent_loop = AgentLoop(
             device,
             client,
@@ -75,6 +96,7 @@ class AgentAndroidExecutor(Executor):
             profile.max_steps,
             response_hint=profile.response_hint,
             response_observer=response_observer,
+            action_observer=action_observer,
         )
 
         for prompt in sample.prompts:

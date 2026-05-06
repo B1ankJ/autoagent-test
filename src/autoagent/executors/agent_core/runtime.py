@@ -22,6 +22,9 @@ class AgentRuntime:
         max_steps: int,
         response_hint: str | None = None,
         response_observer: Callable[[str, str, Screenshot], tuple[bool, str]] | None = None,
+        action_observer: (
+            Callable[[str, dict[str, Any], Screenshot], tuple[bool, str] | None] | None
+        ) = None,
     ) -> None:
         self._device = device
         self._client = client
@@ -30,6 +33,7 @@ class AgentRuntime:
         self._max_steps = max_steps
         self._response_hint = response_hint
         self._response_observer = response_observer
+        self._action_observer = action_observer
 
     def run(self, task: str) -> AgentRunResult:
         context: list[dict[str, Any]] = []
@@ -90,6 +94,20 @@ class AgentRuntime:
             execution = None
             if action.get("_metadata") == "do":
                 execution = self._handler.execute(action, screenshot.width, screenshot.height)
+                if (
+                    execution.success
+                    and self._action_observer is not None
+                    and self._should_verify_action(action)
+                ):
+                    verification = self._action_observer(task, action, screenshot)
+                    if verification is not None:
+                        verified, message = verification
+                        if not verified:
+                            execution = type(execution)(
+                                success=False,
+                                should_finish=False,
+                                message=message,
+                            )
                 record = AgentStepRecord(
                     step=step,
                     raw=raw,
@@ -220,6 +238,11 @@ class AgentRuntime:
                 "Only repeat it if the screenshot clearly changed and the action is still needed."
             )
         return ""
+
+    def _should_verify_action(self, action: dict[str, Any]) -> bool:
+        if action.get("_metadata") != "do":
+            return False
+        return str(action.get("action", "")).strip().lower() == "type"
 
     def _is_response_trigger_action(self, action: dict[str, Any]) -> bool:
         if action.get("_metadata") != "do":
