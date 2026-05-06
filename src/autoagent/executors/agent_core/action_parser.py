@@ -46,10 +46,13 @@ def _to_legacy_action(action: dict[str, Any]) -> dict[str, Any]:
         return {"_type": "press", "key": "home"}
 
     if action_name == "scroll":
+        clicks = _coerce_int(action.get("clicks", 3))
+        if clicks is None:
+            return {"_type": "noop"}
         return {
             "_type": "scroll",
             "direction": str(action.get("direction", "down")).lower(),
-            "amount": int(action.get("clicks", 3)),
+            "amount": clicks,
         }
 
     if action_name == "wait":

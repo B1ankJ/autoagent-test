@@ -136,6 +136,16 @@ def test_compatibility_shim_handles_unified_wait() -> None:
     assert result == {"_type": "wait", "seconds": 3.0}
 
 
+def test_compatibility_shim_degrades_invalid_scroll_clicks_alpha_to_noop() -> None:
+    result = parse_legacy_action('do(action="Scroll", direction="down", clicks="abc")')
+    assert result == {"_type": "noop"}
+
+
+def test_compatibility_shim_degrades_invalid_scroll_clicks_float_string_to_noop() -> None:
+    result = parse_legacy_action('do(action="Scroll", direction="down", clicks="3.0")')
+    assert result == {"_type": "noop"}
+
+
 def test_compatibility_shim_degrades_invalid_wait_to_noop() -> None:
     result = parse_legacy_action('do(action="Wait", duration="soon")')
     assert result == {"_type": "noop"}
