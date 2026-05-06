@@ -327,3 +327,40 @@ def test_runtime_marks_type_failed_when_multimodal_input_check_rejects_it() -> N
     second_call_text = client.calls[1][-1]["content"][1]["text"]
     assert "failed: typed text not visible in input field" in second_call_text
     assert observer.calls[0][1]["action"] == "Type"
+
+
+def test_runtime_blocks_press_enter_after_failed_type_validation() -> None:
+    device = FakeDevice()
+    client = FakeClient(
+        [
+            'do(action="Type", text="hello")',
+            'do(action="Press", key="enter")',
+            'do(action="Tap", element=[500, 500])',
+        ]
+    )
+    handler = FakeHandler(
+        [
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=False),
+        ]
+    )
+    observer = FakeActionObserver([(False, "typed text not visible in input field")])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+        action_observer=observer,
+    )
+    result = runtime.run("task")
+
+    assert result.steps[0].execution is not None
+    assert result.steps[0].execution.success is False
+    assert result.steps[1].action["action"] == "Press"
+    assert result.steps[1].execution is not None
+    assert result.steps[1].execution.success is False
+    assert "Input is not ready" in (result.steps[1].execution.message or "")
+    assert len(handler.calls) == 3

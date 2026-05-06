@@ -11,8 +11,10 @@ from autoagent.executors.agent_core.device import Screenshot
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
 
 _SYSTEM_PROMPT = (
-    "你是一个截图内容提取助手。用户会给你一张屏幕截图和一段内容描述。\n"
-    "你的唯一任务：从截图中找到并完整提取描述所指的文字内容，原样返回，不做改写或总结。\n"
+    "你是一个截图内容提取助手。用户会给你一张屏幕截图和一段定位描述。\n"
+    "你的唯一任务：根据描述定位到目标消息气泡或文本区域，然后将该区域内的【全部文字】\n"
+    "一字不差地原样返回，包括所有段落、换行和标点，不得截断、跳段或总结。\n"
+    "如果目标区域包含多个段落，全部拼接后一起返回。\n"
     "如果找不到目标内容，返回空字符串。严格按给定 JSON schema 返回。"
 )
 
@@ -86,7 +88,14 @@ async def extract_response_from_screenshot(
                         "type": "image_url",
                         "image_url": {"url": f"data:image/png;base64,{screenshot.base64_data}"},
                     },
-                    {"type": "text", "text": f"请提取以下内容的文字：{response_hint}"},
+                    {
+                        "type": "text",
+                        "text": (
+                            f"定位目标：{response_hint}\n"
+                            "请将该目标区域内的所有文字完整提取，包括每一段、每一行，"
+                            "不要只取最后一段或做任何摘要。"
+                        ),
+                    },
                 ],
             },
         ],

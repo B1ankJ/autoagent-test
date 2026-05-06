@@ -40,6 +40,7 @@ class AgentRuntime:
         steps: list[AgentStepRecord] = []
         conversation: list[dict[str, Any]] = []
         response_pending = False
+        input_ready = True
 
         for step in range(1, self._max_steps + 1):
             screenshot = self._device.capture()
@@ -93,21 +94,36 @@ class AgentRuntime:
 
             execution = None
             if action.get("_metadata") == "do":
-                execution = self._handler.execute(action, screenshot.width, screenshot.height)
-                if (
-                    execution.success
-                    and self._action_observer is not None
-                    and self._should_verify_action(action)
-                ):
-                    verification = self._action_observer(task, action, screenshot)
-                    if verification is not None:
-                        verified, message = verification
-                        if not verified:
-                            execution = type(execution)(
-                                success=False,
-                                should_finish=False,
-                                message=message,
-                            )
+                if self._is_send_action(action) and not input_ready:
+                    action_result_type = type(
+                        self._handler.execute(action, screenshot.width, screenshot.height)
+                    )
+                    execution = action_result_type(
+                        success=False,
+                        should_finish=False,
+                        message=(
+                            "Input is not ready; a previous Type action was not confirmed "
+                            "in the input box."
+                        ),
+                    )
+                else:
+                    execution = self._handler.execute(action, screenshot.width, screenshot.height)
+                    if (
+                        execution.success
+                        and self._action_observer is not None
+                        and self._should_verify_action(action)
+                    ):
+                        post_action_screenshot = self._device.capture()
+                        verification = self._action_observer(task, action, post_action_screenshot)
+                        if verification is not None:
+                            verified, message = verification
+                            if not verified:
+                                execution = type(execution)(
+                                    success=False,
+                                    should_finish=False,
+                                    message=message,
+                                )
+                            input_ready = verified
                 record = AgentStepRecord(
                     step=step,
                     raw=raw,
@@ -120,6 +136,10 @@ class AgentRuntime:
                 context.extend([user_message, assistant_message])
                 conversation.append(assistant_message)
                 response_pending = response_pending or self._is_response_trigger_action(action)
+                if self._should_verify_action(action) and execution.success:
+                    input_ready = True
+                elif self._should_verify_action(action) and not execution.success:
+                    input_ready = False
                 if execution.should_finish:
                     return AgentRunResult(
                         True,
@@ -251,6 +271,14 @@ class AgentRuntime:
         if action_name == "press" and str(action.get("key", "")).strip().lower() == "enter":
             return True
         return action_name == "tap"
+
+    def _is_send_action(self, action: dict[str, Any]) -> bool:
+        if action.get("_metadata") != "do":
+            return False
+        action_name = str(action.get("action", "")).strip().lower()
+        if action_name == "press":
+            return str(action.get("key", "")).strip().lower() == "enter"
+        return False
 
     def _assistant_message(self, raw: str) -> dict[str, Any]:
         text = raw.strip()
