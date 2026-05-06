@@ -111,6 +111,36 @@ def test_compatibility_shim_handles_unified_wait() -> None:
     assert result == {"_type": "wait", "seconds": 3.0}
 
 
+def test_compatibility_shim_degrades_invalid_wait_to_noop() -> None:
+    result = parse_legacy_action('do(action="Wait", duration="soon")')
+    assert result == {"_type": "noop"}
+
+
+def test_compatibility_shim_degrades_invalid_tap_coordinates_to_noop() -> None:
+    result = parse_legacy_action('do(action="Tap", element=["a", "b"])')
+    assert result == {"_type": "noop"}
+
+
+def test_compatibility_shim_maps_swipe_to_legacy_scroll() -> None:
+    result = parse_legacy_action('do(action="Swipe", start=[500, 800], end=[500, 200])')
+    assert result == {"_type": "scroll", "direction": "up", "amount": 3}
+
+
+def test_compatibility_shim_maps_double_tap() -> None:
+    result = parse_legacy_action('do(action="Double Tap", element=[320, 640])')
+    assert result == {"_type": "double_click", "x": 320, "y": 640}
+
+
+def test_compatibility_shim_maps_long_press() -> None:
+    result = parse_legacy_action('do(action="Long Press", element=[320, 640], duration_ms=800)')
+    assert result == {"_type": "long_press", "x": 320, "y": 640, "duration_ms": 800}
+
+
+def test_compatibility_shim_maps_hotkey() -> None:
+    result = parse_legacy_action('do(action="Hotkey", keys=["ctrl", "c"])')
+    assert result == {"_type": "hotkey", "keys": ["ctrl", "c"]}
+
+
 def test_parse_malformed_returns_noop_with_original_text() -> None:
     raw = "I cannot determine the action to take."
     result = parse_action(raw)
