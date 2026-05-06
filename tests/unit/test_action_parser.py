@@ -99,3 +99,23 @@ def test_parse_do_swipe_up():
 def test_parse_do_scroll_clicks():
     result = parse_action('do(action="Scroll", clicks=5)')
     assert result == {"_type": "scroll", "direction": "down", "amount": 5}
+
+
+def test_parse_do_wait_duration():
+    result = parse_action('do(action="Wait", duration="3 seconds")')
+    assert result == {"_type": "wait", "seconds": 3.0}
+
+
+def test_parse_do_double_tap():
+    result = parse_action('do(action="Double Tap", element=[320, 640])')
+    assert result == {"_type": "double_click", "x": 320, "y": 640}
+
+
+def test_parse_do_long_press():
+    result = parse_action('do(action="Long Press", element=[320, 640], duration_ms=800)')
+    assert result == {"_type": "long_press", "x": 320, "y": 640, "duration_ms": 800}
+
+
+def test_parse_do_hotkey():
+    result = parse_action('do(action="Hotkey", keys=["ctrl", "c"])')
+    assert result == {"_type": "hotkey", "keys": ["ctrl", "c"]}

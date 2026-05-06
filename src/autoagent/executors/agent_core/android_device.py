@@ -4,6 +4,7 @@ import base64
 import logging
 import struct
 import subprocess
+import time
 
 from .device import Device, Screenshot
 
@@ -31,6 +32,24 @@ class AndroidDevice(Device):
         t = action.get("_type")
         if t == "click":
             self._adb_run(["shell", "input", "tap", str(action["x"]), str(action["y"])])
+        elif t == "double_click":
+            tap_args = ["shell", "input", "tap", str(action["x"]), str(action["y"])]
+            self._adb_run(tap_args)
+            self._adb_run(tap_args)
+        elif t == "long_press":
+            duration_ms = int(action.get("duration_ms", 800))
+            self._adb_run(
+                [
+                    "shell",
+                    "input",
+                    "swipe",
+                    str(action["x"]),
+                    str(action["y"]),
+                    str(action["x"]),
+                    str(action["y"]),
+                    str(duration_ms),
+                ]
+            )
         elif t == "type":
             text = action["text"]
             if text.isascii():
@@ -55,6 +74,8 @@ class AndroidDevice(Device):
             key_map = {"enter": "KEYCODE_ENTER", "back": "KEYCODE_BACK", "home": "KEYCODE_HOME"}
             keycode = key_map.get(action["key"], action["key"].upper())
             self._adb_run(["shell", "input", "keyevent", keycode])
+        elif t == "wait":
+            time.sleep(float(action.get("seconds", 1)))
         else:
             _log.warning("android_device: unknown action %r", t)
 

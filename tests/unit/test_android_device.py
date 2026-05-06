@@ -98,6 +98,29 @@ def test_execute_action_scroll_up():
     )
 
 
+def test_execute_action_double_click():
+    with patch.object(AndroidDevice, "_adb_run") as mock_adb:
+        AndroidDevice().execute_action({"_type": "double_click", "x": 540, "y": 960})
+    assert mock_adb.call_count == 2
+    mock_adb.assert_any_call(["shell", "input", "tap", "540", "960"])
+
+
+def test_execute_action_long_press():
+    with patch.object(AndroidDevice, "_adb_run") as mock_adb:
+        AndroidDevice().execute_action(
+            {"_type": "long_press", "x": 540, "y": 960, "duration_ms": 800}
+        )
+    mock_adb.assert_called_once_with(
+        ["shell", "input", "swipe", "540", "960", "540", "960", "800"]
+    )
+
+
+def test_execute_action_wait():
+    with patch("autoagent.executors.agent_core.android_device.time.sleep") as mock_sleep:
+        AndroidDevice().execute_action({"_type": "wait", "seconds": 1.5})
+    mock_sleep.assert_called_once_with(1.5)
+
+
 def test_execute_action_finish_does_not_crash():
     with patch.object(AndroidDevice, "_adb_run") as mock_adb:
         AndroidDevice().execute_action({"_type": "finish", "message": "done"})

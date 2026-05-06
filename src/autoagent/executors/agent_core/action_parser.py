@@ -130,6 +130,22 @@ def _parse_do_action(text: str) -> dict:
         if isinstance(element, list) and len(element) >= 2:
             return {"_type": "click", "x": int(element[0]), "y": int(element[1])}
 
+    if action_name == "double tap":
+        element = values.get("element")
+        if isinstance(element, list) and len(element) >= 2:
+            return {"_type": "double_click", "x": int(element[0]), "y": int(element[1])}
+
+    if action_name == "long press":
+        element = values.get("element")
+        duration_ms = int(values.get("duration_ms", 800))
+        if isinstance(element, list) and len(element) >= 2:
+            return {
+                "_type": "long_press",
+                "x": int(element[0]),
+                "y": int(element[1]),
+                "duration_ms": duration_ms,
+            }
+
     if action_name == "type":
         text_value = values.get("text", "")
         return {"_type": "type", "text": str(text_value)}
@@ -137,6 +153,11 @@ def _parse_do_action(text: str) -> dict:
     if action_name == "press":
         key = str(values.get("key", "")).lower()
         return {"_type": "press", "key": key}
+
+    if action_name == "hotkey":
+        keys = values.get("keys")
+        if isinstance(keys, list) and keys:
+            return {"_type": "hotkey", "keys": [str(key).lower() for key in keys]}
 
     if action_name == "back":
         return {"_type": "press", "key": "back"}
@@ -161,6 +182,11 @@ def _parse_do_action(text: str) -> dict:
         direction = str(values.get("direction", "down")).lower()
         return {"_type": "scroll", "direction": direction, "amount": clicks}
 
+    if action_name == "wait":
+        duration = values.get("duration", values.get("seconds", 1))
+        seconds = _parse_wait_seconds(duration)
+        return {"_type": "wait", "seconds": seconds}
+
     if action_name == "finish":
         return {"_type": "finish", "message": str(values.get("message", ""))}
 
@@ -180,3 +206,14 @@ def _unquote(s: str) -> str:
     if len(s) >= 2 and s[0] in ('"', "'") and s[-1] == s[0]:
         return s[1:-1]
     return s
+
+
+def _parse_wait_seconds(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip().lower()
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        raise ValueError("invalid wait duration")
+    return float(match.group(0))
