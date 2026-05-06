@@ -3,8 +3,9 @@ from __future__ import annotations
 import base64
 from unittest.mock import MagicMock
 
-from autoagent.executors.agent_core.agent_loop import AgentLoop
+from autoagent.executors.agent_core.agent_loop import AgentLoop, AgentResult, AgentStepRecord
 from autoagent.executors.agent_core.device import Screenshot
+from autoagent.executors.agent_core.result import AgentRunResult
 
 
 def _screenshot() -> Screenshot:
@@ -37,6 +38,11 @@ def test_loop_finishes_on_finish_action() -> None:
     assert result.steps[2].action["_type"] == "finish"
     assert result.steps[0].raw == "Action: click(100, 200)"
     assert result.steps[0].screenshot.base64_data == _screenshot().base64_data
+
+
+def test_agent_loop_exports_canonical_result_types() -> None:
+    assert AgentResult is AgentRunResult
+    assert AgentStepRecord.__module__ == "autoagent.executors.agent_core.result"
 
 
 def test_loop_stops_at_max_steps() -> None:

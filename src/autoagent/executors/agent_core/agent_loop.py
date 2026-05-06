@@ -1,37 +1,14 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.executors.agent_core.action_parser import parse_action
 from autoagent.executors.agent_core.device import Device, Screenshot
 from autoagent.executors.agent_core.model_client import ModelClient
+from autoagent.executors.agent_core.result import AgentResult, AgentStepRecord
 
 _log = logging.getLogger(__name__)
-
-
-@dataclass
-class AgentStepRecord:
-    step: int
-    raw: str
-    action: dict[str, Any]
-    screenshot: Screenshot
-
-    def to_metadata(self) -> dict[str, Any]:
-        return {
-            "step": self.step,
-            "raw": self.raw,
-            "action": self.action,
-        }
-
-
-@dataclass
-class AgentResult:
-    finished: bool
-    finish_message: str
-    step_count: int
-    steps: list[AgentStepRecord] = field(default_factory=list)
 
 
 class AgentLoop:

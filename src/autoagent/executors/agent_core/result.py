@@ -18,8 +18,8 @@ class AgentStepRecord:
     step: int
     raw: str
     action: dict[str, Any]
-    execution: ActionResult | None
     screenshot: Screenshot
+    execution: ActionResult | None = None
 
     def to_metadata(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -41,6 +41,8 @@ class AgentRunResult:
     finished: bool
     finish_message: str
     step_count: int
-    stop_reason: str
+    stop_reason: str = ""
     steps: list[AgentStepRecord] = field(default_factory=list)
 
+
+AgentResult = AgentRunResult
