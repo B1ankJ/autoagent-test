@@ -67,6 +67,7 @@ class AgentAndroidExecutor(Executor):
                 "finish_message": loop_result.finish_message,
                 "step_count": loop_result.step_count,
                 "stop_reason": loop_result.stop_reason,
+                "conversation": loop_result.conversation,
                 "steps": [step.to_metadata() for step in loop_result.steps],
             }
             trace_path.write_text(

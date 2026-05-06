@@ -43,6 +43,7 @@ class AgentRunResult:
     step_count: int
     stop_reason: str = ""
     steps: list[AgentStepRecord] = field(default_factory=list)
+    conversation: list[dict[str, Any]] = field(default_factory=list)
 
 
 AgentResult = AgentRunResult

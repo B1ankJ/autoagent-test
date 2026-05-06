@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 from dataclasses import dataclass
 
 from autoagent.executors.agent_core.agent_loop import AgentResult, AgentStepRecord
@@ -27,8 +28,10 @@ class FakeClient:
     def __init__(self, responses: list[str]) -> None:
         self._responses = responses
         self._index = 0
+        self.calls: list[list[dict]] = []
 
     def call(self, messages) -> str:  # noqa: ANN001
+        self.calls.append(copy.deepcopy(messages))
         response = self._responses[self._index]
         self._index += 1
         return response
@@ -98,6 +101,65 @@ def test_runtime_records_execution_result() -> None:
     assert result.steps[0].execution.success is True
     assert result.steps[0].action["action"] == "Tap"
     assert handler.calls[0][1:] == (1920, 1080)
+
+
+def test_runtime_carries_forward_text_only_conversation_context() -> None:
+    device = FakeDevice()
+    client = FakeClient(['do(action="Tap", element=[100, 200])', 'finish(message="done")'])
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+    )
+    result = runtime.run("task")
+
+    second_call = client.calls[1]
+    assert len(second_call) == 4
+    assert second_call[1]["role"] == "user"
+    assert second_call[1]["content"] == [
+        {
+            "type": "text",
+            "text": result.conversation[0]["content"][0]["text"],
+        }
+    ]
+    assert second_call[2]["role"] == "assistant"
+    assert second_call[2]["content"] == '<answer>do(action="Tap", element=[100, 200])</answer>'
+
+
+def test_runtime_includes_recent_step_summary_and_repeated_action_warning() -> None:
+    device = FakeDevice()
+    client = FakeClient(
+        [
+            'do(action="Type", text="hello")',
+            'do(action="Type", text="hello")',
+            'finish(message="done")',
+        ]
+    )
+    handler = FakeHandler(
+        [
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=False),
+        ]
+    )
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+    )
+    runtime.run("send hello")
+
+    third_call_user = client.calls[2][-1]
+    third_call_text = third_call_user["content"][1]["text"]
+    assert "Recent steps:" in third_call_text
+    assert "Step 1: Type" in third_call_text
+    assert "Repeated action warning" in third_call_text
 
 
 def test_runtime_stops_at_max_steps() -> None:

@@ -6,6 +6,11 @@
 
 **Architecture:** The refactor introduces a unified action schema and splits `agent_core` into focused modules: `parser.py`, `result.py`, `runtime.py`, `handlers/`, and `devices/`. `AgentPcExecutor` and `AgentAndroidExecutor` remain the outer system boundary, but they will call the new runtime and persist the same artifacts under `logs/<batch>/<sample>/`.
 
+Latest follow-up status:
+- The shared runtime now preserves text-only conversation context across steps instead of replaying only raw action strings.
+- Each new step includes recent-step summaries, basic screen metadata, and repeated-action warnings so the model can detect when `Type`/`Wait` loops are unproductive.
+- Executor traces now persist `conversation` alongside `steps`, `execution`, and `stop_reason` for post-run diagnosis.
+
 **Tech Stack:** Python 3.11, `httpx`, `mss`, `pyautogui`, `adb`, `pytest`, `ruff`.
 
 ---

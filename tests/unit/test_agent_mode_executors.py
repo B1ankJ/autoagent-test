@@ -58,6 +58,16 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
                 finish_message="done",
                 step_count=1,
                 stop_reason="handler_finish",
+                conversation=[
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": "Task: reset then do hello"}],
+                    },
+                    {
+                        "role": "assistant",
+                        "content": '<answer>do(action="Tap", element=[10, 20])</answer>',
+                    },
+                ],
                 steps=[
                     AgentStepRecord(
                         step=1,
@@ -133,6 +143,10 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
     assert trace["steps"][0]["action"]["action"] == "Tap"
     assert trace["steps"][0]["execution"]["success"] is True
     assert trace["stop_reason"] == "handler_finish"
+    assert (
+        trace["conversation"][1]["content"]
+        == '<answer>do(action="Tap", element=[10, 20])</answer>'
+    )
     assert seen["task"] == "reset then do hello"
     assert seen["response_hint"] == "latest assistant reply"
     assert seen["loop_max_steps"] == 7
@@ -181,6 +195,13 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
                 finish_message="max_steps reached",
                 step_count=1,
                 stop_reason="max_steps",
+                conversation=[
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": "Task: tap and send hello"}],
+                    },
+                    {"role": "assistant", "content": '<answer>do(action="Back")</answer>'},
+                ],
                 steps=[
                     AgentStepRecord(
                         step=1,
@@ -261,6 +282,7 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
     assert trace["steps"][0]["action"]["action"] == "Back"
     assert trace["steps"][0]["execution"]["success"] is True
     assert trace["stop_reason"] == "max_steps"
+    assert trace["conversation"][1]["content"] == '<answer>do(action="Back")</answer>'
     assert seen["serial"] == "ctx-serial"
     assert seen["task"] == "tap and send hello"
     assert seen["loop_max_steps"] == 9
