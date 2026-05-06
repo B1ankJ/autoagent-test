@@ -154,10 +154,41 @@ class AndroidProfile(BaseModel):
         return bool(self.base_url and self.model and self.api_key)
 
 
+# ---- Agent PC profile ----
+
+
+class AgentPcProfile(BaseModel):
+    name: str
+    platform: Literal["agent_pc"]
+    base_url: str
+    model: str
+    api_key: str
+    task_template: str
+    new_session_task_template: str | None = None
+    response_hint: str
+    max_steps: int = 20
+
+
+# ---- Agent Android profile ----
+
+
+class AgentAndroidProfile(BaseModel):
+    name: str
+    platform: Literal["agent_android"]
+    serial: str | None = None
+    base_url: str
+    model: str
+    api_key: str
+    task_template: str
+    new_session_task_template: str | None = None
+    response_hint: str
+    max_steps: int = 30
+
+
 # ---- Union + parser ----
 
 Profile = Annotated[
-    ApiProfile | WebProfile | AndroidProfile,
+    ApiProfile | WebProfile | AndroidProfile | AgentPcProfile | AgentAndroidProfile,
     Field(discriminator="platform"),
 ]
 

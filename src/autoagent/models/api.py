@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-Mode = Literal["api", "gui_pc_web", "gui_android"]
+Mode = Literal["api", "gui_pc_web", "gui_android", "agent_pc", "agent_android"]
 SampleStatus = Literal[
     "queued", "running", "done", "failed", "timeout", "extraction_failed", "cancelled"
 ]
