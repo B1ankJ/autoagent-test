@@ -1,121 +1,81 @@
-"""Unit tests for agent action parser."""
+"""Unit tests for the unified agent action parser."""
 
 from __future__ import annotations
 
-from autoagent.executors.agent_core.action_parser import parse_action
+from autoagent.executors.agent_core.parser import parse_action
 
 
-def test_parse_click():
-    result = parse_action("Action: click(850, 420)")
-    assert result == {"_type": "click", "x": 850, "y": 420}
+def test_parse_do_tap() -> None:
+    result = parse_action('do(action="Tap", element=[320, 640])')
+    assert result == {"_metadata": "do", "action": "Tap", "element": [320, 640]}
 
 
-def test_parse_type():
-    result = parse_action('Action: type("hello world")')
-    assert result == {"_type": "type", "text": "hello world"}
-
-
-def test_parse_finish():
-    result = parse_action('Action: finish("Task done")')
-    assert result == {"_type": "finish", "message": "Task done"}
-
-
-def test_parse_scroll_down():
-    result = parse_action("Action: scroll(down, 3)")
-    assert result == {"_type": "scroll", "direction": "down", "amount": 3}
-
-
-def test_parse_press():
-    result = parse_action("Action: press(enter)")
-    assert result == {"_type": "press", "key": "enter"}
-
-
-def test_parse_malformed_returns_noop():
-    result = parse_action("I cannot determine the action to take.")
-    assert result == {"_type": "noop"}
-
-
-def test_parse_empty_returns_noop():
-    result = parse_action("")
-    assert result == {"_type": "noop"}
-
-
-def test_parse_extracts_from_multiline():
-    text = "<think>I should click the button</think>\nAction: click(100, 200)"
-    result = parse_action(text)
-    assert result == {"_type": "click", "x": 100, "y": 200}
-
-
-def test_parse_type_with_single_quotes():
-    result = parse_action("Action: type('hello')")
-    assert result == {"_type": "type", "text": "hello"}
-
-
-def test_parse_finish_with_chinese():
-    result = parse_action('Action: finish("任务完成")')
-    assert result == {"_type": "finish", "message": "任务完成"}
-
-
-def test_parse_click_with_named_args():
-    result = parse_action("Action: click(x=387, y=480)")
-    assert result == {"_type": "click", "x": 387, "y": 480}
-
-
-def test_parse_do_tap_from_answer_tag():
-    result = parse_action('<answer>do(action="Tap", element=[200, 300])</answer>')
-    assert result == {"_type": "click", "x": 200, "y": 300}
-
-
-def test_parse_do_type():
-    result = parse_action('do(action="Type", text="hello world")')
-    assert result == {"_type": "type", "text": "hello world"}
-
-
-def test_parse_finish_message_form():
-    result = parse_action('finish(message="Task done")')
-    assert result == {"_type": "finish", "message": "Task done"}
-
-
-def test_parse_do_back():
+def test_parse_do_back() -> None:
     result = parse_action('do(action="Back")')
-    assert result == {"_type": "press", "key": "back"}
+    assert result == {"_metadata": "do", "action": "Back"}
 
 
-def test_parse_do_home():
+def test_parse_do_home() -> None:
     result = parse_action('do(action="Home")')
-    assert result == {"_type": "press", "key": "home"}
+    assert result == {"_metadata": "do", "action": "Home"}
 
 
-def test_parse_do_press():
-    result = parse_action('do(action="Press", key="enter")')
-    assert result == {"_type": "press", "key": "enter"}
-
-
-def test_parse_do_swipe_up():
-    result = parse_action('do(action="Swipe", start=[500, 800], end=[500, 200])')
-    assert result == {"_type": "scroll", "direction": "up", "amount": 3}
-
-
-def test_parse_do_scroll_clicks():
-    result = parse_action('do(action="Scroll", clicks=5)')
-    assert result == {"_type": "scroll", "direction": "down", "amount": 5}
-
-
-def test_parse_do_wait_duration():
+def test_parse_do_wait() -> None:
     result = parse_action('do(action="Wait", duration="3 seconds")')
-    assert result == {"_type": "wait", "seconds": 3.0}
+    assert result == {"_metadata": "do", "action": "Wait", "duration": "3 seconds"}
 
 
-def test_parse_do_double_tap():
-    result = parse_action('do(action="Double Tap", element=[320, 640])')
-    assert result == {"_type": "double_click", "x": 320, "y": 640}
+def test_parse_finish() -> None:
+    result = parse_action('finish(message="Task done")')
+    assert result == {"_metadata": "finish", "message": "Task done"}
 
 
-def test_parse_do_long_press():
-    result = parse_action('do(action="Long Press", element=[320, 640], duration_ms=800)')
-    assert result == {"_type": "long_press", "x": 320, "y": 640, "duration_ms": 800}
+def test_parse_legacy_click_positional() -> None:
+    result = parse_action("Action: click(100, 200)")
+    assert result == {"_metadata": "do", "action": "Tap", "element": [100, 200]}
 
 
-def test_parse_do_hotkey():
-    result = parse_action('do(action="Hotkey", keys=["ctrl", "c"])')
-    assert result == {"_type": "hotkey", "keys": ["ctrl", "c"]}
+def test_parse_legacy_click_named_args() -> None:
+    result = parse_action("Action: click(x=387, y=480)")
+    assert result == {"_metadata": "do", "action": "Tap", "element": [387, 480]}
+
+
+def test_parse_legacy_type() -> None:
+    result = parse_action('Action: type("hello world")')
+    assert result == {"_metadata": "do", "action": "Type", "text": "hello world"}
+
+
+def test_parse_legacy_press_enter() -> None:
+    result = parse_action("Action: press(enter)")
+    assert result == {"_metadata": "do", "action": "Press", "key": "enter"}
+
+
+def test_parse_legacy_press_back() -> None:
+    result = parse_action("Action: press(back)")
+    assert result == {"_metadata": "do", "action": "Back"}
+
+
+def test_parse_legacy_press_home() -> None:
+    result = parse_action("Action: press(home)")
+    assert result == {"_metadata": "do", "action": "Home"}
+
+
+def test_parse_legacy_scroll() -> None:
+    result = parse_action("Action: scroll(down, 3)")
+    assert result == {"_metadata": "do", "action": "Scroll", "direction": "down", "clicks": 3}
+
+
+def test_parse_extracts_answer_payload() -> None:
+    result = parse_action('<answer>do(action="Tap", element=[200, 300])</answer>')
+    assert result == {"_metadata": "do", "action": "Tap", "element": [200, 300]}
+
+
+def test_parse_malformed_returns_noop_with_original_text() -> None:
+    raw = "I cannot determine the action to take."
+    result = parse_action(raw)
+    assert result == {"_metadata": "noop", "raw": raw}
+
+
+def test_parse_empty_returns_noop_with_original_text() -> None:
+    result = parse_action("")
+    assert result == {"_metadata": "noop", "raw": ""}
