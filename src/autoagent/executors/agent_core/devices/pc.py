@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import base64
 import logging
+import subprocess
+import sys
 import time
 from typing import Any
 
 import mss
 import mss.tools
 import pyautogui
+
+try:
+    import pyperclip
+except ImportError:  # pragma: no cover - exercised through fallback behavior
+    class _ClipboardFallback:
+        @staticmethod
+        def copy(text: str) -> None:
+            if sys.platform == "darwin":
+                subprocess.run(["pbcopy"], input=text, text=True, check=True)
+                return
+            if sys.platform.startswith("win"):
+                subprocess.run(["clip"], input=text, text=True, check=True)
+                return
+            subprocess.run(["xclip", "-selection", "clipboard"], input=text, text=True, check=True)
+
+    pyperclip = _ClipboardFallback()
 
 from autoagent.executors.agent_core.device import Device, Screenshot
 
@@ -37,7 +55,10 @@ class PcDeviceAdapter(Device):
         pyautogui.mouseUp(x, y)
 
     def type_text(self, text: str) -> None:
-        pyautogui.typewrite(text, interval=0.05)
+        pyperclip.copy(text)
+        paste_modifier = "command" if sys.platform == "darwin" else "ctrl"
+        pyautogui.hotkey(paste_modifier, "v")
+        time.sleep(0.1)
 
     def press_key(self, key: str) -> None:
         pyautogui.press(key)

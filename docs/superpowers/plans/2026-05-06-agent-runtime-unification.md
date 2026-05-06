@@ -13,6 +13,7 @@ Latest follow-up status:
 - The shared PC/Android handlers now interpret `element` / `start` / `end` coordinates using the same 0-1000 relative coordinate contract used by `apa_llm` and `Open-AutoGLM`, then convert them to absolute screen pixels with `screen_width` / `screen_height`.
 - Runtime conversation storage also avoids double-wrapping existing `<answer>...</answer>` outputs, so replayed assistant context stays clean.
 - The system prompts now explicitly tell the model that `element` / `start` / `end` must use 0-1000 relative coordinates rather than raw pixels, so the model-side coordinate contract matches the handler-side conversion.
+- The PC `Type` implementation now follows the reference desktop runtimes more closely: clipboard copy plus system paste shortcut, instead of `pyautogui.typewrite()`, so non-ASCII text entry is reliable.
 
 **Tech Stack:** Python 3.11, `httpx`, `mss`, `pyautogui`, `adb`, `pytest`, `ruff`.
 
