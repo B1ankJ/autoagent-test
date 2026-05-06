@@ -51,6 +51,11 @@ def test_parse_finish() -> None:
     assert result == {"_metadata": "finish", "message": "Task done"}
 
 
+def test_parse_finish_with_unquoted_message() -> None:
+    result = parse_action("finish(message=done)")
+    assert result == {"_metadata": "finish", "message": "done"}
+
+
 def test_parse_legacy_click_positional() -> None:
     result = parse_action("Action: click(100, 200)")
     assert result == {"_metadata": "do", "action": "Tap", "element": [100, 200]}
@@ -99,6 +104,11 @@ def test_compatibility_shim_maps_unified_tap_to_legacy_click() -> None:
 def test_compatibility_shim_maps_unified_finish_to_legacy_finish() -> None:
     result = parse_legacy_action('finish(message="Task done")')
     assert result == {"_type": "finish", "message": "Task done"}
+
+
+def test_compatibility_shim_maps_unquoted_finish_to_legacy_finish() -> None:
+    result = parse_legacy_action("finish(message=done)")
+    assert result == {"_type": "finish", "message": "done"}
 
 
 def test_compatibility_shim_preserves_legacy_click_format() -> None:

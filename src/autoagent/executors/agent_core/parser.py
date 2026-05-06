@@ -73,13 +73,15 @@ def _parse_do_action(text: str) -> dict[str, Any] | None:
 
 def _parse_finish_action(text: str) -> dict[str, Any] | None:
     values = _parse_call_keywords(text, "finish")
-    if values is None:
-        return None
+    if values is not None:
+        message = values.get("message")
+        if isinstance(message, str):
+            return {"_metadata": "finish", "message": message}
 
-    message = values.get("message")
-    if not isinstance(message, str):
+    fallback = re.fullmatch(r"finish\s*\(\s*message\s*=\s*([^()]+?)\s*\)", text, re.DOTALL)
+    if fallback is None:
         return None
-    return {"_metadata": "finish", "message": message}
+    return {"_metadata": "finish", "message": _unquote(fallback.group(1))}
 
 
 def _parse_call_keywords(text: str, expected_name: str) -> dict[str, Any] | None:
