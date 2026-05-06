@@ -25,7 +25,7 @@ def parse_action(text: str) -> dict:
 
     try:
         return _dispatch(name, raw_args)
-    except Exception:  # noqa: BLE001
+    except (ValueError, IndexError):
         _log.debug("action_parser: failed to parse args for %r: %r", name, raw_args)
         return {"_type": "noop"}
 

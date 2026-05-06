@@ -23,7 +23,10 @@ class ModelClient:
         self._config = config
 
     def call(self, messages: list[dict]) -> str:
-        """Send messages to the VLM, return the raw text response."""
+        """Send messages to the VLM, return the raw text response.
+
+        Synchronous by design — called from within a run_in_executor thread.
+        """
         url = self._config.base_url.rstrip("/") + "/chat/completions"
         headers = {
             "Authorization": f"Bearer {self._config.api_key}",
