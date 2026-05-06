@@ -11,12 +11,12 @@ def test_pc_handler_executes_tap() -> None:
     handler = PcActionHandler(device=device)
 
     result = handler.execute(
-        {"_metadata": "do", "action": "Tap", "element": [100, 200]},
+        {"_metadata": "do", "action": "Tap", "element": [500, 500]},
         1920,
         1080,
     )
 
-    device.tap.assert_called_once_with(100, 200)
+    device.tap.assert_called_once_with(960, 540)
     assert result.success is True
     assert result.should_finish is False
 
@@ -68,11 +68,11 @@ def test_android_handler_executes_long_press() -> None:
     handler = AndroidActionHandler(device=device)
 
     result = handler.execute(
-        {"_metadata": "do", "action": "Long Press", "element": [300, 500], "duration_ms": 800},
+        {"_metadata": "do", "action": "Long Press", "element": [250, 500], "duration_ms": 800},
         1080,
         2400,
     )
 
-    device.long_press.assert_called_once_with(300, 500, duration_ms=800)
+    device.long_press.assert_called_once_with(270, 1200, duration_ms=800)
     assert result.success is True
     assert result.should_finish is False

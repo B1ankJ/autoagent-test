@@ -187,7 +187,10 @@ class AgentRuntime:
         return ""
 
     def _assistant_message(self, raw: str) -> dict[str, Any]:
-        return {"role": "assistant", "content": f"<answer>{raw.strip()}</answer>"}
+        text = raw.strip()
+        if text.startswith("<answer>") and text.endswith("</answer>"):
+            return {"role": "assistant", "content": text}
+        return {"role": "assistant", "content": f"<answer>{text}</answer>"}
 
     def _strip_images(self, message: dict[str, Any]) -> dict[str, Any]:
         content = message.get("content")

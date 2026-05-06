@@ -162,6 +162,28 @@ def test_runtime_includes_recent_step_summary_and_repeated_action_warning() -> N
     assert "Repeated action warning" in third_call_text
 
 
+def test_runtime_does_not_double_wrap_answer_tags_in_conversation() -> None:
+    device = FakeDevice()
+    client = FakeClient(
+        ['<answer>do(action="Tap", element=[500, 500])</answer>', 'finish(message="done")']
+    )
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
+
+    runtime = AgentRuntime(
+        device=device,
+        client=client,
+        handler=handler,
+        system_prompt="sys",
+        max_steps=3,
+    )
+    result = runtime.run("task")
+
+    assert (
+        result.conversation[1]["content"]
+        == '<answer>do(action="Tap", element=[500, 500])</answer>'
+    )
+
+
 def test_runtime_stops_at_max_steps() -> None:
     device = FakeDevice()
     client = FakeClient(
