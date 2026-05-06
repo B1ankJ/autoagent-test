@@ -5,7 +5,7 @@ import logging
 import struct
 import subprocess
 
-from autoagent.executors.agent_core.device import Device, Screenshot
+from .device import Device, Screenshot
 
 _log = logging.getLogger(__name__)
 
@@ -33,22 +33,12 @@ class AndroidDevice(Device):
             self._adb_run(["shell", "input", "tap", str(action["x"]), str(action["y"])])
         elif t == "type":
             text = action["text"]
-            escaped = text.replace("'", "'\\''")
             if text.isascii():
-                self._adb_run(["shell", "input", "text", f"'{escaped}'"])
+                self._adb_run(["shell", "input", "text", text])
             else:
+                # ADB Keyboard broadcast for non-ASCII text
                 self._adb_run(
-                    # ADB Keyboard broadcast for non-ASCII text
-                    [
-                        "shell",
-                        "am",
-                        "broadcast",
-                        "-a",
-                        "ADB_INPUT_TEXT",
-                        "--es",
-                        "msg",
-                        f"'{escaped}'",
-                    ]
+                    ["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT", "--es", "msg", text]
                 )
         elif t == "scroll":
             amount = action.get("amount", 3)
