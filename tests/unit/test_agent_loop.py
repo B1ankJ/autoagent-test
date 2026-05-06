@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
 from unittest.mock import MagicMock
 
 from autoagent.executors.agent_core.agent_loop import AgentLoop, AgentResult, AgentStepRecord
 from autoagent.executors.agent_core.device import Screenshot
-from autoagent.executors.agent_core.result import AgentRunResult
+from autoagent.executors.agent_core.result import ActionResult, AgentRunResult
+from autoagent.executors.agent_core.runtime import AgentRuntime
 
 
 def _screenshot() -> Screenshot:
@@ -16,28 +18,48 @@ def _screenshot() -> Screenshot:
     )
 
 
-def test_loop_finishes_on_finish_action() -> None:
-    device = MagicMock()
-    device.capture.return_value = _screenshot()
-    client = MagicMock()
-    client.call.side_effect = [
-        "Action: click(100, 200)",
-        'Action: type("hello")',
-        'Action: finish("done")',
-    ]
+@dataclass
+class FakeDevice:
+    def capture(self) -> Screenshot:
+        return _screenshot()
 
-    loop = AgentLoop(device, client, "sys", max_steps=10)
-    result = loop.run("type hello and finish")
+
+class FakeClient:
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = responses
+        self._index = 0
+
+    def call(self, messages) -> str:  # noqa: ANN001
+        response = self._responses[self._index]
+        self._index += 1
+        return response
+
+
+class FakeHandler:
+    def __init__(self, results: list[ActionResult]) -> None:
+        self._results = results
+        self.calls: list[tuple[dict, int, int]] = []
+
+    def execute(self, action: dict, screen_width: int, screen_height: int) -> ActionResult:
+        self.calls.append((action, screen_width, screen_height))
+        return self._results[len(self.calls) - 1]
+
+
+def test_runtime_stops_on_finish_action() -> None:
+    device = FakeDevice()
+    client = FakeClient(['finish(message="done")'])
+    handler = FakeHandler([ActionResult(success=True, should_finish=True, message="done")])
+
+    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="x", max_steps=3)
+    result = runtime.run("task")
 
     assert result.finished is True
-    assert result.step_count == 3
+    assert result.stop_reason == "finish"
+    assert result.step_count == 1
     assert result.finish_message == "done"
-    assert device.execute_action.call_count == 2
-    assert len(result.steps) == 3
-    assert result.steps[0].action["_type"] == "click"
-    assert result.steps[2].action["_type"] == "finish"
-    assert result.steps[0].raw == "Action: click(100, 200)"
-    assert result.steps[0].screenshot.base64_data == _screenshot().base64_data
+    assert len(result.steps) == 1
+    assert result.steps[0].action == {"_metadata": "finish", "message": "done"}
+    assert result.steps[0].execution is None
 
 
 def test_agent_loop_exports_canonical_result_types() -> None:
@@ -45,35 +67,60 @@ def test_agent_loop_exports_canonical_result_types() -> None:
     assert AgentStepRecord.__module__ == "autoagent.executors.agent_core.result"
 
 
-def test_loop_stops_at_max_steps() -> None:
-    device = MagicMock()
-    device.capture.return_value = _screenshot()
-    client = MagicMock()
-    client.call.return_value = "Action: click(100, 200)"
+def test_runtime_records_execution_result() -> None:
+    device = FakeDevice()
+    client = FakeClient(['do(action="Tap", element=[100, 200])', 'finish(message="done")'])
+    handler = FakeHandler(
+        [
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=True, message="done"),
+        ]
+    )
 
-    loop = AgentLoop(device, client, "sys", max_steps=3)
-    result = loop.run("do something")
+    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="x", max_steps=3)
+    result = runtime.run("task")
+
+    assert result.finished is True
+    assert result.finish_message == "done"
+    assert result.stop_reason == "finish"
+    assert result.steps[0].execution is not None
+    assert result.steps[0].execution.success is True
+    assert result.steps[0].action["action"] == "Tap"
+    assert handler.calls[0][1:] == (1920, 1080)
+
+
+def test_runtime_stops_at_max_steps() -> None:
+    device = FakeDevice()
+    client = FakeClient(["Action: click(100, 200)", "Action: click(100, 200)", "Action: click(100, 200)"])
+    handler = FakeHandler(
+        [
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=False),
+            ActionResult(success=True, should_finish=False),
+        ]
+    )
+
+    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="sys", max_steps=3)
+    result = runtime.run("do something")
 
     assert result.finished is False
+    assert result.stop_reason == "max_steps"
     assert result.step_count == 3
     assert result.finish_message == "max_steps reached"
-    assert device.execute_action.call_count == 3
     assert len(result.steps) == 3
+    assert len(handler.calls) == 3
 
 
-def test_loop_skips_noop_but_counts_step() -> None:
-    device = MagicMock()
-    device.capture.return_value = _screenshot()
-    client = MagicMock()
-    client.call.side_effect = [
-        "gibberish output",
-        'Action: finish("ok")',
-    ]
+def test_runtime_skips_noop_but_counts_step() -> None:
+    device = FakeDevice()
+    client = FakeClient(["gibberish output", 'finish(message="ok")'])
+    handler = FakeHandler([ActionResult(success=True, should_finish=False)])
 
-    loop = AgentLoop(device, client, "sys", max_steps=10)
-    result = loop.run("task")
+    runtime = AgentRuntime(device=device, client=client, handler=handler, system_prompt="sys", max_steps=10)
+    result = runtime.run("task")
 
     assert result.finished is True
     assert result.step_count == 2
-    assert device.execute_action.call_count == 0
-    assert result.steps[0].action["_type"] == "noop"
+    assert result.stop_reason == "finish"
+    assert len(handler.calls) == 0
+    assert result.steps[0].action["_metadata"] == "noop"

@@ -8,6 +8,7 @@ from typing import Any
 
 from autoagent.executors.agent_core.agent_loop import AgentLoop
 from autoagent.executors.agent_core.android_device import AndroidDevice
+from autoagent.executors.agent_core.handlers.android import AndroidActionHandler
 from autoagent.executors.agent_core.model_client import ModelClient, ModelConfig
 from autoagent.executors.agent_core.prompts import ANDROID_SYSTEM_PROMPT
 from autoagent.executors.agent_screenshot_extractor import extract_response_from_screenshot
@@ -45,7 +46,8 @@ class AgentAndroidExecutor(Executor):
                 api_key=profile.api_key,
             )
         )
-        agent_loop = AgentLoop(device, client, ANDROID_SYSTEM_PROMPT, profile.max_steps)
+        handler = AndroidActionHandler(device=device)
+        agent_loop = AgentLoop(device, client, handler, ANDROID_SYSTEM_PROMPT, profile.max_steps)
         loop = asyncio.get_running_loop()
         responses: list[str] = []
 
@@ -64,6 +66,7 @@ class AgentAndroidExecutor(Executor):
                 "finished": loop_result.finished,
                 "finish_message": loop_result.finish_message,
                 "step_count": loop_result.step_count,
+                "stop_reason": loop_result.stop_reason,
                 "steps": [step.to_metadata() for step in loop_result.steps],
             }
             trace_path.write_text(

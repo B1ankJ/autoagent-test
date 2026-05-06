@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import base64
+import json
 from dataclasses import dataclass
 
 import pytest
 
-from autoagent.executors.agent_core.action_parser import parse_action as parse_legacy_action
 from autoagent.executors.agent_core.agent_loop import AgentResult, AgentStepRecord
 from autoagent.executors.base import ExecutorContext
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
+from autoagent.executors.agent_core.result import ActionResult
 from autoagent.executors.screenshot_store import ScreenshotResult
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import AgentAndroidProfile, AgentPcProfile
@@ -38,9 +39,14 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
         def __init__(self, config) -> None:  # noqa: ANN001
             seen["client_model"] = config.model
 
+    class FakeHandler:
+        def __init__(self, device) -> None:  # noqa: ANN001
+            seen["handler_device"] = device
+
     class FakeLoop:
-        def __init__(self, device, client, system_prompt, max_steps) -> None:  # noqa: ANN001
+        def __init__(self, device, client, handler, system_prompt, max_steps) -> None:  # noqa: ANN001
             seen["loop_device"] = device
+            seen["loop_handler"] = handler
             seen["loop_prompt"] = system_prompt
             seen["loop_max_steps"] = max_steps
 
@@ -51,16 +57,18 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
                 finished=True,
                 finish_message="done",
                 step_count=1,
+                stop_reason="handler_finish",
                 steps=[
                     AgentStepRecord(
                         step=1,
                         raw=raw_action,
-                        action=parse_legacy_action(raw_action),
+                        action={"_metadata": "do", "action": "Tap", "element": [10, 20]},
                         screenshot=Screenshot(
                             base64_data=base64.b64encode(b"pc-step-shot").decode(),
                             width=100,
                             height=50,
                         ),
+                        execution=ActionResult(success=True, should_finish=False),
                     )
                 ],
             )
@@ -70,6 +78,7 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
         return LLMExtractionResult(text="pc reply", error=None, latency_ms=1, status_code=200)
 
     monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcDevice", FakeDevice)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcActionHandler", FakeHandler)
     monkeypatch.setattr("autoagent.executors.agent_pc_executor.ModelClient", FakeClient)
     monkeypatch.setattr("autoagent.executors.agent_pc_executor.AgentLoop", FakeLoop)
     monkeypatch.setattr(
@@ -109,18 +118,26 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
         {
             "step": 1,
             "raw": 'do(action="Tap", element=[10, 20])',
-            "action": {"_type": "click", "x": 10, "y": 20},
+            "action": {"_metadata": "do", "action": "Tap", "element": [10, 20]},
+            "execution": {"success": True, "should_finish": False, "message": None},
         }
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-1" / "s1").resolve())
     assert any(isinstance(item, ScreenshotResult) for item in ctx.screenshot_index)
     assert (tmp_path / "batch-1" / "s1" / "step_1_1.png").is_file()
     assert (tmp_path / "batch-1" / "s1" / "final_1.png").is_file()
-    assert (tmp_path / "batch-1" / "s1" / "loop_trace_1.json").is_file()
+    trace_path = tmp_path / "batch-1" / "s1" / "loop_trace_1.json"
+    assert trace_path.is_file()
     assert (tmp_path / "batch-1" / "s1" / "extract_1.json").is_file()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert trace["steps"][0]["action"]["action"] == "Tap"
+    assert trace["steps"][0]["execution"]["success"] is True
+    assert trace["stop_reason"] == "handler_finish"
     assert seen["task"] == "reset then do hello"
     assert seen["response_hint"] == "latest assistant reply"
     assert seen["loop_max_steps"] == 7
+    assert seen["handler_device"] is seen["loop_device"]
+    assert seen["loop_handler"] is not None
 
 
 @pytest.mark.asyncio
@@ -148,8 +165,13 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
         def __init__(self, config) -> None:  # noqa: ANN001
             seen["client_model"] = config.model
 
+    class FakeHandler:
+        def __init__(self, device) -> None:  # noqa: ANN001
+            seen["handler_device"] = device
+
     class FakeLoop:
-        def __init__(self, device, client, system_prompt, max_steps) -> None:  # noqa: ANN001
+        def __init__(self, device, client, handler, system_prompt, max_steps) -> None:  # noqa: ANN001
+            seen["loop_handler"] = handler
             seen["loop_max_steps"] = max_steps
 
         def run(self, task: str) -> AgentResult:
@@ -158,16 +180,18 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
                 finished=False,
                 finish_message="max_steps reached",
                 step_count=1,
+                stop_reason="max_steps",
                 steps=[
                     AgentStepRecord(
                         step=1,
-                        raw='Action: press(back)',
-                        action={"_type": "press", "key": "back"},
+                        raw='do(action="Back")',
+                        action={"_metadata": "do", "action": "Back"},
                         screenshot=Screenshot(
                             base64_data=base64.b64encode(b"android-step-shot").decode(),
                             width=50,
                             height=100,
                         ),
+                        execution=ActionResult(success=True, should_finish=False),
                     )
                 ],
             )
@@ -181,6 +205,7 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
         )
 
     monkeypatch.setattr("autoagent.executors.agent_android_executor.AndroidDevice", FakeDevice)
+    monkeypatch.setattr("autoagent.executors.agent_android_executor.AndroidActionHandler", FakeHandler)
     monkeypatch.setattr("autoagent.executors.agent_android_executor.ModelClient", FakeClient)
     monkeypatch.setattr("autoagent.executors.agent_android_executor.AgentLoop", FakeLoop)
     monkeypatch.setattr(
@@ -218,15 +243,22 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
     assert ctx.action_log == [
         {
             "step": 1,
-            "raw": 'Action: press(back)',
-            "action": {"_type": "press", "key": "back"},
+            "raw": 'do(action="Back")',
+            "action": {"_metadata": "do", "action": "Back"},
+            "execution": {"success": True, "should_finish": False, "message": None},
         }
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-2" / "s1").resolve())
     assert (tmp_path / "batch-2" / "s1" / "step_1_1.png").is_file()
     assert (tmp_path / "batch-2" / "s1" / "final_1.png").is_file()
-    assert (tmp_path / "batch-2" / "s1" / "loop_trace_1.json").is_file()
+    trace_path = tmp_path / "batch-2" / "s1" / "loop_trace_1.json"
+    assert trace_path.is_file()
     assert (tmp_path / "batch-2" / "s1" / "extract_1.json").is_file()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert trace["steps"][0]["action"]["action"] == "Back"
+    assert trace["steps"][0]["execution"]["success"] is True
+    assert trace["stop_reason"] == "max_steps"
     assert seen["serial"] == "ctx-serial"
     assert seen["task"] == "tap and send hello"
     assert seen["loop_max_steps"] == 9
+    assert seen["loop_handler"] is not None

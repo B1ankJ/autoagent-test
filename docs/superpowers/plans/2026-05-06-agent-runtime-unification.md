@@ -397,7 +397,7 @@ git commit -m "refactor: split agent devices and action handlers"
 - Modify: `tests/unit/test_agent_loop.py`
 - Modify: `src/autoagent/executors/agent_core/agent_loop.py`
 
-- [ ] **Step 1: Rewrite loop tests around runtime behavior**
+- [x] **Step 1: Rewrite loop tests around runtime behavior**
 
 Update `tests/unit/test_agent_loop.py` to verify execution result metadata, not just raw action dicts:
 
@@ -430,7 +430,7 @@ def test_runtime_records_execution_result():
     assert result.steps[0].action["action"] == "Tap"
 ```
 
-- [ ] **Step 2: Run loop tests to verify they fail**
+- [x] **Step 2: Run loop tests to verify they fail**
 
 Run:
 
@@ -440,7 +440,7 @@ python3.11 -m pytest tests/unit/test_agent_loop.py -q
 
 Expected: failures because `AgentRuntime` does not exist yet and `AgentLoop` does not record execution results.
 
-- [ ] **Step 3: Implement `runtime.py`**
+- [x] **Step 3: Implement `runtime.py`**
 
 Add:
 
@@ -478,7 +478,7 @@ class AgentRuntime:
         return AgentRunResult(False, "max_steps reached", self._max_steps, "max_steps", steps)
 ```
 
-- [ ] **Step 4: Keep `agent_loop.py` as a runtime shim**
+- [x] **Step 4: Keep `agent_loop.py` as a runtime shim**
 
 Replace `src/autoagent/executors/agent_core/agent_loop.py` with:
 
@@ -493,7 +493,7 @@ __all__ = ["AgentLoop", "AgentResult", "AgentStepRecord"]
 
 This avoids a wide import churn during the transition.
 
-- [ ] **Step 5: Run loop tests**
+- [x] **Step 5: Run loop tests**
 
 Run:
 
@@ -503,7 +503,7 @@ python3.11 -m pytest tests/unit/test_agent_loop.py -q
 
 Expected: loop tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -522,7 +522,7 @@ git commit -m "refactor: replace agent loop with unified runtime"
 - Modify: `src/autoagent/executors/agent_core/prompts.py`
 - Modify: `tests/unit/test_agent_mode_executors.py`
 
-- [ ] **Step 1: Extend executor tests for handler-driven traces**
+- [x] **Step 1: Extend executor tests for handler-driven traces**
 
 Update `tests/unit/test_agent_mode_executors.py` so the loop trace assertions include execution metadata:
 
@@ -533,7 +533,7 @@ assert trace["steps"][0]["execution"]["success"] is True
 assert trace["stop_reason"] in {"finish", "handler_finish", "max_steps"}
 ```
 
-- [ ] **Step 2: Run executor tests to verify they fail**
+- [x] **Step 2: Run executor tests to verify they fail**
 
 Run:
 
@@ -543,7 +543,7 @@ python3.11 -m pytest tests/unit/test_agent_mode_executors.py -q
 
 Expected: failures because the executors currently instantiate only `device + client + loop` and do not provide handlers or stop reasons.
 
-- [ ] **Step 3: Update prompts to the unified protocol**
+- [x] **Step 3: Update prompts to the unified protocol**
 
 `src/autoagent/executors/agent_core/prompts.py` should instruct the model to return only:
 
@@ -563,7 +563,7 @@ The prompt must explicitly say:
 - prefer `do(...)`
 - use `finish(...)` only when the interaction is complete
 
-- [ ] **Step 4: Rewire `AgentPcExecutor`**
+- [x] **Step 4: Rewire `AgentPcExecutor`**
 
 Change executor setup from:
 
@@ -593,7 +593,7 @@ trace_payload = {
 }
 ```
 
-- [ ] **Step 5: Rewire `AgentAndroidExecutor`**
+- [x] **Step 5: Rewire `AgentAndroidExecutor`**
 
 Mirror the PC executor changes using:
 
@@ -603,7 +603,7 @@ handler = AndroidActionHandler(device=device)
 runtime = AgentLoop(device=device, client=client, handler=handler, system_prompt=ANDROID_SYSTEM_PROMPT, max_steps=profile.max_steps)
 ```
 
-- [ ] **Step 6: Run focused executor and extractor tests**
+- [x] **Step 6: Run focused executor and extractor tests**
 
 Run:
 
@@ -613,7 +613,7 @@ python3.11 -m pytest tests/unit/test_agent_mode_executors.py tests/unit/test_age
 
 Expected: tests pass and artifact assertions still hold.
 
-- [ ] **Step 7: Run the full targeted agent suite**
+- [x] **Step 7: Run the full targeted agent suite**
 
 Run:
 
@@ -630,7 +630,7 @@ python3.11 -m pytest \
 
 Expected: all tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
