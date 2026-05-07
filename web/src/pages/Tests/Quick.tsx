@@ -37,7 +37,15 @@ export function TestsQuick() {
   const [lastSyncResult, setLastSyncResult] = useState<SingleTestSyncResponse | null>(null)
   const mode = Form.useWatch('mode', form) ?? 'api'
   const selectedPlatform =
-    mode === 'gui_pc_web' ? 'web' : mode === 'gui_android' ? 'android' : 'api'
+    mode === 'gui_pc_web'
+      ? 'web'
+      : mode === 'gui_android'
+        ? 'android'
+        : mode === 'agent_pc'
+          ? 'agent_pc'
+          : mode === 'agent_android'
+            ? 'agent_android'
+            : 'api'
 
   const profileOptions = (profiles.data ?? [])
     .filter((profile) => profile.platform === selectedPlatform)
@@ -50,7 +58,7 @@ export function TestsQuick() {
       mode: values.mode,
       target_profile: values.target_profile,
       retry: 0,
-      timeout_sec: values.mode === 'api' ? 60 : 180,
+      timeout_sec: values.mode === 'api' ? 60 : values.mode.startsWith('agent') ? 600 : 180,
     }
 
     if (values.kind === 'sync') {
@@ -108,6 +116,8 @@ export function TestsQuick() {
                 { label: 'API', value: 'api' },
                 { label: 'Web (GUI)', value: 'gui_pc_web' },
                 { label: 'Android (GUI)', value: 'gui_android' },
+                { label: 'Agent PC', value: 'agent_pc' },
+                { label: 'Agent Android', value: 'agent_android' },
               ]}
             />
           </Form.Item>
