@@ -207,6 +207,7 @@ class AndroidExecutor(Executor):
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=after_send_path, label=f"after_send_{idx}")
                     )
+                    await asyncio.sleep(3)
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
                         sample_log.info(
