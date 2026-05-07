@@ -37,6 +37,7 @@ _LOADING_INDICATOR_PATTERNS = (
     "正在生成",
     "AI正在回复",
     "正在回答",
+    "正在回复",
     "正在处理",
     "加载中",
     "Loading",
@@ -51,6 +52,11 @@ def _is_loading_indicator(text: str) -> bool:
     if not stripped:
         return True
     return any(pattern in stripped for pattern in _LOADING_INDICATOR_PATTERNS)
+
+
+def _xml_has_loading_indicator(xml: str) -> bool:
+    """Return True if the raw XML contains any loading indicator pattern."""
+    return any(pattern in xml for pattern in _LOADING_INDICATOR_PATTERNS)
 
 
 def _clip_log_text(value: str | None, max_chars: int = 240) -> str | None:
@@ -263,20 +269,14 @@ class AndroidExecutor(Executor):
                                 stable_sec=0.0,
                                 max_wait_sec=profile.complete_detection.max_wait_sec,
                             )
-                        result = ui_tree_extractor.extract_from_xml(
-                            xml,
-                            response_container_locator=profile.response_extraction.response_container_locator,
-                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
-                        )
                         for _retry in range(_LOADING_RETRY_MAX):
-                            if not _is_loading_indicator(result.text):
+                            if not _xml_has_loading_indicator(xml):
                                 break
                             sample_log.info(
-                                "android sample %s prompt %s loading indicator detected (%r), "
+                                "android sample %s prompt %s xml loading indicator, "
                                 "retry %s/%s",
                                 sample.id,
                                 idx,
-                                result.text,
                                 _retry + 1,
                                 _LOADING_RETRY_MAX,
                             )
@@ -286,10 +286,17 @@ class AndroidExecutor(Executor):
                                 stable_sec=1.0,
                                 max_wait_sec=profile.complete_detection.max_wait_sec,
                             )
-                            result = ui_tree_extractor.extract_from_xml(
-                                xml,
-                                response_container_locator=profile.response_extraction.response_container_locator,
-                                latest_bubble_locator=profile.response_extraction.latest_bubble_match,
+                        result = ui_tree_extractor.extract_from_xml(
+                            xml,
+                            response_container_locator=profile.response_extraction.response_container_locator,
+                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
+                        )
+                        if _is_loading_indicator(result.text):
+                            sample_log.info(
+                                "android sample %s prompt %s result is loading indicator: %r",
+                                sample.id,
+                                idx,
+                                result.text,
                             )
                         sample_log.info(
                             (
@@ -316,20 +323,14 @@ class AndroidExecutor(Executor):
                                 stable_sec=0.0,
                                 max_wait_sec=profile.complete_detection.max_wait_sec,
                             )
-                        result = ui_tree_extractor.extract_from_xml(
-                            xml,
-                            response_container_locator=profile.response_extraction.response_container_locator,
-                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
-                        )
                         for _retry in range(_LOADING_RETRY_MAX):
-                            if not _is_loading_indicator(result.text):
+                            if not _xml_has_loading_indicator(xml):
                                 break
                             sample_log.info(
-                                "android sample %s prompt %s loading indicator detected (%r), "
+                                "android sample %s prompt %s xml loading indicator, "
                                 "retry %s/%s",
                                 sample.id,
                                 idx,
-                                result.text,
                                 _retry + 1,
                                 _LOADING_RETRY_MAX,
                             )
@@ -339,11 +340,11 @@ class AndroidExecutor(Executor):
                                 stable_sec=1.0,
                                 max_wait_sec=profile.complete_detection.max_wait_sec,
                             )
-                            result = ui_tree_extractor.extract_from_xml(
-                                xml,
-                                response_container_locator=profile.response_extraction.response_container_locator,
-                                latest_bubble_locator=profile.response_extraction.latest_bubble_match,
-                            )
+                        result = ui_tree_extractor.extract_from_xml(
+                            xml,
+                            response_container_locator=profile.response_extraction.response_container_locator,
+                            latest_bubble_locator=profile.response_extraction.latest_bubble_match,
+                        )
                         sample_log.info(
                             (
                                 "android sample %s prompt %s ui_tree extraction: "
