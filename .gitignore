@@ -16,6 +16,8 @@ data/profiles/*
 !data/profiles/.gitkeep
 data/logs/
 data/results/
+data/browser_profiles/
+data/profile_builder/
 logs/*
 !logs/.gitkeep
 node_modules/
