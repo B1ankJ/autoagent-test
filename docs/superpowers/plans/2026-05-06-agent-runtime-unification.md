@@ -17,6 +17,7 @@ Latest follow-up status:
 - The PC `Type` implementation now follows the reference desktop runtimes more closely: clipboard copy plus system paste shortcut, instead of `pyautogui.typewrite()`, so non-ASCII text entry is reliable.
 - The shared runtime can now use a multimodal response observer before accepting `finish(...)` after send-like actions, so agent runs do not stop merely because the policy model claims the message was sent; they stop only after the screenshot-based verifier sees a reply matching `response_hint`.
 - The shared runtime can also use a multimodal action observer for `Type` actions: if the screenshot-based verifier cannot confirm that the expected text actually appeared inside the input box, the step is marked failed in runtime history so the model is pushed to re-focus the input area instead of blindly pressing send.
+- The runtime now treats that `Type` verification result as a hard guardrail for send-like actions: when the latest input attempt was not confirmed inside the input box, `Press(enter)` is rejected in runtime before it reaches the device handler, preventing accidental duplicate sends caused by blind retries.
 
 **Tech Stack:** Python 3.11, `httpx`, `mss`, `pyautogui`, `adb`, `pytest`, `ruff`.
 

@@ -95,10 +95,9 @@ class AgentRuntime:
             execution = None
             if action.get("_metadata") == "do":
                 if self._is_send_action(action) and not input_ready:
-                    action_result_type = type(
-                        self._handler.execute(action, screenshot.width, screenshot.height)
-                    )
-                    execution = action_result_type(
+                    from autoagent.executors.agent_core.result import ActionResult
+
+                    execution = ActionResult(
                         success=False,
                         should_finish=False,
                         message=(

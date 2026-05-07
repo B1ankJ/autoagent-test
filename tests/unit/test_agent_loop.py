@@ -363,4 +363,4 @@ def test_runtime_blocks_press_enter_after_failed_type_validation() -> None:
     assert result.steps[1].execution is not None
     assert result.steps[1].execution.success is False
     assert "Input is not ready" in (result.steps[1].execution.message or "")
-    assert len(handler.calls) == 3
+    assert len(handler.calls) == 2
