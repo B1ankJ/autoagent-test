@@ -55,12 +55,18 @@ def _quote_env_value(value: str) -> str:
 def generate_env() -> None:
     env_path = ROOT / ".env"
     if env_path.exists():
-        answer = input("\n.env already exists. Overwrite? [y/N]: ").strip().lower()
+        try:
+            answer = input("\n.env already exists. Overwrite? [y/N]: ").strip().lower()
+        except EOFError:
+            answer = "n"
         if answer != "y":
             print("  ✓ Keeping existing .env")
             return
 
-    password = getpass.getpass("\nAdmin password [Enter to generate random]: ").strip()
+    try:
+        password = getpass.getpass("\nAdmin password [Enter to generate random]: ").strip()
+    except EOFError:
+        password = ""
     if not password:
         password = secrets.token_urlsafe(16)
         print("  (random password generated)")

@@ -7,13 +7,6 @@ ok()   { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 fail() { echo -e "${RED}✗${NC} $*" >&2; exit 1; }
 
-# ── version helpers ──────────────────────────────────────────────────────────
-version_gte() {
-    # Returns 0 (true) if installed >= required
-    local required="$1" installed="$2"
-    printf '%s\n%s\n' "$required" "$installed" | sort -V -C
-}
-
 check_or_install_brew() {
     if command -v brew &>/dev/null; then
         ok "Homebrew already installed"
@@ -21,8 +14,13 @@ check_or_install_brew() {
     fi
     echo "Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    # Add brew to PATH for the rest of this session
-    eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
+    # Find brew regardless of install prefix and add to PATH
+    local brew_bin
+    brew_bin="$(find /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin -name brew 2>/dev/null | head -1)"
+    if [[ -z "$brew_bin" ]]; then
+        fail "Homebrew installed but 'brew' not found in expected locations. Add brew to your PATH manually and re-run."
+    fi
+    eval "$("$brew_bin" shellenv)"
     ok "Homebrew installed"
 }
 
@@ -63,6 +61,13 @@ install_linux() {
     if command -v apt-get &>/dev/null; then
         echo "Detected Debian/Ubuntu — using apt"
         sudo apt-get update -qq
+        # Add deadsnakes PPA if python3.11 is not available in default repos
+        if ! apt-cache show python3.11 &>/dev/null; then
+            echo "python3.11 not in default apt repos — adding deadsnakes PPA..."
+            sudo apt-get install -y software-properties-common
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt-get update -qq
+        fi
         sudo apt-get install -y python3.11 python3.11-venv nodejs npm adb
         ok "apt packages installed"
     elif command -v dnf &>/dev/null; then
@@ -98,7 +103,12 @@ install_pnpm() {
         return
     fi
     echo "Installing pnpm..."
-    npm install -g pnpm
+    # corepack ships with Node 16.9+; prefer it over npm -g to avoid permission issues
+    if command -v corepack &>/dev/null; then
+        corepack enable pnpm
+    else
+        npm install -g pnpm
+    fi
     ok "pnpm installed"
 }
 
@@ -121,6 +131,9 @@ main() {
     install_pnpm
 
     echo -e "\n[Python setup]\n"
+    if ! command -v python3.11 &>/dev/null; then
+        fail "python3.11 not found after install. Check your PATH or install Python 3.11 manually."
+    fi
     python3.11 scripts/setup.py
 }
 
