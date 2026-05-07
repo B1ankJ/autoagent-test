@@ -164,6 +164,7 @@ class AndroidExecutor(Executor):
                         action_runner,
                         profile.new_session_action,
                     )
+                    await asyncio.sleep(3.0)
                 for idx, prompt in enumerate(sample.prompts, start=1):
                     resolved_input = resolved_methods[idx - 1]
                     if profile.input_focus_action:
