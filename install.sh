@@ -109,6 +109,11 @@ install_pnpm() {
     else
         npm install -g pnpm
     fi
+    # Reload shell hash table so the new shim is found
+    hash -r 2>/dev/null || true
+    if ! command -v pnpm &>/dev/null; then
+        fail "pnpm installed but not found on PATH. Open a new shell and re-run, or add pnpm's bin directory to your PATH."
+    fi
     ok "pnpm installed"
 }
 

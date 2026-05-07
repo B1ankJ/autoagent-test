@@ -27,7 +27,7 @@ def _run(label: str, cmd: list[str], *, cwd: Path = ROOT, fatal: bool = True) ->
 
 
 def install_python_deps() -> None:
-    _run("Python deps (uv sync)", ["uv", "sync"], cwd=ROOT)
+    _run("Python deps (uv sync)", ["uv", "sync", "--python", "3.11"], cwd=ROOT)
 
 
 def build_frontend() -> None:
@@ -41,7 +41,7 @@ def install_playwright() -> None:
     interpreter = str(venv_python) if venv_python.exists() else sys.executable
     _run(
         "Playwright Chromium",
-        [interpreter, "-m", "playwright", "install", "chromium"],
+        [interpreter, "-m", "playwright", "install", "--with-deps", "chromium"],
         cwd=ROOT,
         fatal=False,
     )

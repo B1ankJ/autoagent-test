@@ -24,9 +24,7 @@ Then start the server with the command printed at the end of the install.
 
 ## Status
 
-**Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder MVP. Remaining work is final manual verification on a real device + real app, then release tagging.
-
-Current Android/Profile Builder handoff, including the latest Qwen/Tongyi debugging status and open blockers, is tracked in `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`.
+**Plans 1–4 and Plan 6 complete. Plan 5 (Polish/packaging) in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android executor (Plan 4) is complete and tagged `android-executor-v0.4.0`: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder. Agent executor (Plan 6) added `agent_pc` and `agent_android` modes with a shared `agent_core` loop, screenshot-based response extraction, and Android device-pool scheduling support.
 
 ## Requirements
 
@@ -35,22 +33,9 @@ Current Android/Profile Builder handoff, including the latest Qwen/Tongyi debugg
 
 ## Setup
 
-```bash
-cp .env.example .env
-# Edit .env: set ADMIN_PASSWORD and JWT_SECRET (at least 32 chars)
-
-pip install -e ".[dev]"
-```
-
-### Web executor prerequisite (Plan 3)
-
-Web mode uses Playwright. After `pip install`:
-
-```bash
-python3.11 -m playwright install chromium --with-deps
-```
-
-Run once per machine. `--with-deps` installs OS libs on Linux and is a no-op on macOS.
+> **Use the Quick Start installer above.** `bash install.sh` handles all of the below automatically.
+>
+> For manual setup: `uv sync` to install Python deps, `cd web && pnpm build` for the frontend, copy `.env.example` to `.env` and fill in secrets.
 
 ### Android executor prerequisite (Plan 4 Tier 1)
 
@@ -274,6 +259,4 @@ See:
 
 ## Next plans
 
-- Plan 3: Web GUI Executor (Playwright)
-- Plan 4: Android Executor (uiautomator2 + OCR)
-- Plan 5: Packaging, monthly backups, Docker
+- Plan 5: Polish — packaging, backups, Docker, security hardening (in progress)
