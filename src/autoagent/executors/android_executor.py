@@ -94,7 +94,10 @@ def _ready_check_text_candidates(text: str | list[str]) -> list[str]:
 
 class AndroidExecutor(Executor):
     def __init__(self, screenshots_root: Path | None = None) -> None:
-        self._root = Path(screenshots_root) if screenshots_root else Path("./data/logs")
+        if screenshots_root is None:
+            from autoagent.config.settings import get_settings
+            screenshots_root = get_settings().logs_root
+        self._root = Path(screenshots_root)
 
     async def execute(self, sample: Sample, profile: Any, ctx: ExecutorContext) -> list[str]:
         if not isinstance(profile, AndroidProfile):
@@ -392,6 +395,7 @@ class AndroidExecutor(Executor):
                         llm_debug_payload = {
                             "prompt": prompt,
                             "xml_artifact": after_result_xml_path.name if xml is not None else None,
+                            "xml_sent": llm_res.xml_sent,
                             "status_code": llm_res.status_code,
                             "latency_ms": llm_res.latency_ms,
                             "error": llm_res.error,

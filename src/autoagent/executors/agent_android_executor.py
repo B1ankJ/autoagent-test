@@ -24,7 +24,10 @@ from autoagent.profiles.schemas import AgentAndroidProfile
 
 class AgentAndroidExecutor(Executor):
     def __init__(self, screenshots_root: Path | None = None) -> None:
-        self._root = Path(screenshots_root) if screenshots_root else Path("./logs")
+        if screenshots_root is None:
+            from autoagent.config.settings import get_settings
+            screenshots_root = get_settings().logs_root
+        self._root = Path(screenshots_root)
 
     async def execute(self, sample: Sample, profile: Any, ctx: ExecutorContext) -> list[str]:
         if not isinstance(profile, AgentAndroidProfile):

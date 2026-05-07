@@ -43,7 +43,10 @@ class WebExecutor(Executor):
     """
 
     def __init__(self, screenshots_root: Path | None = None) -> None:
-        self._root = Path(screenshots_root) if screenshots_root else Path("./data/logs")
+        if screenshots_root is None:
+            from autoagent.config.settings import get_settings
+            screenshots_root = get_settings().logs_root
+        self._root = Path(screenshots_root)
         self._pw: Any = None
         self._sessions: dict[str, _WebSession] = {}
 

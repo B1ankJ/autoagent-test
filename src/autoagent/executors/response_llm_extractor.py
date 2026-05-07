@@ -53,6 +53,7 @@ class LLMExtractionResult:
     raw_response_text: str | None = None
     raw_message_content: str | None = None
     truncated_input: bool = False
+    xml_sent: str | None = None
 
 
 async def _make_client(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
@@ -139,6 +140,7 @@ async def extract_response_via_llm(
             "timeout",
             int((time.monotonic() - started) * 1000),
             truncated_input=truncated,
+            xml_sent=trimmed,
         )
     except httpx.HTTPError:
         return LLMExtractionResult(
@@ -146,6 +148,7 @@ async def extract_response_via_llm(
             "connect",
             int((time.monotonic() - started) * 1000),
             truncated_input=truncated,
+            xml_sent=trimmed,
         )
 
     latency_ms = int((time.monotonic() - started) * 1000)
@@ -159,6 +162,7 @@ async def extract_response_via_llm(
             status_code=resp.status_code,
             raw_response_text=raw_response_text,
             truncated_input=truncated,
+            xml_sent=trimmed,
         )
     if resp.status_code >= 400:
         return LLMExtractionResult(
@@ -168,6 +172,7 @@ async def extract_response_via_llm(
             status_code=resp.status_code,
             raw_response_text=raw_response_text,
             truncated_input=truncated,
+            xml_sent=trimmed,
         )
 
     raw_message_content: str | None = None
@@ -186,6 +191,7 @@ async def extract_response_via_llm(
                 raw_response_text=raw_response_text,
                 raw_message_content=raw_message_content,
                 truncated_input=truncated,
+                xml_sent=trimmed,
             )
     except (KeyError, IndexError, TypeError, ValueError):
         return LLMExtractionResult(
@@ -196,6 +202,7 @@ async def extract_response_via_llm(
             raw_response_text=raw_response_text,
             raw_message_content=raw_message_content,
             truncated_input=truncated,
+            xml_sent=trimmed,
         )
 
     return LLMExtractionResult(
@@ -206,4 +213,5 @@ async def extract_response_via_llm(
         raw_response_text=raw_response_text,
         raw_message_content=raw_message_content,
         truncated_input=truncated,
+        xml_sent=trimmed,
     )
