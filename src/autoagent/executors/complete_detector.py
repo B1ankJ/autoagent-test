@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import subprocess
 import time
 from typing import Any
 
@@ -124,6 +125,28 @@ async def _send_button_reenable(
     raise TimeoutError(f"send_button_reenable not reached within {max_wait_sec}s")
 
 
+def dump_hierarchy_via_adb(device: Any) -> str:
+    """Dump the UI hierarchy via adb shell uiautomator dump.
+
+    uiautomator2's device.dump_hierarchy() can silently truncate large trees
+    (RecyclerView-heavy chat UIs with hundreds of nodes). Calling adb directly
+    returns the full XML that uiautomator writes to disk.
+    """
+    serial: str = device.serial
+    dump_path = "/sdcard/window_dump.xml"
+    subprocess.run(
+        ["adb", "-s", serial, "shell", "uiautomator", "dump", dump_path],
+        capture_output=True,
+        timeout=30,
+    )
+    result = subprocess.run(
+        ["adb", "-s", serial, "shell", "cat", dump_path],
+        capture_output=True,
+        timeout=30,
+    )
+    return result.stdout.decode("utf-8", errors="replace")
+
+
 async def wait_for_ui_tree_stable(
     device: Any,
     *,
@@ -136,7 +159,7 @@ async def wait_for_ui_tree_stable(
     stable_since: float | None = None
 
     while time.monotonic() < deadline:
-        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
         now = time.monotonic()
         if xml == last_xml:
             if stable_since is None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import traceback
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.complete_detector import (
     capture_screenshot_bytes,
+    dump_hierarchy_via_adb,
     wait_for_pixel_stable,
     wait_for_ui_tree_stable,
 )
@@ -41,8 +43,11 @@ _LOADING_INDICATOR_PATTERNS = (
 )
 
 
+_TRAILING_ELLIPSIS_RE = re.compile(r"[.…·\u30fb ]+$")
+
+
 def _is_loading_indicator(text: str) -> bool:
-    stripped = text.strip().rstrip(".…·· ")
+    stripped = _TRAILING_ELLIPSIS_RE.sub("", text.strip())
     if not stripped:
         return True
     return any(pattern in stripped for pattern in _LOADING_INDICATOR_PATTERNS)
@@ -182,7 +187,7 @@ class AndroidExecutor(Executor):
                     await input_ctl.set_text(profile.input_locator, prompt)
                     xml_path = store.artifact_path(f"after_input_{idx}", "xml")
                     screenshot_path = store.artifact_path(f"after_input_{idx}", "png")
-                    current_xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+                    current_xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
                     await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
                     after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(screenshot_path.write_bytes, after_input)
@@ -432,7 +437,7 @@ async def _wait_for_ready_text(device: Any, text: str | list[str], *, timeout_se
     candidates = _ready_check_text_candidates(text)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        xml = await asyncio.to_thread(device.dump_hierarchy, compressed=False)
+        xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
         if any(candidate in xml for candidate in candidates):
             return True
         await asyncio.sleep(0.2)

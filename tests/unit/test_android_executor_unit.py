@@ -24,10 +24,21 @@ async def test_wait_for_ready_text_matches_any_candidate(
     from autoagent.executors.android_executor import _wait_for_ready_text
 
     device = MagicMock()
-    device.dump_hierarchy.side_effect = [
+    _dump_responses = [
         '<hierarchy><node text="加载中" class="android.widget.TextView"/></hierarchy>',
         '<hierarchy><node text="发消息" class="android.widget.TextView"/></hierarchy>',
     ]
+    _dump_iter = iter(_dump_responses)
+    _dump_call_count = 0
+
+    def fake_dump_hierarchy(_device):
+        nonlocal _dump_call_count
+        _dump_call_count += 1
+        return next(_dump_iter)
+
+    monkeypatch.setattr(
+        "autoagent.executors.android_executor.dump_hierarchy_via_adb", fake_dump_hierarchy
+    )
     sleep_calls = []
 
     async def fake_sleep(_seconds: float) -> None:
@@ -42,7 +53,7 @@ async def test_wait_for_ready_text_matches_any_candidate(
     )
 
     assert matched is True
-    assert device.dump_hierarchy.call_count == 2
+    assert _dump_call_count == 2
     assert sleep_calls == [0.2]
 
 

@@ -8,14 +8,15 @@ from autoagent.executors.complete_detector import (
 
 
 @pytest.mark.asyncio
-async def test_wait_for_ui_tree_stable_returns_after_same_xml():
+async def test_wait_for_ui_tree_stable_returns_after_same_xml(monkeypatch):
     seq = iter(["<a/>", "<a/>", "<a/>"])
 
-    class Device:
-        def dump_hierarchy(self, compressed=False):
-            return next(seq)
+    monkeypatch.setattr(
+        "autoagent.executors.complete_detector.dump_hierarchy_via_adb",
+        lambda _device: next(seq),
+    )
 
-    await wait_for_ui_tree_stable(Device(), stable_sec=0.0, max_wait_sec=0.2)
+    await wait_for_ui_tree_stable(object(), stable_sec=0.0, max_wait_sec=0.2)
 
 
 @pytest.mark.asyncio
