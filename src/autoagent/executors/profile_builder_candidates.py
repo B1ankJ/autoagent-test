@@ -455,7 +455,11 @@ def _response_text_score(text: str) -> int:
     stripped = text.strip()
     if not stripped:
         return -2000
-    if _looks_like_response_ui_chrome(stripped):
+    # Only penalise blocks that are SHORT and consist mainly of UI chrome
+    # (e.g. the standalone disclaimer node).  Long blocks that combine a real
+    # response with a trailing "以上内容由AI生成" footer must not be penalised,
+    # otherwise the correct candidate is buried under -4000.
+    if len(stripped) < 40 and _looks_like_response_ui_chrome(stripped):
         return -4000
     if len(stripped) <= 3:
         return -1200
