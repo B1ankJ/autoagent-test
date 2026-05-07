@@ -37,12 +37,19 @@ def build_frontend() -> None:
 
 
 def install_playwright() -> None:
+    venv_python = ROOT / ".venv" / "bin" / "python3.11"
+    interpreter = str(venv_python) if venv_python.exists() else sys.executable
     _run(
         "Playwright Chromium",
-        [sys.executable, "-m", "playwright", "install", "chromium"],
+        [interpreter, "-m", "playwright", "install", "chromium"],
         cwd=ROOT,
         fatal=False,
     )
+
+
+def _quote_env_value(value: str) -> str:
+    """Wrap value in double-quotes and escape internal double-quotes."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def generate_env() -> None:
@@ -59,12 +66,12 @@ def generate_env() -> None:
         print("  (random password generated)")
 
     jwt_secret = secrets.token_hex(32)
-    assert len(jwt_secret) >= 32
 
+    env_path.touch(mode=0o600, exist_ok=True)
     env_path.write_text(
         f"ADMIN_USERNAME=admin\n"
-        f"ADMIN_PASSWORD={password}\n"
-        f"JWT_SECRET={jwt_secret}\n"
+        f"ADMIN_PASSWORD={_quote_env_value(password)}\n"
+        f"JWT_SECRET={_quote_env_value(jwt_secret)}\n"
         f"DATA_ROOT=./data\n"
         f"LOGS_ROOT=./logs\n",
         encoding="utf-8",
