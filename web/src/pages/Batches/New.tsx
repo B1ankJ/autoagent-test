@@ -50,28 +50,26 @@ export function BatchNew() {
   const [jsonForm] = Form.useForm<JsonFormValues>()
   const [uploadForm] = Form.useForm<UploadFormValues>()
 
-  const availableProfiles = (profiles.data ?? []).filter(
-    (profile) =>
-      profile.platform === 'api' || profile.platform === 'web' || profile.platform === 'android',
-  )
+  const availableProfiles = profiles.data ?? []
   const jsonMode = Form.useWatch('mode', jsonForm) ?? 'api'
   const uploadMode = Form.useWatch('mode', uploadForm) ?? 'api'
-  const jsonPlatform =
-    jsonMode === 'gui_pc_web' ? 'web' : jsonMode === 'gui_android' ? 'android' : 'api'
-  const uploadPlatform =
-    uploadMode === 'gui_pc_web' ? 'web' : uploadMode === 'gui_android' ? 'android' : 'api'
+
+  function modeToPlatform(mode: string): string {
+    if (mode === 'gui_pc_web') return 'web'
+    if (mode === 'gui_android') return 'android'
+    if (mode === 'agent_pc') return 'agent_pc'
+    if (mode === 'agent_android') return 'agent_android'
+    return 'api'
+  }
+
+  const jsonPlatform = modeToPlatform(jsonMode)
+  const uploadPlatform = modeToPlatform(uploadMode)
   const jsonProfileOptions = availableProfiles
     .filter((profile) => profile.platform === jsonPlatform)
-    .map((profile) => ({
-      value: profile.name,
-      label: profile.name,
-    }))
+    .map((profile) => ({ value: profile.name, label: profile.name }))
   const uploadProfileOptions = availableProfiles
     .filter((profile) => profile.platform === uploadPlatform)
-    .map((profile) => ({
-      value: profile.name,
-      label: profile.name,
-    }))
+    .map((profile) => ({ value: profile.name, label: profile.name }))
 
   const onJsonSubmit = async (values: JsonFormValues) => {
     try {
@@ -117,7 +115,7 @@ export function BatchNew() {
     }
   }
 
-  if (availableProfiles.length === 0) {
+  if (profiles.data !== undefined && availableProfiles.length === 0) {
     return (
       <Card>
         <Typography.Paragraph>至少创建一个可用 Profile 才能跑批次。</Typography.Paragraph>
@@ -157,13 +155,15 @@ export function BatchNew() {
                         { label: 'API', value: 'api' },
                         { label: 'Web (GUI)', value: 'gui_pc_web' },
                         { label: 'Android (GUI)', value: 'gui_android' },
+                        { label: 'Agent PC', value: 'agent_pc' },
+                        { label: 'Agent Android', value: 'agent_android' },
                       ]}
                     />
                   </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
                   </Form.Item>
-                  {jsonMode === 'gui_android' ? (
+                  {jsonMode === 'gui_android' || jsonMode === 'agent_android' ? (
                     <Typography.Text type="secondary">
                       Android 模式下，实际并发上限取决于在线可用设备数。
                     </Typography.Text>
@@ -244,13 +244,15 @@ export function BatchNew() {
                         { label: 'API', value: 'api' },
                         { label: 'Web (GUI)', value: 'gui_pc_web' },
                         { label: 'Android (GUI)', value: 'gui_android' },
+                        { label: 'Agent PC', value: 'agent_pc' },
+                        { label: 'Agent Android', value: 'agent_android' },
                       ]}
                     />
                   </Form.Item>
                   <Form.Item name="concurrency" label="并发">
                     <InputNumber min={1} max={10} />
                   </Form.Item>
-                  {uploadMode === 'gui_android' ? (
+                  {uploadMode === 'gui_android' || uploadMode === 'agent_android' ? (
                     <Typography.Text type="secondary">
                       Android 模式下，实际并发上限取决于在线可用设备数。
                     </Typography.Text>

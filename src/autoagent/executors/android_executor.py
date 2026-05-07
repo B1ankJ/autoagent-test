@@ -144,7 +144,7 @@ class AndroidExecutor(Executor):
                         action_runner,
                         profile.new_session_action,
                     )
-                    await asyncio.sleep(3.0)
+                    await asyncio.sleep(profile.new_session_wait_sec)
                 for idx, prompt in enumerate(sample.prompts, start=1):
                     resolved_input = resolved_methods[idx - 1]
                     if profile.input_focus_action:
@@ -215,7 +215,7 @@ class AndroidExecutor(Executor):
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=after_send_path, label=f"after_send_{idx}")
                     )
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(profile.post_send_wait_sec)
                     xml: str | None = None
                     if profile.complete_detection.type == "pixel_stable":
                         sample_log.info(

@@ -125,26 +125,48 @@ async def _send_button_reenable(
     raise TimeoutError(f"send_button_reenable not reached within {max_wait_sec}s")
 
 
+_DUMP_RETRIES = 3
+_DUMP_RETRY_DELAY_SEC = 1.0
+
+
 def dump_hierarchy_via_adb(device: Any) -> str:
     """Dump the UI hierarchy via adb shell uiautomator dump.
 
     uiautomator2's device.dump_hierarchy() can silently truncate large trees
     (RecyclerView-heavy chat UIs with hundreds of nodes). Calling adb directly
     returns the full XML that uiautomator writes to disk.
+
+    `uiautomator dump` can fail when the screen has active animations; we retry
+    up to _DUMP_RETRIES times before falling back to uiautomator2's own dump.
     """
     serial: str = device.serial
     dump_path = "/sdcard/window_dump.xml"
-    subprocess.run(
-        ["adb", "-s", serial, "shell", "uiautomator", "dump", dump_path],
-        capture_output=True,
-        timeout=30,
-    )
-    result = subprocess.run(
-        ["adb", "-s", serial, "shell", "cat", dump_path],
-        capture_output=True,
-        timeout=30,
-    )
-    return result.stdout.decode("utf-8", errors="replace")
+
+    for attempt in range(_DUMP_RETRIES):
+        # Remove stale file so a failed dump doesn't return old content.
+        subprocess.run(
+            ["adb", "-s", serial, "shell", "rm", "-f", dump_path],
+            capture_output=True,
+            timeout=10,
+        )
+        subprocess.run(
+            ["adb", "-s", serial, "shell", "uiautomator", "dump", dump_path],
+            capture_output=True,
+            timeout=30,
+        )
+        result = subprocess.run(
+            ["adb", "-s", serial, "shell", "cat", dump_path],
+            capture_output=True,
+            timeout=30,
+        )
+        xml = result.stdout.decode("utf-8", errors="replace").strip()
+        if xml:
+            return xml
+        if attempt < _DUMP_RETRIES - 1:
+            time.sleep(_DUMP_RETRY_DELAY_SEC)
+
+    # All adb attempts failed (animation/lock). Fall back to uiautomator2.
+    return device.dump_hierarchy(compressed=False) or ""
 
 
 async def wait_for_ui_tree_stable(
@@ -161,6 +183,10 @@ async def wait_for_ui_tree_stable(
     while time.monotonic() < deadline:
         xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
         now = time.monotonic()
+        if not xml:
+            # Dump failed entirely — don't treat empty as stable, just retry.
+            await asyncio.sleep(poll_interval_sec)
+            continue
         if xml == last_xml:
             if stable_since is None:
                 if stable_sec <= 0:

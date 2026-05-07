@@ -149,6 +149,8 @@ class AndroidProfile(BaseModel):
     input_focus_action: list[ActionStep] = Field(default_factory=list)
     send_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
+    new_session_wait_sec: float = 3.0
+    post_send_wait_sec: float = 10.0
 
     def llm_response_enabled(self) -> bool:
         return bool(self.base_url and self.model and self.api_key)

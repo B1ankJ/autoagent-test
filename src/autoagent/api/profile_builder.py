@@ -930,6 +930,8 @@ def _draft_profile_from_candidates(
             "stable_sec": 2,
             "max_wait_sec": 180,
         },
+        "new_session_wait_sec": 3.0,
+        "post_send_wait_sec": 10.0,
     }
 
 
