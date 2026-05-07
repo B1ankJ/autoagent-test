@@ -38,7 +38,7 @@ _UI_CHROME_PATTERNS = (
     "发消息",
     "按住说话",
 )
-_MIN_BUBBLE_HEIGHT = 80
+_MIN_BUBBLE_HEIGHT = 20
 
 
 def _looks_like_ui_chrome(text: str) -> bool:
