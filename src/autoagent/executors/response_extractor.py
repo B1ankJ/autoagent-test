@@ -197,7 +197,11 @@ def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int,
     text = _block_text(block)
     if bounds is None:
         return (0, index, len(text), len(block))
-    return (1, bounds[3], len(text), index)
+    # Short texts (< 15 chars) are likely suggestion chips or placeholders
+    # that sit below the actual response. Apply a y-penalty so a genuine
+    # response higher on screen still wins over them.
+    y_penalty = 2500 if len(text) < 15 else 0
+    return (1, bounds[3] - y_penalty, len(text), index)
 
 
 class UiTreeExtractor:
@@ -243,6 +247,8 @@ class UiTreeExtractor:
                 ]
                 if non_chip_blocks:
                     blocks = non_chip_blocks
+            # When substantial blocks exist, filter out short single-node items
+            # (suggestion prompts / placeholder chips that sit below the response)
             winner_index, winner_block = max(
                 enumerate(blocks),
                 key=lambda item: _block_score(item[1], index=item[0]),
