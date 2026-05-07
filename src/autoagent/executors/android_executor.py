@@ -27,6 +27,25 @@ from autoagent.profiles.schemas import ActionStep, AndroidProfile
 
 log = logging.getLogger(__name__)
 _NEW_SESSION_STEP_DELAY_SEC = 2.0
+_LOADING_RETRY_MAX = 5
+_LOADING_RETRY_SEC = 3.0
+_LOADING_INDICATOR_PATTERNS = (
+    "正在思考",
+    "思考中",
+    "正在生成",
+    "AI正在回复",
+    "正在回答",
+    "正在处理",
+    "加载中",
+    "Loading",
+)
+
+
+def _is_loading_indicator(text: str) -> bool:
+    stripped = text.strip().rstrip(".…·· ")
+    if not stripped:
+        return True
+    return any(pattern in stripped for pattern in _LOADING_INDICATOR_PATTERNS)
 
 
 def _clip_log_text(value: str | None, max_chars: int = 240) -> str | None:
@@ -240,6 +259,29 @@ class AndroidExecutor(Executor):
                             response_container_locator=profile.response_extraction.response_container_locator,
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
+                        for _retry in range(_LOADING_RETRY_MAX):
+                            if not _is_loading_indicator(result.text):
+                                break
+                            sample_log.info(
+                                "android sample %s prompt %s loading indicator detected (%r), "
+                                "retry %s/%s",
+                                sample.id,
+                                idx,
+                                result.text,
+                                _retry + 1,
+                                _LOADING_RETRY_MAX,
+                            )
+                            await asyncio.sleep(_LOADING_RETRY_SEC)
+                            xml = await wait_for_ui_tree_stable(
+                                device,
+                                stable_sec=1.0,
+                                max_wait_sec=profile.complete_detection.max_wait_sec,
+                            )
+                            result = ui_tree_extractor.extract_from_xml(
+                                xml,
+                                response_container_locator=profile.response_extraction.response_container_locator,
+                                latest_bubble_locator=profile.response_extraction.latest_bubble_match,
+                            )
                         sample_log.info(
                             (
                                 "android sample %s prompt %s ui_tree extraction: "
@@ -270,6 +312,29 @@ class AndroidExecutor(Executor):
                             response_container_locator=profile.response_extraction.response_container_locator,
                             latest_bubble_locator=profile.response_extraction.latest_bubble_match,
                         )
+                        for _retry in range(_LOADING_RETRY_MAX):
+                            if not _is_loading_indicator(result.text):
+                                break
+                            sample_log.info(
+                                "android sample %s prompt %s loading indicator detected (%r), "
+                                "retry %s/%s",
+                                sample.id,
+                                idx,
+                                result.text,
+                                _retry + 1,
+                                _LOADING_RETRY_MAX,
+                            )
+                            await asyncio.sleep(_LOADING_RETRY_SEC)
+                            xml = await wait_for_ui_tree_stable(
+                                device,
+                                stable_sec=1.0,
+                                max_wait_sec=profile.complete_detection.max_wait_sec,
+                            )
+                            result = ui_tree_extractor.extract_from_xml(
+                                xml,
+                                response_container_locator=profile.response_extraction.response_container_locator,
+                                latest_bubble_locator=profile.response_extraction.latest_bubble_match,
+                            )
                         sample_log.info(
                             (
                                 "android sample %s prompt %s ui_tree extraction: "
@@ -283,7 +348,7 @@ class AndroidExecutor(Executor):
                             profile.response_extraction.response_container_locator.model_dump(mode="json"),
                             profile.response_extraction.latest_bubble_match.model_dump(mode="json"),
                         )
-                        if result.text.strip():
+                        if result.text.strip() and not _is_loading_indicator(result.text):
                             responses.append(result.text)
                         else:
                             raw = await asyncio.to_thread(capture_screenshot_bytes, device)
