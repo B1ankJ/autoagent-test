@@ -9,6 +9,8 @@ const COLORS: Record<ModeValue, string> = {
   android: 'green',
   gui_pc_web: 'purple',
   gui_android: 'green',
+  agent_pc: 'cyan',
+  agent_android: 'geekblue',
 }
 
 const LABELS: Record<ModeValue, string> = {
@@ -17,6 +19,8 @@ const LABELS: Record<ModeValue, string> = {
   android: 'android',
   gui_pc_web: 'gui_pc_web',
   gui_android: 'gui_android',
+  agent_pc: 'agent_pc',
+  agent_android: 'agent_android',
 }
 
 export function ModeTag({ mode }: { mode: ModeValue }) {

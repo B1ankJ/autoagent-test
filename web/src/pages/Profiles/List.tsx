@@ -16,9 +16,11 @@ export function ProfileList() {
     api: [] as ProfileSummary[],
     web: [] as ProfileSummary[],
     android: [] as ProfileSummary[],
+    agent_pc: [] as ProfileSummary[],
+    agent_android: [] as ProfileSummary[],
   }
   for (const profile of data ?? []) {
-    groups[profile.platform].push(profile)
+    groups[profile.platform]?.push(profile)
   }
 
   const columns: ColumnsType<ProfileSummary> = [
@@ -88,6 +90,16 @@ export function ProfileList() {
             key: 'android',
             label: `Android (${groups.android.length})`,
             children: renderTab(groups.android),
+          },
+          {
+            key: 'agent_pc',
+            label: `Agent PC (${groups.agent_pc.length})`,
+            children: renderTab(groups.agent_pc),
+          },
+          {
+            key: 'agent_android',
+            label: `Agent Android (${groups.agent_android.length})`,
+            children: renderTab(groups.agent_android),
           },
         ]}
       />

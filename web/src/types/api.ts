@@ -1,5 +1,5 @@
-export type ExecutionMode = 'api' | 'gui_pc_web' | 'gui_android'
-export type ProfilePlatform = 'api' | 'web' | 'android'
+export type ExecutionMode = 'api' | 'gui_pc_web' | 'gui_android' | 'agent_pc' | 'agent_android'
+export type ProfilePlatform = 'api' | 'web' | 'android' | 'agent_pc' | 'agent_android'
 export type SampleStatus =
   | 'queued'
   | 'running'
