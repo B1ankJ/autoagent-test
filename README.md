@@ -2,6 +2,26 @@
 
 Backend service for batch testing of conversational AI products via OpenAI-compatible APIs, with a React + TypeScript web UI built into the FastAPI binary.
 
+## Quick Start
+
+**Requirements:** git, curl, internet access. Everything else is installed automatically.
+
+```bash
+git clone <repo-url>
+cd AutoAgentTest
+bash install.sh
+```
+
+The script will:
+1. Install Python 3.11, Node.js, ADB, uv, and pnpm (if not already present)
+2. Install Python and frontend dependencies
+3. Download Playwright Chromium
+4. Prompt for an admin password and generate a `.env` with a random JWT secret
+
+Then start the server with the command printed at the end of the install.
+
+**Platforms:** macOS (Homebrew), Ubuntu/Debian (apt + deadsnakes PPA for Python 3.11), RHEL/Fedora (dnf).
+
 ## Status
 
 **Plan 1 complete. Plan 2 complete. Plan 3 complete. Plan 4 in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android Tier 1 and Tier 2 code paths are now in the repo: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder MVP. Remaining work is final manual verification on a real device + real app, then release tagging.
