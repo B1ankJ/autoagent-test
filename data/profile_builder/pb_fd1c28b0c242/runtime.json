@@ -1,0 +1,74 @@
+{
+  "session_id": "pb_fd1c28b0c242",
+  "session_status": "validated",
+  "current_step": "connectivity",
+  "step_state": "done",
+  "last_error": null,
+  "builder_adb_keyboard_active": false,
+  "builder_previous_ime": null,
+  "captures": [
+    {
+      "step": "idle",
+      "status": "done",
+      "screenshot": "capture_idle.png",
+      "updated_at": "2026-05-07T13:41:00.945676Z"
+    },
+    {
+      "step": "editing",
+      "status": "done",
+      "screenshot": "capture_editing.png",
+      "updated_at": "2026-05-07T13:41:03.773059Z"
+    }
+  ],
+  "connectivity": {
+    "status": "done",
+    "result_status": "done",
+    "result_summary": "你好！我是农小宝，很高兴为你服务。无论是农业种植、养殖技术，还是生活里遇到的其他问题，都可以随时问我。",
+    "screens": [
+      {
+        "step": "connectivity",
+        "label": "validate_before_input",
+        "path": "validate_before_input.png",
+        "taken_at": "2026-05-07T13:42:31.148023Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_input",
+        "path": "validate_after_input.png",
+        "taken_at": "2026-05-07T13:42:33.417849Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_send",
+        "path": "validate_after_send.png",
+        "taken_at": "2026-05-07T13:42:33.922812Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_result",
+        "path": "validate_after_result.png",
+        "taken_at": "2026-05-07T13:42:43.607288Z"
+      }
+    ]
+  },
+  "recent_screens": [
+    {
+      "step": "connectivity",
+      "label": "validate_after_input",
+      "path": "validate_after_input.png",
+      "taken_at": "2026-05-07T13:42:33.417849Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_send",
+      "path": "validate_after_send.png",
+      "taken_at": "2026-05-07T13:42:33.922812Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_result",
+      "path": "validate_after_result.png",
+      "taken_at": "2026-05-07T13:42:43.607288Z"
+    }
+  ]
+}

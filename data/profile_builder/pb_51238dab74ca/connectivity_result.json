@@ -1,0 +1,70 @@
+{
+  "id": "pb-validate-pb_51238dab74ca",
+  "status": "done",
+  "prompts_sent": [
+    "hello"
+  ],
+  "responses": [
+    "今天有什么想了解的吗？无论是农业技术、天气情况，还是其他问题，我都很乐意帮你解答。"
+  ],
+  "llm_responses": [
+    "你好！很高兴再次见到你。..今天有什么想了解的吗？无论是农业技术、天气情况，还是其他问题，我都很乐意帮你解答。"
+  ],
+  "llm_errors": [
+    null
+  ],
+  "duration_ms": 16754,
+  "attempt_count": 1,
+  "mode": "gui_android",
+  "target_profile": "pb_pb_51238dab74ca",
+  "metadata": {
+    "action_log": [
+      {
+        "t_ms": 1010,
+        "action": "tap_xy",
+        "x": 622,
+        "y": 2110,
+        "ok": true
+      },
+      {
+        "t_ms": 3048,
+        "action": "tap_xy",
+        "x": 975,
+        "y": 2110,
+        "ok": true
+      }
+    ],
+    "action_replay_available": true,
+    "device_serial": "24108eff",
+    "screenshots": [
+      {
+        "name": "before_input_1.png",
+        "label": "before_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_input_1.png",
+        "label": "after_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_send_1.png",
+        "label": "after_send_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_result_1.png",
+        "label": "after_result_1",
+        "is_sensitive": false,
+        "error": null
+      }
+    ]
+  },
+  "error": null,
+  "logs_dir": "/Users/b1ankj/Desktop/2026/Q2/AutoAgentTest/data/logs/b_1778141744_7338c7/pb-validate-pb_51238dab74ca",
+  "started_at": "2026-05-07T08:15:44.262157Z",
+  "ended_at": "2026-05-07T08:16:01.017260Z"
+}

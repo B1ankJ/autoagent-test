@@ -1,7 +1,5 @@
 from autoagent.api.profile_builder import (
     _input_focus_action_review_item,
-    _ready_check_review_item,
-    _ready_check_text,
 )
 from autoagent.executors.profile_builder_candidates import build_android_candidates
 
@@ -534,49 +532,3 @@ def test_build_android_candidates_keeps_all_bounded_nodes_for_manual_review() ->
     )
 
 
-def test_ready_check_text_prefers_input_placeholder_over_chat_content():
-    idle_xml = """
-    <hierarchy>
-      <node
-        text="你好你好！嚯，升级了，直接上中文了，hh。今天这是打招呼大赏吗？"
-        class="android.widget.TextView"
-      />
-      <node text="发消息或按住说话..." class="android.widget.TextView" />
-    </hierarchy>
-    """
-
-    assert _ready_check_text(idle_xml) == "发消息"
-
-
-def test_ready_check_text_returns_multiple_candidates_when_available():
-    idle_xml = """
-    <hierarchy>
-      <node text="发消息" class="android.widget.TextView" />
-      <node text="语音输入" class="android.widget.ImageView" />
-      <node text="输入消息" class="android.widget.TextView" />
-    </hierarchy>
-    """
-
-    assert _ready_check_text(idle_xml) == ["发消息", "语音输入", "输入消息"]
-
-
-def test_ready_check_review_item_emits_multi_select_candidates():
-    idle_xml = """
-    <hierarchy>
-      <node text="发消息" class="android.widget.TextView" bounds="[100,2000][400,2080]" />
-      <node text="语音输入" class="android.widget.ImageView" bounds="[500,2000][900,2080]" />
-      <node text="输入消息" class="android.widget.TextView" bounds="[100,2100][400,2180]" />
-    </hierarchy>
-    """
-
-    item = _ready_check_review_item(idle_xml)
-
-    assert item is not None
-    assert item["field"] == "ready_check"
-    assert item["recommended_option"] == {
-        "type": "ui_tree_contains",
-        "text": ["发消息", "语音输入", "输入消息"],
-        "timeout_sec": 5,
-    }
-    assert item["candidate_texts"] == ["发消息", "语音输入", "输入消息"]
-    assert [ref["text"] for ref in item["evidence_refs"]] == ["发消息", "语音输入", "输入消息"]

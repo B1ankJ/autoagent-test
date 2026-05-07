@@ -9,52 +9,11 @@ from autoagent.executors.response_llm_extractor import LLMExtractionResult
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import (
     AndroidProfile,
-    AndroidReadyCheckTree,
     AndroidResponseExtraction,
     Locator,
     PixelStable,
     UiTreeStable,
 )
-
-
-@pytest.mark.asyncio
-async def test_wait_for_ready_text_matches_any_candidate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from autoagent.executors.android_executor import _wait_for_ready_text
-
-    device = MagicMock()
-    _dump_responses = [
-        '<hierarchy><node text="加载中" class="android.widget.TextView"/></hierarchy>',
-        '<hierarchy><node text="发消息" class="android.widget.TextView"/></hierarchy>',
-    ]
-    _dump_iter = iter(_dump_responses)
-    _dump_call_count = 0
-
-    def fake_dump_hierarchy(_device):
-        nonlocal _dump_call_count
-        _dump_call_count += 1
-        return next(_dump_iter)
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor.dump_hierarchy_via_adb", fake_dump_hierarchy
-    )
-    sleep_calls = []
-
-    async def fake_sleep(_seconds: float) -> None:
-        sleep_calls.append(_seconds)
-
-    monkeypatch.setattr("autoagent.executors.android_executor.asyncio.sleep", fake_sleep)
-
-    matched = await _wait_for_ready_text(
-        device,
-        ["发消息", "语音输入"],
-        timeout_sec=1,
-    )
-
-    assert matched is True
-    assert _dump_call_count == 2
-    assert sleep_calls == [0.2]
 
 
 @pytest.mark.asyncio
@@ -92,13 +51,6 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         fake_wait_for_ui_tree_stable,
     )
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_input.ensure_adb_keyboard_ready",
         lambda _device: "com.example/.Ime",
@@ -116,8 +68,6 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -197,16 +147,9 @@ async def test_execute_activates_adb_keyboard_before_new_session_action(
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -231,8 +174,6 @@ async def test_execute_activates_adb_keyboard_before_new_session_action(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -296,16 +237,9 @@ async def test_execute_skips_new_session_action_when_sample_does_not_request_it(
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -327,8 +261,6 @@ async def test_execute_skips_new_session_action_when_sample_does_not_request_it(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -394,19 +326,12 @@ async def test_execute_waits_two_seconds_between_new_session_steps(
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
     async def fake_sleep(delay: float):
         sleeps.append(delay)
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -434,8 +359,6 @@ async def test_execute_waits_two_seconds_between_new_session_steps(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -500,16 +423,9 @@ async def test_execute_prefers_send_action_over_send_button_locator(
     device.click.side_effect = lambda x, y: events.append((x, y))
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -523,8 +439,6 @@ async def test_execute_prefers_send_action_over_send_button_locator(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="resource_id", value="missing:id/send"),
         response_extraction=AndroidResponseExtraction(
@@ -606,13 +520,6 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         lambda: FakeOcrExtractor(),
     )
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_input.is_package_installed",
         lambda _serial, _pkg: False,
@@ -623,8 +530,6 @@ async def test_execute_ocr_mode_uses_pixel_stable(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -664,101 +569,6 @@ async def test_execute_ocr_mode_uses_pixel_stable(
 
 
 @pytest.mark.asyncio
-async def test_execute_runs_recovery_path_when_ready_check_initially_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    device = MagicMock()
-    input_target = MagicMock()
-    send_target = MagicMock()
-    recovery_target = MagicMock()
-
-    def lookup(**kwargs):
-        if kwargs == {"resourceId": "demo:id/input"}:
-            return input_target
-        if kwargs == {"text": "Send"}:
-            return send_target
-        if kwargs == {"text": "Chat"}:
-            return recovery_target
-        raise AssertionError(f"unexpected selector: {kwargs}")
-
-    device.side_effect = lookup
-    device.dump_hierarchy.return_value = "<hierarchy/>"
-    device.screenshot.return_value = b"raw-frame"
-    monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
-
-    ready_states = iter(
-        [
-            False,
-            True,
-        ]
-    )
-
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return next(ready_states)
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
-
-    async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
-        return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor.wait_for_ui_tree_stable",
-        fake_wait_for_ui_tree_stable,
-    )
-    monkeypatch.setattr(
-        "autoagent.executors.android_input.is_package_installed",
-        lambda _serial, _pkg: False,
-    )
-
-    profile = AndroidProfile(
-        name="fake_android",
-        platform="android",
-        package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
-        recovery_path=[
-            {
-                "action": "click_locator",
-                "locator": {"type": "text", "value": "Chat"},
-            }
-        ],
-        input_locator=Locator(type="resource_id", value="demo:id/input"),
-        send_button_locator=Locator(type="text", value="Send"),
-        response_extraction=AndroidResponseExtraction(
-            method="ui_tree_only",
-            response_container_locator=Locator(type="resource_id", value="demo:id/list"),
-            scroll_container_locator=Locator(type="resource_id", value="demo:id/list"),
-            latest_bubble_match=Locator(
-                type="last_child_with_class",
-                value="android.widget.TextView",
-            ),
-        ),
-        new_session_action=[],
-        complete_detection=UiTreeStable(type="ui_tree_stable", stable_sec=0.0, max_wait_sec=1),
-    )
-    sample = Sample(
-        id="s1",
-        prompts=["hi"],
-        mode="gui_android",
-        target_profile="fake_android",
-        retry=0,
-    )
-
-    out = await AndroidExecutor(screenshots_root=tmp_path).execute(
-        sample,
-        profile,
-        ExecutorContext(device_serial="emulator-5554", verbose_logs=True),
-    )
-
-    assert out == ["echo: hi"]
-    recovery_target.click.assert_called_once()
-    input_target.click.assert_called_once()
-    device.shell.assert_called_once_with(["input", "text", "hi"])
-
-
-@pytest.mark.asyncio
 async def test_execute_skips_llm_when_profile_does_not_enable_it(monkeypatch, tmp_path) -> None:
     device = MagicMock()
     input_target = MagicMock()
@@ -776,16 +586,9 @@ async def test_execute_skips_llm_when_profile_does_not_enable_it(monkeypatch, tm
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -799,8 +602,6 @@ async def test_execute_skips_llm_when_profile_does_not_enable_it(monkeypatch, tm
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -859,16 +660,9 @@ async def test_execute_calls_llm_per_round_when_profile_enables_it(monkeypatch, 
         ]
     )
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return next(xmls)
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -885,8 +679,6 @@ async def test_execute_calls_llm_per_round_when_profile_enables_it(monkeypatch, 
         base_url="u",
         model="m",
         api_key="k",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="echo", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(
@@ -967,13 +759,6 @@ async def test_execute_writes_exception_to_executor_log(
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_input.is_package_installed",
         lambda _serial, _pkg: False,
@@ -991,8 +776,6 @@ async def test_execute_writes_exception_to_executor_log(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="resource_id", value="missing:id/send"),
         response_extraction=AndroidResponseExtraction(
@@ -1048,16 +831,9 @@ async def test_execute_reuses_existing_logs_dir_without_nesting(
     device.screenshot.return_value = b"raw-frame"
     monkeypatch.setattr("autoagent.executors.android_executor.u2.connect", lambda serial: device)
 
-    async def fake_wait_for_ready_text(*_args, **_kwargs):
-        return True
-
     async def fake_wait_for_ui_tree_stable(*_args, **_kwargs):
         return '<hierarchy><node class="android.widget.TextView" text="echo: hi"/></hierarchy>'
 
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor._wait_for_ready_text",
-        fake_wait_for_ready_text,
-    )
     monkeypatch.setattr(
         "autoagent.executors.android_executor.wait_for_ui_tree_stable",
         fake_wait_for_ui_tree_stable,
@@ -1071,8 +847,6 @@ async def test_execute_reuses_existing_logs_dir_without_nesting(
         name="fake_android",
         platform="android",
         package="demo.app",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="发消息", timeout_sec=1),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="demo:id/input"),
         send_button_locator=Locator(type="text", value="Send"),
         response_extraction=AndroidResponseExtraction(

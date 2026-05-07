@@ -1,0 +1,44 @@
+name: nxb_android
+platform: android
+package: com.eg.android.AlipayGphone
+activity: com.alipay.mobile.nebulax.xriver.activity.XRiverActivity
+serial: 24108eff
+base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+model: qwen-vl-max
+api_key: sk-877a0b6c4a424f9e89c937e4c65261fe
+input_method: auto
+ready_check:
+  type: ui_tree_contains
+  text: 耕地地力保护补贴标准
+  timeout_sec: 5
+recovery_path: []
+input_locator:
+  type: xpath
+  value: //*[@bounds="[72,1998][1008,2055]"]
+send_button_locator:
+  type: xpath
+  value: //*[@bounds="[942,2076][1008,2145]"]
+response_extraction:
+  method: ui_tree_only
+  response_container_locator:
+    type: class
+    value: android.view.View
+  scroll_container_locator:
+    type: class
+    value: android.view.View
+  latest_bubble_match:
+    type: class
+    value: android.widget.TextView
+new_session_action: []
+input_focus_action:
+- action: tap_xy
+  x: 622
+  y: 2110
+send_action:
+- action: tap_xy
+  x: 975
+  y: 2110
+complete_detection:
+  type: ui_tree_stable
+  stable_sec: 2
+  max_wait_sec: 180

@@ -1,0 +1,50 @@
+{
+  "id": "pb_c37d337e8f11",
+  "platform": "android",
+  "device_serial": "24108eff",
+  "name": "qwen_android",
+  "status": "validated",
+  "steps": [
+    "idle",
+    "editing"
+  ],
+  "artifact_dir": "data/profile_builder/pb_c37d337e8f11",
+  "artifacts": [
+    "candidates.json",
+    "capture_editing.png",
+    "capture_editing.xml",
+    "capture_idle.png",
+    "capture_idle.xml",
+    "capture_new_session_step_0.png",
+    "capture_new_session_step_0.xml",
+    "capture_new_session_step_1.png",
+    "capture_new_session_step_1.xml",
+    "connectivity_result.json",
+    "draft_profile.yaml",
+    "review_items.json",
+    "validate_after_input.png",
+    "validate_after_result.png",
+    "validate_after_send.png",
+    "validate_before_input.png"
+  ],
+  "captures": [
+    {
+      "step": "idle",
+      "package": "com.aliyun.tongyi",
+      "activity": "com.ucpro.BrowserActivity",
+      "xml_artifact": "capture_idle.xml",
+      "screenshot_artifact": "capture_idle.png",
+      "active": true,
+      "captured_at": "2026-04-28T09:02:29.113169Z"
+    },
+    {
+      "step": "editing",
+      "package": "com.aliyun.tongyi",
+      "activity": "com.ucpro.BrowserActivity",
+      "xml_artifact": "capture_editing.xml",
+      "screenshot_artifact": "capture_editing.png",
+      "active": true,
+      "captured_at": "2026-04-28T09:02:33.341698Z"
+    }
+  ]
+}

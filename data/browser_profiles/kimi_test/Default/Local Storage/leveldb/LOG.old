@@ -1,0 +1,6 @@
+2026/04/28-15:46:04.611 1dcdbf7 Reusing MANIFEST /Users/b1ankj/Desktop/2026/Q2/AutoAgentTest/data/browser_profiles/kimi_test/Default/Local Storage/leveldb/MANIFEST-000001
+2026/04/28-15:46:04.613 1dcdbf7 Recovering log #3
+2026/04/28-15:46:04.614 1dcdbf7 Reusing old log /Users/b1ankj/Desktop/2026/Q2/AutoAgentTest/data/browser_profiles/kimi_test/Default/Local Storage/leveldb/000003.log 
+2026/04/28-15:46:15.245 1dcdbfb Level-0 table #5: started
+2026/04/28-15:46:15.247 1dcdbfb Level-0 table #5: 137932 bytes OK
+2026/04/28-15:46:15.250 1dcdbfb Delete type=0 #3

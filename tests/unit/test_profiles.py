@@ -51,8 +51,6 @@ def test_parse_android_profile():
             "name": "wechat_bot",
             "platform": "android",
             "package": "com.tencent.mm",
-            "ready_check": {"type": "ui_tree_contains", "text": "Bot"},
-            "recovery_path": [],
             "input_locator": {"type": "resource_id", "value": "com.tencent.mm:id/edit"},
             "send_button_locator": {"type": "text", "value": "Send"},
             "response_extraction": {

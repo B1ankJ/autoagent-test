@@ -1,0 +1,70 @@
+{
+  "id": "pb-validate-pb_c37d337e8f11",
+  "status": "done",
+  "prompts_sent": [
+    "hello"
+  ],
+  "responses": [
+    "哈喽呀，今天怎么有空来找我聊天？"
+  ],
+  "llm_responses": [
+    "哈喽呀，今天怎么有空来找我聊天？"
+  ],
+  "llm_errors": [
+    null
+  ],
+  "duration_ms": 11582,
+  "attempt_count": 1,
+  "mode": "gui_android",
+  "target_profile": "pb_pb_c37d337e8f11",
+  "metadata": {
+    "action_log": [
+      {
+        "t_ms": 547,
+        "action": "tap_xy",
+        "x": 477,
+        "y": 2094,
+        "ok": true
+      },
+      {
+        "t_ms": 2228,
+        "action": "tap_xy",
+        "x": 964,
+        "y": 2064,
+        "ok": true
+      }
+    ],
+    "action_replay_available": true,
+    "device_serial": "24108eff",
+    "screenshots": [
+      {
+        "name": "before_input_1.png",
+        "label": "before_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_input_1.png",
+        "label": "after_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_send_1.png",
+        "label": "after_send_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_result_1.png",
+        "label": "after_result_1",
+        "is_sensitive": false,
+        "error": null
+      }
+    ]
+  },
+  "error": null,
+  "logs_dir": "/Users/b1ankj/Desktop/2026/Q2/AutoAgentTest/data/logs/b_1777367010_d4338c/pb-validate-pb_c37d337e8f11",
+  "started_at": "2026-04-28T09:03:30.256913Z",
+  "ended_at": "2026-04-28T09:03:41.839336Z"
+}

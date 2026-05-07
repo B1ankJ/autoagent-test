@@ -1,0 +1,74 @@
+{
+  "session_id": "pb_34a41db11246",
+  "session_status": "validated",
+  "current_step": "connectivity",
+  "step_state": "done",
+  "last_error": null,
+  "builder_adb_keyboard_active": false,
+  "builder_previous_ime": null,
+  "captures": [
+    {
+      "step": "idle",
+      "status": "done",
+      "screenshot": "capture_idle.png",
+      "updated_at": "2026-05-07T08:54:05.340754Z"
+    },
+    {
+      "step": "editing",
+      "status": "done",
+      "screenshot": "capture_editing.png",
+      "updated_at": "2026-05-07T08:54:08.794536Z"
+    }
+  ],
+  "connectivity": {
+    "status": "done",
+    "result_status": "done",
+    "result_summary": "你好！我是农小宝，很高兴为你服务。无论是农业种植、养殖技术，还是日常生活中的其他问题，都可以问我。今天有什么可以帮你的吗？",
+    "screens": [
+      {
+        "step": "connectivity",
+        "label": "validate_before_input",
+        "path": "validate_before_input.png",
+        "taken_at": "2026-05-07T08:55:54.355760Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_input",
+        "path": "validate_after_input.png",
+        "taken_at": "2026-05-07T08:55:56.644220Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_send",
+        "path": "validate_after_send.png",
+        "taken_at": "2026-05-07T08:55:57.142782Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_result",
+        "path": "validate_after_result.png",
+        "taken_at": "2026-05-07T08:56:07.005651Z"
+      }
+    ]
+  },
+  "recent_screens": [
+    {
+      "step": "connectivity",
+      "label": "validate_after_input",
+      "path": "validate_after_input.png",
+      "taken_at": "2026-05-07T08:55:56.644220Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_send",
+      "path": "validate_after_send.png",
+      "taken_at": "2026-05-07T08:55:57.142782Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_result",
+      "path": "validate_after_result.png",
+      "taken_at": "2026-05-07T08:56:07.005651Z"
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 from autoagent.profiles.schemas import (
     AndroidProfile,
-    AndroidReadyCheckTree,
     AndroidResponseExtraction,
     Locator,
     UiTreeStable,
@@ -11,8 +10,6 @@ _BASE = dict(
     platform="android",
     package="com.aliyun.tongyi",
     serial="ABC",
-    ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="Ready", timeout_sec=5),
-    recovery_path=[],
     input_locator=Locator(type="resource_id", value="com.aliyun.tongyi:id/input"),
     send_button_locator=Locator(type="text", value="Send"),
     response_extraction=AndroidResponseExtraction(
@@ -51,11 +48,6 @@ def test_android_profile_llm_disabled_when_any_field_missing():
         assert p.llm_response_enabled() is False, f"{missing} missing should disable"
 
 
-def test_android_ready_check_accepts_multiple_text_candidates():
-    check = AndroidReadyCheckTree(
-        type="ui_tree_contains",
-        text=["发消息", "语音输入"],
-        timeout_sec=5,
-    )
-
-    assert check.text == ["发消息", "语音输入"]
+def test_android_profile_ignores_unknown_fields():
+    p = AndroidProfile(**_BASE, ready_check={"type": "ui_tree_contains", "text": "发消息"})
+    assert not hasattr(p, "ready_check")

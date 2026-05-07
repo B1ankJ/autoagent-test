@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import re
-import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,14 +89,6 @@ class _SampleLogger:
             f.write(f"{ts} {level} {message}\n")
 
 
-def _ready_check_text_candidates(text: str | list[str]) -> list[str]:
-    if isinstance(text, str):
-        candidates = [text.strip()]
-    else:
-        candidates = [candidate.strip() for candidate in text if candidate and candidate.strip()]
-    return [candidate for candidate in candidates if candidate]
-
-
 class AndroidExecutor(Executor):
     def __init__(self, screenshots_root: Path | None = None) -> None:
         if screenshots_root is None:
@@ -142,23 +133,6 @@ class AndroidExecutor(Executor):
                     action_log=ctx.action_log,
                     replay_path=ctx.action_replay_path,
                 )
-                ready = await _wait_for_ready_text(
-                    device,
-                    profile.ready_check.text,
-                    timeout_sec=profile.ready_check.timeout_sec,
-                )
-                if not ready and profile.recovery_path:
-                    sample_log.info(
-                        "android sample %s ready_check failed, running recovery_path", sample.id
-                    )
-                    await action_runner.run(profile.recovery_path)
-                    ready = await _wait_for_ready_text(
-                        device,
-                        profile.ready_check.text,
-                        timeout_sec=profile.ready_check.timeout_sec,
-                    )
-                if not ready:
-                    raise TimeoutError(f"ready_check text not found: {profile.ready_check.text!r}")
                 resolved_methods = [
                     await input_ctl.preview_method(prompt) for prompt in sample.prompts
                 ]
@@ -437,17 +411,6 @@ class AndroidExecutor(Executor):
             raise
 
         return responses
-
-
-async def _wait_for_ready_text(device: Any, text: str | list[str], *, timeout_sec: float) -> bool:
-    candidates = _ready_check_text_candidates(text)
-    deadline = time.monotonic() + timeout_sec
-    while time.monotonic() < deadline:
-        xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
-        if any(candidate in xml for candidate in candidates):
-            return True
-        await asyncio.sleep(0.2)
-    return False
 
 
 async def _run_new_session_action_with_delay(

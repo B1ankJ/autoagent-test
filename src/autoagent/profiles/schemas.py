@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 # ---- shared fragments ----
 
@@ -131,6 +131,8 @@ class AndroidResponseExtraction(BaseModel):
 
 
 class AndroidProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     name: str
     platform: Literal["android"]
     package: str
@@ -140,8 +142,6 @@ class AndroidProfile(BaseModel):
     model: str | None = None
     api_key: str | None = None
     input_method: Literal["auto", "adb_keyboard", "u2_send_keys"] = "auto"
-    ready_check: AndroidReadyCheckTree
-    recovery_path: list[ActionStep]
     input_locator: Locator
     send_button_locator: Locator
     response_extraction: AndroidResponseExtraction

@@ -1,0 +1,43 @@
+{
+  "session_id": "pb_8965391e8227",
+  "session_status": "ready",
+  "current_step": "capture_editing",
+  "step_state": "done",
+  "last_error": null,
+  "builder_adb_keyboard_active": false,
+  "builder_previous_ime": null,
+  "captures": [
+    {
+      "step": "idle",
+      "status": "done",
+      "screenshot": "capture_idle.png",
+      "updated_at": "2026-05-07T08:01:07.937178Z"
+    },
+    {
+      "step": "editing",
+      "status": "done",
+      "screenshot": "capture_editing.png",
+      "updated_at": "2026-05-07T08:01:10.742701Z"
+    }
+  ],
+  "connectivity": {
+    "status": "idle",
+    "result_status": null,
+    "result_summary": null,
+    "screens": []
+  },
+  "recent_screens": [
+    {
+      "step": "idle",
+      "label": "capture_idle",
+      "path": "capture_idle.png",
+      "taken_at": "2026-05-07T08:01:07.937178Z"
+    },
+    {
+      "step": "editing",
+      "label": "capture_editing",
+      "path": "capture_editing.png",
+      "taken_at": "2026-05-07T08:01:10.742701Z"
+    }
+  ]
+}

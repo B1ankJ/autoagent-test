@@ -1,0 +1,41 @@
+{
+  "id": "pb_8965391e8227",
+  "platform": "android",
+  "device_serial": "24108eff",
+  "name": "nxb_android",
+  "status": "ready",
+  "steps": [
+    "idle",
+    "editing"
+  ],
+  "artifact_dir": "data/profile_builder/pb_8965391e8227",
+  "artifacts": [
+    "candidates.json",
+    "capture_editing.png",
+    "capture_editing.xml",
+    "capture_idle.png",
+    "capture_idle.xml",
+    "draft_profile.yaml",
+    "review_items.json"
+  ],
+  "captures": [
+    {
+      "step": "idle",
+      "package": "com.eg.android.AlipayGphone",
+      "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+      "xml_artifact": "capture_idle.xml",
+      "screenshot_artifact": "capture_idle.png",
+      "active": true,
+      "captured_at": "2026-05-07T08:01:07.936756Z"
+    },
+    {
+      "step": "editing",
+      "package": "com.eg.android.AlipayGphone",
+      "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+      "xml_artifact": "capture_editing.xml",
+      "screenshot_artifact": "capture_editing.png",
+      "active": true,
+      "captured_at": "2026-05-07T08:01:10.742284Z"
+    }
+  ]
+}

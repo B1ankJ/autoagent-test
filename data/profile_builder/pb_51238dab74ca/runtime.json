@@ -1,0 +1,74 @@
+{
+  "session_id": "pb_51238dab74ca",
+  "session_status": "validated",
+  "current_step": "connectivity",
+  "step_state": "done",
+  "last_error": null,
+  "builder_adb_keyboard_active": false,
+  "builder_previous_ime": null,
+  "captures": [
+    {
+      "step": "idle",
+      "status": "done",
+      "screenshot": "capture_idle.png",
+      "updated_at": "2026-05-07T08:14:12.610389Z"
+    },
+    {
+      "step": "editing",
+      "status": "done",
+      "screenshot": "capture_editing.png",
+      "updated_at": "2026-05-07T08:14:17.026162Z"
+    }
+  ],
+  "connectivity": {
+    "status": "done",
+    "result_status": "done",
+    "result_summary": "今天有什么想了解的吗？无论是农业技术、天气情况，还是其他问题，我都很乐意帮你解答。",
+    "screens": [
+      {
+        "step": "connectivity",
+        "label": "validate_before_input",
+        "path": "validate_before_input.png",
+        "taken_at": "2026-05-07T08:15:46.310579Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_input",
+        "path": "validate_after_input.png",
+        "taken_at": "2026-05-07T08:15:47.858933Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_send",
+        "path": "validate_after_send.png",
+        "taken_at": "2026-05-07T08:15:48.332235Z"
+      },
+      {
+        "step": "connectivity",
+        "label": "validate_after_result",
+        "path": "validate_after_result.png",
+        "taken_at": "2026-05-07T08:15:57.572287Z"
+      }
+    ]
+  },
+  "recent_screens": [
+    {
+      "step": "connectivity",
+      "label": "validate_after_input",
+      "path": "validate_after_input.png",
+      "taken_at": "2026-05-07T08:15:47.858933Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_send",
+      "path": "validate_after_send.png",
+      "taken_at": "2026-05-07T08:15:48.332235Z"
+    },
+    {
+      "step": "connectivity",
+      "label": "validate_after_result",
+      "path": "validate_after_result.png",
+      "taken_at": "2026-05-07T08:15:57.572287Z"
+    }
+  ]
+}

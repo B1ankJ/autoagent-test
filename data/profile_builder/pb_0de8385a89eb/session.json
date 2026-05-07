@@ -1,0 +1,46 @@
+{
+  "id": "pb_0de8385a89eb",
+  "platform": "android",
+  "device_serial": "24108eff",
+  "name": "nxb",
+  "status": "validated",
+  "steps": [
+    "idle",
+    "editing"
+  ],
+  "artifact_dir": "data/profile_builder/pb_0de8385a89eb",
+  "artifacts": [
+    "candidates.json",
+    "capture_editing.png",
+    "capture_editing.xml",
+    "capture_idle.png",
+    "capture_idle.xml",
+    "capture_new_session_step_0.png",
+    "capture_new_session_step_0.xml",
+    "capture_new_session_step_1.png",
+    "capture_new_session_step_1.xml",
+    "connectivity_result.json",
+    "draft_profile.yaml",
+    "review_items.json"
+  ],
+  "captures": [
+    {
+      "step": "idle",
+      "package": "com.eg.android.AlipayGphone",
+      "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+      "xml_artifact": "capture_idle.xml",
+      "screenshot_artifact": "capture_idle.png",
+      "active": true,
+      "captured_at": "2026-05-07T13:38:28.551182Z"
+    },
+    {
+      "step": "editing",
+      "package": "com.eg.android.AlipayGphone",
+      "activity": "com.alipay.mobile.nebulax.xriver.activity.XRiverActivity",
+      "xml_artifact": "capture_editing.xml",
+      "screenshot_artifact": "capture_editing.png",
+      "active": true,
+      "captured_at": "2026-05-07T13:38:35.016215Z"
+    }
+  ]
+}

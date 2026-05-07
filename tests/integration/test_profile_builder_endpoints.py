@@ -812,13 +812,7 @@ async def test_profile_builder_generate_draft_persists_rule_artifacts(client, mo
     assert body["review_items"][0]["recommended_option"] == [
         {"action": "tap_xy", "x": 477, "y": 2094}
     ]
-    ready_check_review = next(item for item in body["review_items"] if item["field"] == "ready_check")
-    assert ready_check_review["recommended_option"] == {
-        "type": "ui_tree_contains",
-        "text": ["发消息", "语音输入"],
-        "timeout_sec": 5,
-    }
-    assert ready_check_review["candidate_texts"] == ["发消息", "语音输入"]
+    assert not any(item.get("field") == "ready_check" for item in body["review_items"])
     assert len(body["review_items"][0]["alternative_candidates"]) >= 2
     assert [
         {
@@ -922,7 +916,7 @@ async def test_profile_builder_generate_draft_falls_back_to_input_locator_focus_
     assert draft.status_code == 200
     body = draft.json()
     profile_data = yaml.safe_load(body["draft_profile_yaml"])
-    assert profile_data["ready_check"]["text"] == "百灵·专属服务顾问"
+    assert "ready_check" not in profile_data
     assert profile_data["input_focus_action"] == [{"action": "tap_xy", "x": 495, "y": 2059}]
     assert body["review_items"][0]["field"] == "input_focus_action"
 
@@ -1004,8 +998,6 @@ async def test_profile_builder_review_and_validate_flow(client, monkeypatch):
                 "activity": ".BrowserActivity",
                 "serial": "serial-1",
                 "input_method": "auto",
-                "ready_check": {"type": "ui_tree_contains", "text": "发消息", "timeout_sec": 5},
-                "recovery_path": [],
                 "input_locator": {
                     "type": "xpath",
                     "value": '//*[@class="android.widget.EditText"]',
@@ -1095,8 +1087,6 @@ async def test_profile_builder_review_updates_input_focus_action_field(client):
                 "activity": ".BrowserActivity",
                 "serial": "serial-1",
                 "input_method": "auto",
-                "ready_check": {"type": "ui_tree_contains", "text": "发消息", "timeout_sec": 5},
-                "recovery_path": [],
                 "input_locator": {
                     "type": "xpath",
                     "value": '//*[@class="android.widget.EditText"]',
@@ -1197,8 +1187,6 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
                 "activity": ".BrowserActivity",
                 "serial": "serial-1",
                 "input_method": "auto",
-                "ready_check": {"type": "ui_tree_contains", "text": "发消息", "timeout_sec": 5},
-                "recovery_path": [],
                 "input_locator": {"type": "xpath", "value": "//*[contains(@text, '发消息')]"},
                 "send_button_locator": {"type": "xpath", "value": "//*[@bounds='[1,1][2,2]']"},
                 "response_extraction": {

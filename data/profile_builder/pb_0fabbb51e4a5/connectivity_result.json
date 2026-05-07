@@ -1,0 +1,70 @@
+{
+  "id": "pb-validate-pb_0fabbb51e4a5",
+  "status": "done",
+  "prompts_sent": [
+    "hello"
+  ],
+  "responses": [
+    "您好，关于网商贷额度评估标准，会根据您的经营类型进行差异化评估：1. ，主要评估维度包括： -店铺经营情况（如信用等级、动态评分、好评差评率、退款率等） -账户安全情况（如是否有投诉违规扣分、近期是否修改过邮箱/密码等） -信用记录（如贷款还款是否逾期） -负债情况（如其他平台借款或对外担保情况）2. ，主要评估维度包括： -店铺经营稳定性（如收单用户数、收单量波动情况等） -信用记录（如贷款还款是否逾期） -负债情况（如其他平台借款或对外担保情况）以上维度会综合判断您的经营健康度和还款能力，最终评估结果以系统为准。"
+  ],
+  "llm_responses": [
+    "您好，关于网商贷额度评估标准，会根据您的经营类型进行差异化评估：1. \n若您是淘系经营者\n，主要评估维度包括： -店铺经营情况（如信用等级、动态评分、好评差评率、退款率等） -账户安全情况（如是否有投诉违规扣分、近期是否修改过邮箱/密码等） -信用记录（如贷款还款是否逾期） -负债情况（如其他平台借款或对外担保情况）2. \n若您是线下实体经营者\n，主要评估维度包括： -店铺经营稳定性（如收单用户数、收单量波动情况等） -信用记录（如贷款还款是否逾期） -负债情况（如其他平台借款或对外担保情况）以上维度会综合判断您的经营健康度和还款能力，最终评估结果以系统为准。"
+  ],
+  "llm_errors": [
+    null
+  ],
+  "duration_ms": 27393,
+  "attempt_count": 1,
+  "mode": "gui_android",
+  "target_profile": "pb_pb_0fabbb51e4a5",
+  "metadata": {
+    "action_log": [
+      {
+        "t_ms": 728,
+        "action": "tap_xy",
+        "x": 580,
+        "y": 2059,
+        "ok": true
+      },
+      {
+        "t_ms": 2869,
+        "action": "tap_xy",
+        "x": 962,
+        "y": 2059,
+        "ok": true
+      }
+    ],
+    "action_replay_available": true,
+    "device_serial": "24108eff",
+    "screenshots": [
+      {
+        "name": "before_input_1.png",
+        "label": "before_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_input_1.png",
+        "label": "after_input_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_send_1.png",
+        "label": "after_send_1",
+        "is_sensitive": false,
+        "error": null
+      },
+      {
+        "name": "after_result_1.png",
+        "label": "after_result_1",
+        "is_sensitive": false,
+        "error": null
+      }
+    ]
+  },
+  "error": null,
+  "logs_dir": "/Users/b1ankj/Desktop/2026/Q2/AutoAgentTest/data/logs/b_1777366077_861c64/pb-validate-pb_0fabbb51e4a5",
+  "started_at": "2026-04-28T08:47:57.960583Z",
+  "ended_at": "2026-04-28T08:48:25.353882Z"
+}

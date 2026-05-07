@@ -1,0 +1,45 @@
+{
+  "strategy": "guided_tap_sequence",
+  "steps": [
+    {
+      "step_index": 0,
+      "xml_artifact": "capture_new_session_step_0.xml",
+      "screenshot_artifact": "capture_new_session_step_0.png",
+      "recommendation_error": null,
+      "recommended_tap": {
+        "point": {
+          "x": 269,
+          "y": 2310
+        },
+        "reason": "The current screen shows an ongoing conversation with a message input field at the bottom. To start a new conversation thread, the user should tap the back arrow in the top-left corner to exit the current chat and return to the main interface where a new session can be initiated.",
+        "status": "ready",
+        "error": null
+      },
+      "confirmed_tap": {
+        "x": 269,
+        "y": 2310
+      },
+      "source": "recommended"
+    },
+    {
+      "step_index": 1,
+      "xml_artifact": "capture_new_session_step_1.xml",
+      "screenshot_artifact": "capture_new_session_step_1.png",
+      "recommendation_error": null,
+      "recommended_tap": {
+        "point": {
+          "x": 540,
+          "y": 1585
+        },
+        "reason": "The current screen shows a search result page for '农小宝' with no visible chat or conversation interface. To initiate a new conversation thread, the most logical next step is to tap on the '农小宝' brand card at the top, which likely leads to a dedicated service or chat interface.",
+        "status": "ready",
+        "error": null
+      },
+      "confirmed_tap": {
+        "x": 269,
+        "y": 706
+      },
+      "source": "manual"
+    }
+  ]
+}

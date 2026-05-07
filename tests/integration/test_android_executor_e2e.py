@@ -11,7 +11,6 @@ from autoagent.executors.base import ExecutorContext
 from autoagent.models.api import Sample
 from autoagent.profiles.schemas import (
     AndroidProfile,
-    AndroidReadyCheckTree,
     AndroidResponseExtraction,
     Locator,
     UiTreeStable,
@@ -64,8 +63,6 @@ def android_profile() -> AndroidProfile:
         platform="android",
         package="com.autoagent.fakechat",
         activity=".MainActivity",
-        ready_check=AndroidReadyCheckTree(type="ui_tree_contains", text="Send", timeout_sec=10),
-        recovery_path=[],
         input_locator=Locator(type="resource_id", value="com.autoagent.fakechat:id/input"),
         send_button_locator=Locator(type="resource_id", value="com.autoagent.fakechat:id/send"),
         response_extraction=AndroidResponseExtraction(
