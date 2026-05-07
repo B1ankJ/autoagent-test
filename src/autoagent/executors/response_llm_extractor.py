@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -58,6 +59,19 @@ async def _make_client(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=timeout)
 
 
+_EMOJI_PLACEHOLDER_RE = re.compile(r'\s*\.\.\s*')
+
+
+def _clean_extracted_text(text: str) -> str:
+    """Remove emoji placeholders that Android uiautomator inserts for surrogate-pair emoji."""
+    return _EMOJI_PLACEHOLDER_RE.sub(' ', text).strip()
+
+
+def _preprocess_xml(xml: str) -> str:
+    """Strip Unicode OBJECT REPLACEMENT CHARACTERS before sending to the LLM."""
+    return xml.replace('\ufffc', '')
+
+
 def _truncate_xml(xml: str, max_chars: int) -> tuple[str, bool]:
     if len(xml) <= max_chars:
         return xml, False
@@ -97,7 +111,7 @@ async def extract_response_via_llm(
     timeout_sec: float = 30.0,
     max_xml_chars: int = 120_000,
 ) -> LLMExtractionResult:
-    trimmed, truncated = _truncate_xml(xml, max_xml_chars)
+    trimmed, truncated = _truncate_xml(_preprocess_xml(xml), max_xml_chars)
     user_payload = {"prompt": prompt, "xml": trimmed}
     body = {
         "model": model,
@@ -185,7 +199,7 @@ async def extract_response_via_llm(
         )
 
     return LLMExtractionResult(
-        text=parsed["response"],
+        text=_clean_extracted_text(parsed["response"]),
         error="truncated" if truncated else None,
         latency_ms=latency_ms,
         status_code=resp.status_code,

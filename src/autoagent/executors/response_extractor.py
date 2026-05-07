@@ -172,6 +172,46 @@ def _block_text(block: list[ET.Element]) -> str:
     return " ".join((node.attrib.get("text") or "").strip() for node in block if (node.attrib.get("text") or "").strip())
 
 
+def _expand_winner_text(
+    winner_block: list[ET.Element],
+    all_blocks: list[list[ET.Element]],
+) -> str:
+    """Expand the winner block upward by chaining tightly-connected adjacent blocks.
+
+    A chat response can span multiple TextViews whose inter-node gap exceeds
+    _group_candidate_blocks' 90 px threshold.  Walking backward through
+    spatially-sorted blocks and following a chain where each consecutive gap
+    is ≤ 150 px (in the same x-column) captures multi-paragraph replies while
+    stopping at genuine message boundaries (which have larger gaps).
+    """
+    winner_bounds = _node_bounds(winner_block[-1])
+    if winner_bounds is None:
+        return _block_text(winner_block)
+
+    winner_x = winner_bounds[0]
+    sorted_blocks = sorted(
+        all_blocks,
+        key=lambda b: (_node_bounds(b[0]) or (0, 0, 0, 0))[1],
+    )
+    winner_sorted_idx = next(
+        (i for i, b in enumerate(sorted_blocks) if b is winner_block),
+        len(sorted_blocks) - 1,
+    )
+    connected: list[list[ET.Element]] = [winner_block]
+    for i in range(winner_sorted_idx - 1, -1, -1):
+        b = sorted_blocks[i]
+        b_bounds = _node_bounds(b[-1])
+        if b_bounds is None:
+            break
+        next_top = (_node_bounds(connected[0][0]) or (0, 0, 0, 0))[1]
+        gap = next_top - b_bounds[3]
+        if abs(b_bounds[0] - winner_x) <= 120 and gap <= 150:
+            connected.insert(0, b)
+        else:
+            break
+    return _block_text([node for b in connected for node in b])
+
+
 def _looks_like_suggestion_chip_block(block: list[ET.Element]) -> bool:
     texts = [(node.attrib.get("text") or "").strip() for node in block]
     texts = [text for text in texts if text]
@@ -253,7 +293,7 @@ class UiTreeExtractor:
                 enumerate(blocks),
                 key=lambda item: _block_score(item[1], index=item[0]),
             )
-            winner_text = _block_text(winner_block)
+            winner_text = _expand_winner_text(winner_block, blocks)
             winner_score = _block_score(winner_block, index=winner_index)
             if best_score is None or winner_score > best_score:
                 best_score = winner_score
