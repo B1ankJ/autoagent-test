@@ -346,9 +346,3 @@ class OcrExtractor:
     async def extract_from_paths(self, paths: list[Path]) -> ExtractionResult:
         frames = [path.read_bytes() for path in paths]
         return await self.extract(frames)
-
-
-class HybridExtractor:
-    def __init__(self, ui_tree: UiTreeExtractor, ocr: OcrExtractor) -> None:
-        self.ui_tree = ui_tree
-        self.ocr = ocr

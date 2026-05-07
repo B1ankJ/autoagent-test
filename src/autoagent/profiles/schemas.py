@@ -117,12 +117,6 @@ class WebProfile(BaseModel):
 # ---- Android profile ----
 
 
-class AndroidReadyCheckTree(BaseModel):
-    type: Literal["ui_tree_contains"]
-    text: str | list[str]
-    timeout_sec: float = 5
-
-
 class AndroidResponseExtraction(BaseModel):
     method: Literal["ui_tree_only", "ocr_only", "ui_tree_then_ocr"]
     response_container_locator: Locator
