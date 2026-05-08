@@ -1,10 +1,18 @@
 # AutoAgent Test
 
-Backend service for batch testing of conversational AI products via OpenAI-compatible APIs, with a React + TypeScript web UI built into the FastAPI binary.
+批量测试对话式 AI 产品的自动化测试平台，支持 API、Web GUI、Android GUI 和 Agent 四种执行模式，内置 React + TypeScript 管理界面。
 
-## Quick Start
+## 功能
 
-**Requirements:** git, curl, internet access. Everything else is installed automatically.
+- **多种执行模式**：API 调用、Playwright Web GUI、Android uiautomator2 GUI、AI Agent PC/Android 自主操作
+- **批量测试**：JSONL/JSON/CSV 文件上传，并发调度，结果实时流式更新（SSE）
+- **Profile 系统**：YAML 配置文件定义目标应用，支持 Android Profile Builder 向导
+- **设备管理**：Android 设备池，ADB Keyboard 一键安装/切换
+- **结果分析**：截图索引、动作日志、LLM 回复提取、JSONL 结果下载
+
+## 快速开始
+
+**前提**：git、curl、联网。其余依赖自动安装。
 
 ```bash
 git clone <repo-url>
@@ -12,251 +20,275 @@ cd AutoAgentTest
 bash install.sh
 ```
 
-The script will:
-1. Install Python 3.11, Node.js, ADB, uv, and pnpm (if not already present)
-2. Install Python and frontend dependencies
-3. Download Playwright Chromium
-4. Prompt for an admin password and generate a `.env` with a random JWT secret
+安装脚本将：
 
-Then start the server with the command printed at the end of the install.
+1. 安装 Python 3.11、Node.js、ADB、uv、pnpm（已安装则跳过）
+2. 安装 Python 和前端依赖
+3. 下载 Playwright Chromium
+4. 交互式配置管理员密码，自动生成 `.env`
 
-**Platforms:** macOS (Homebrew), Ubuntu/Debian (apt + deadsnakes PPA for Python 3.11), RHEL/Fedora (dnf).
+脚本结束时打印启动命令。
 
-## Status
+**支持平台**：macOS（Homebrew）、Ubuntu/Debian（apt + deadsnakes PPA）、RHEL/Fedora（dnf）
 
-**Plans 1–4 and Plan 6 complete. Plan 5 (Polish/packaging) in progress.** API mode is fully wired. Web GUI execution includes a Playwright-backed executor, SSE batch progress, screenshot endpoints, web connectivity testing, and SampleDetail screenshot/action-log UI. Android executor (Plan 4) is complete and tagged `android-executor-v0.4.0`: persistent device discovery, `/devices` API + UI, `gui_android` scheduler/executor plumbing, Android profile connectivity support, action replay download, OCR extraction, scroll stitching, `pixel_stable`, and the Android Profile Builder. Agent executor (Plan 6) added `agent_pc` and `agent_android` modes with a shared `agent_core` loop, screenshot-based response extraction, and Android device-pool scheduling support.
-
-## Requirements
-
-- Python 3.10+
-- Optional: Docker (later plan)
-
-## Setup
-
-> **Use the Quick Start installer above.** `bash install.sh` handles all of the below automatically.
->
-> For manual setup: `uv sync` to install Python deps, `cd web && pnpm build` for the frontend, copy `.env.example` to `.env` and fill in secrets.
-
-### Android executor prerequisite (Plan 4 Tier 1)
-
-Android mode requires:
+## 手动安装
 
 ```bash
-brew install android-platform-tools   # macOS
-python3.11 -m pip install -e '.[dev]'
-adb devices
+# Python 依赖
+uv sync --python 3.11
+
+# 前端构建
+cd web && pnpm install && pnpm build && cd ..
+
+# Playwright（gui_pc_web 模式需要）
+python3.11 -m playwright install --with-deps chromium
+
+# 配置
+cp .env.example .env  # 填写 ADMIN_PASSWORD 和 JWT_SECRET
 ```
 
-Tier 1 uses `uiautomator2` plus a connected emulator or real device. If you plan to use
-`input_method: adb_keyboard`, the repo now bundles `src/autoagent/fixtures/ADBKeyboard.apk` so the
-Devices page can offer one-click installation by default. Set `ADB_KEYBOARD_APK_PATH` only if you
-want to override that bundled APK. The executor auto-switches to
-`com.android.adbkeyboard/.AdbIME` for non-ASCII input and restores the previous IME afterwards.
-
-The optional Tier 1 fake-chat smoke target lives under `tests/fixtures/fake_chat_apk/`. Build its
-debug APK in Android Studio and place it at `tests/fixtures/fake_chat_apk/fake_chat-debug.apk`, or
-set `AUTOAGENT_FAKE_CHAT_APK=/abs/path/to/app-debug.apk` before running `pytest -m android`.
-If you skip this fixture, final Android verification can be done directly on a real device + real
-target app via the Web UI.
-
-The current Android/Profile Builder handoff is tracked in
-`docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md`. The final real-device
-checklist is tracked in `docs/superpowers/plans/2026-04-23-plan-4-android-manual-smoke.md`.
-
-### Profile Builder (Android MVP)
-
-Use `Profiles -> Build Profile` in the web UI to generate a draft Android profile from guided
-captures. The builder walks through idle and editing states, proposes candidate
-locators, surfaces `review_items` when confidence is low, and can run a connectivity check against
-the generated draft before you save anything as a normal profile.
-
-Capture expectations:
-
-- `idle`: manually send one short test message first, wait until the answer is visible, then stop on the target conversation page before the input is focused
-- `editing`: manually focus the input so the real editing controls are visible, then capture exactly that screen
-
-Builder behavior:
-
-- `Start Builder Session` enables `ADB Keyboard` once for the whole builder session and restores the previous IME after `Generate Draft`
-- `Capture Editing State` does not auto-tap into the input area and does not run an extra runtime probe; the draft is derived only from the manual `idle` and `editing` captures
-- Review generation now keeps raw candidates without destructive filtering for `input_locator`, `input_focus_action`, and `send_action`; backend recommendation only affects ordering, and every bounded node remains available in manual review
-- `send_action` review now also keeps non-clickable visual send controls when the XML exposes a tappable-looking send icon or label without `clickable="true"`, so manual review can still choose the correct tap target
-- `latest_bubble_match` review is now conditional: if the structural response anchor resolves to one clear latest response block, the builder can skip that review item; ambiguous containers or blocks still surface all evidence for manual choice
-- Android response extraction now treats `response_container_locator` as a structural anchor, not a single frozen bounds box. Runtime extraction ranks matching containers, groups multi-`TextView` reply fragments into one response block, and selects the latest valid block inside the best match.
-
-Builder artifacts are stored under `data/profile_builder/<session_id>/` and include
-`capture_<step>.*`, `candidates.json`, `review_items.json`, `draft_profile.yaml`, and
-`connectivity_result.json` after validation.
-
-Optional LLM settings:
+## 启动服务
 
 ```bash
-export PROFILE_BUILDER_LLM_BASE_URL=...
-export PROFILE_BUILDER_LLM_MODEL=...
-export PROFILE_BUILDER_LLM_API_KEY=...
-export PROFILE_BUILDER_LLM_TIMEOUT_SEC=30
+source .venv/bin/activate
+python3.11 -m uvicorn --app-dir src autoagent.main:app --host 0.0.0.0 --port 8000
 ```
 
-If those env vars are absent, the builder stays in deterministic rule-only mode.
+管理员账号在首次启动时从 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 自动创建。
 
-### Android OCR notes (Plan 4 Tier 2)
+健康检查：`curl http://localhost:8000/health`
 
-- Tier 2 OCR uses `rapidocr_onnxruntime` on CPU.
-- Long responses may take several seconds because multiple frames are OCR'd and stitched.
-- `@pytest.mark.slow` covers OCR fixtures and is excluded from the fast suite.
+Web UI：`http://localhost:8000`
 
-## Run
+## 执行模式
 
-```bash
-python3.11 -m uvicorn --app-dir src autoagent.main:app --host 0.0.0.0 --port 8000 --reload
+| 模式 | 说明 | Profile 类型 |
+|---|---|---|
+| `api` | OpenAI-compatible API 调用 | `platform: api` |
+| `gui_pc_web` | Playwright 浏览器 GUI | `platform: web` |
+| `gui_android` | Android uiautomator2 GUI | `platform: android` |
+| `agent_pc` | AI Agent 自主操作桌面 | `platform: agent_pc` |
+| `agent_android` | AI Agent 自主操作 Android | `platform: agent_android` |
+
+## Profile 配置
+
+Profile 是 YAML 文件，存放在 `data/profiles/<name>.yaml`。
+
+**API Profile 示例：**
+
+```yaml
+name: my_api
+platform: api
+base_url: https://api.openai.com/v1
+model: gpt-4o
+api_key: sk-...
 ```
 
-The admin user is bootstrapped on first start from `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+**Android Profile 示例：**
 
-Health check: `curl http://localhost:8000/health`
+```yaml
+name: my_app
+platform: android
+package: com.example.app
+activity: .MainActivity
+input_locator:
+  type: resource_id
+  value: com.example.app:id/input
+send_button_locator:
+  type: resource_id
+  value: com.example.app:id/send
+response_extraction:
+  method: ui_tree_only
+  response_container_locator:
+    type: resource_id
+    value: com.example.app:id/messages
+  scroll_container_locator:
+    type: resource_id
+    value: com.example.app:id/messages
+  latest_bubble_match:
+    type: last_child_with_class
+    value: android.widget.TextView
+complete_detection:
+  type: ui_tree_stable
+  stable_sec: 2
+  max_wait_sec: 180
+post_send_wait_sec: 10.0
+new_session_wait_sec: 3.0
+```
 
-## Quick start — run one prompt
+**Agent Profile 示例：**
+
+```yaml
+name: my_agent
+platform: agent_pc
+base_url: https://api.openai.com/v1
+model: gpt-4o
+api_key: sk-...
+task_template: "在聊天框中输入「{prompt}」并发送，等待回复"
+response_hint: "最新的 AI 回复内容"
+max_steps: 20
+```
+
+Android Profile Builder（`Profiles → Build Profile`）可通过界面向导自动生成 Android profile。
+
+## 批量测试
+
+### 创建批次（Web UI）
+
+1. 进入 `Batches → 新建批次`
+2. 选择执行模式和 Profile
+3. 填写 Samples 或上传文件
+
+### 批量文件格式
+
+**JSONL（推荐）：**
+
+```jsonl
+{"id": "t1", "prompts": ["你好"], "mode": "api", "target_profile": "my_api"}
+{"id": "t2", "prompts": ["hi", "再问一个"], "mode": "api", "target_profile": "my_api", "new_session": false}
+```
+
+**JSON：** 同上 objects 的列表，或 `{"samples": [...]}`
+
+**CSV：** 列名 `id,prompts,mode,target_profile,new_session`，多轮 prompts 用 `\u241f` 分隔
+
+### API 直接调用
 
 ```bash
-# 1. Log in
+# 登录
 TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"your_password"}' | jq -r .token)
+  -d '{"username":"admin","password":"<密码>"}' | jq -r .token)
 
-# 2. Create a profile (YAML string inside a JSON body)
-curl -X POST http://localhost:8000/api/v1/profiles/openai_gpt4 \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"yaml": "name: openai_gpt4\nplatform: api\napi:\n  base_url: https://api.openai.com/v1\n  model: gpt-4o\n  api_key_env: OPENAI_KEY\n"}'
-
-# 3. Set env var before running the service: export OPENAI_KEY=sk-...
-# 4. Run a single-prompt sync test
+# 单次同步测试
 curl -X POST http://localhost:8000/api/v1/tests/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"id":"t1","prompts":["hello"],"mode":"api","target_profile":"openai_gpt4"}'
+  -d '{"id":"t1","prompts":["hello"],"mode":"api","target_profile":"my_api"}'
+
+# 创建批次
+curl -X POST http://localhost:8000/api/v1/batches \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"test","mode":"api","concurrency":2,"target_profile_default":"my_api","samples":[...]}'
 ```
 
-## Batch file formats
+## Android 使用
 
-**JSONL** (recommended):
-
-```jsonl
-{"id": "t1", "prompts": ["hello"], "mode": "api", "target_profile": "openai_gpt4"}
-{"id": "t2", "prompts": ["hi", "再说"], "mode": "api", "target_profile": "openai_gpt4", "new_session": false}
-```
-
-**JSON** — list of the same sample objects, or `{"samples": [...]}`
-
-**CSV** — columns: `id,prompts,mode,target_profile,new_session,metadata`. Multi-turn prompts are joined by the Unicode Unit Separator `\u241f`.
-
-## API reference
-
-Auto-generated OpenAPI: `http://localhost:8000/docs`
-
-Key endpoints:
-- `POST /api/v1/auth/login` — get JWT
-- `POST /api/v1/tests/sync` — single test, blocking
-- `POST /api/v1/tests` — single test, async (returns `task_id`)
-- `GET  /api/v1/tests/{task_id}` — poll async result
-- `POST /api/v1/batches` — batch via JSON body
-- `POST /api/v1/batches/upload` — batch via file upload (JSONL/JSON/CSV)
-- `GET  /api/v1/batches/{id}` — batch detail + samples
-- `GET  /api/v1/batches/{id}/results` — download JSONL
-- `POST /api/v1/batches/{id}/cancel`
-- `GET/POST/PUT/DELETE /api/v1/profiles/...`
-- `POST /api/v1/profiles/validate`
-- `GET/PUT /api/v1/config/vlm`, `/api/v1/config/defaults`
-
-## Development
+### 前提
 
 ```bash
-pytest              # run all tests
-pytest -v           # verbose
-pytest tests/unit   # unit only
-ruff check .        # lint
-ruff format .       # format
+# 确认设备在线
+adb devices
 ```
 
-### Runtime artifact cleanup
+Android 模式需要连接物理设备或模拟器。`install.sh` 已自动安装 ADB。
 
-Use the repo-local cleanup script to preview or delete old runtime artifacts under any `logs/`
-directory plus `data/profile_builder/`:
+### ADB Keyboard
+
+非 ASCII 输入需要 ADB Keyboard IME。进入 Web UI `Devices` 页面：
+
+- 点击 **Install ADB Keyboard** 一键安装（APK 已内置于 `src/autoagent/fixtures/ADBKeyboard.apk`）
+- 点击 **Enable IME** 启用
+
+运行时自动切换到 ADB Keyboard 处理非 ASCII 输入，结束后恢复原 IME。
+
+### Android Profile Builder
+
+`Profiles → Build Profile` 提供向导式 profile 生成：
+
+1. 选择设备和应用
+2. 截取空闲状态（有 AI 回复可见，输入框未聚焦）
+3. 截取编辑状态（输入框已聚焦）
+4. 生成草稿，逐项 Review 候选
+5. 连通性验证后保存
+
+## Agent 模式
+
+Agent 模式使用视觉 AI 模型（需 OpenAI-compatible 视觉 API）自主操控界面：
+
+- **agent_pc**：截图 macOS/Windows 桌面，AI 决策点击/输入动作
+- **agent_android**：截图 Android 屏幕（via ADB），AI 决策触控动作
+
+每步截图保存在日志目录，可在 SampleDetail 页面逐步回放。
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `ADMIN_USERNAME` | `admin` | 管理员用户名 |
+| `ADMIN_PASSWORD` | `admin123456` | 管理员密码（**生产必须修改**） |
+| `JWT_SECRET` | `dev-secret-...` | JWT 签名密钥（**生产必须修改**，≥32字符） |
+| `DATA_ROOT` | `./data` | 数据库和 profile 存储路径 |
+| `LOGS_ROOT` | `./logs` | 截图和执行日志路径 |
+| `PORT` | `8000` | 服务端口 |
+
+## API 参考
+
+OpenAPI 文档：`http://localhost:8000/docs`
+
+主要端点：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/v1/auth/login` | 登录获取 JWT |
+| POST | `/api/v1/tests/sync` | 单次同步测试 |
+| POST | `/api/v1/tests` | 单次异步测试 |
+| GET | `/api/v1/tests/{task_id}` | 轮询异步结果 |
+| POST | `/api/v1/batches` | 创建批次（JSON） |
+| POST | `/api/v1/batches/upload` | 创建批次（文件） |
+| GET | `/api/v1/batches/{id}` | 批次详情 |
+| GET | `/api/v1/batches/{id}/results` | 下载 JSONL 结果 |
+| POST | `/api/v1/batches/{id}/cancel` | 取消批次 |
+| GET | `/api/v1/profiles` | Profile 列表 |
+| GET/PUT/DELETE | `/api/v1/profiles/{name}` | Profile CRUD |
+| GET | `/api/v1/devices` | Android 设备列表 |
+| GET/PUT | `/api/v1/config/vlm` | VLM 配置 |
+
+## 开发
 
 ```bash
-python3.11 scripts/cleanup_runtime_artifacts.py --days 7
-python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply
-python3.11 scripts/cleanup_runtime_artifacts.py --all --apply
+# 测试
+python3.11 -m pytest -q                                              # 全量
+python3.11 -m pytest -q -m "not playwright and not android and not slow"  # 快速套件
+
+# Lint / Format
+python3.11 -m ruff check .
+python3.11 -m ruff format .
+
+# 前端
+cd web && pnpm dev    # 开发服务器（:5173，代理 API 到 :8000）
+cd web && pnpm test   # 前端测试
+cd web && pnpm build  # 构建到 src/autoagent/static/
 ```
 
-The default mode is dry-run. Only `--apply` performs deletion. `--all --apply` clears all
-matched `logs/` and `data/profile_builder/` contents while keeping the root directories
-themselves.
-
-## Web UI
-
-The web UI lives in `web/` and is built into `src/autoagent/static/` where FastAPI serves it.
-
-### Dev
+### 日志清理
 
 ```bash
-# Terminal 1 — backend
-python3.11 -m uvicorn --app-dir src autoagent.main:app --reload
-
-# Terminal 2 — frontend dev server with proxy
-cd web
-pnpm install
-pnpm dev
-# open http://localhost:5173
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7          # 预览
+python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply  # 删除
+python3.11 scripts/cleanup_runtime_artifacts.py --all --apply     # 全清
 ```
 
-### Production build
+## 架构
 
-```bash
-cd web && pnpm build
-# outputs to src/autoagent/static/
-# now a single uvicorn serves both API and UI on :8000
+```
+src/autoagent/
+  api/          FastAPI 路由（auth、profiles、tests、batches、config、devices）
+  auth/         JWT + 密码哈希 + FastAPI deps
+  config/       Pydantic Settings（env 配置）
+  executors/    执行器：API、Web、Android、Agent PC/Android
+  profiles/     Profile schema（discriminated union）+ YAML 注册表
+  scheduler/    BatchScheduler（异步，设备池）
+  storage/      SQLAlchemy CRUD（SQLite + aiosqlite）
+  webhooks/     Webhook 回调（指数退避）
+  main.py       FastAPI app + lifespan
+tests/
+  unit/         单元测试
+  integration/  集成测试（httpx AsyncClient）
+web/            React + TypeScript + AntD 5（Vite）
 ```
 
-### Web UI Smoke Test
+## 许可
 
-```bash
-cd web && pnpm build
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=admin_pw_1234
-export JWT_SECRET=$(python3.11 -c "import secrets; print(secrets.token_hex(32))")
-python3.11 -m uvicorn --app-dir src autoagent.main:app
-```
-
-Then:
-
-1. Open `http://localhost:8000/`; unauthenticated access should land on `/login`.
-2. Log in with the admin credentials above.
-3. Go to Profiles, create `openai_gpt4`, and paste:
-
-```yaml
-name: openai_gpt4
-platform: api
-api:
-  base_url: https://api.openai.com/v1
-  model: gpt-4o
-  api_key_env: OPENAI_KEY
-```
-
-4. Click `校验` and then `保存`.
-5. Export `OPENAI_KEY=sk-...` in the backend shell, restart the backend, then run `连通性测试` with prompt `hello`.
-6. Go to `Tests / Quick`, choose sync mode, and verify a response appears.
-7. Go to `Batches / 新建批次`, upload a 3-line JSONL, and verify the batch reaches `done`.
-8. Click `下载结果` and verify a `.jsonl` file is downloaded.
-9. Go to `Config`, change a default, save, and reload to confirm persistence.
-10. Click `登出`; revisiting `/` should redirect back to `/login`.
-
-## Architecture
-
-See:
-- `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md`
-- `docs/superpowers/plans/2026-04-21-plan-1-backend-mvp.md`
-
-## Next plans
-
-- Plan 5: Polish — packaging, backups, Docker, security hardening (in progress)
+内部使用。
