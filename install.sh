@@ -39,14 +39,9 @@ brew_install() {
 install_macos() {
     echo -e "\n[macOS] Installing system dependencies...\n"
     check_or_install_brew
-    brew_install python@3.11
+    brew_install python3
     brew_install node
     brew_install android-platform-tools
-
-    # Ensure python3.11 is on PATH (brew links may vary)
-    if ! command -v python3.11 &>/dev/null; then
-        export PATH="$(brew --prefix python@3.11)/bin:$PATH"
-    fi
 }
 
 # ── Linux system deps ────────────────────────────────────────────────────────
@@ -61,25 +56,18 @@ install_linux() {
     if command -v apt-get &>/dev/null; then
         echo "Detected Debian/Ubuntu — using apt"
         sudo apt-get update -qq
-        # Add deadsnakes PPA if python3.11 is not available in default repos
-        if ! apt-cache show python3.11 &>/dev/null; then
-            echo "python3.11 not in default apt repos — adding deadsnakes PPA..."
-            sudo apt-get install -y software-properties-common
-            sudo add-apt-repository -y ppa:deadsnakes/ppa
-            sudo apt-get update -qq
-        fi
-        sudo apt-get install -y python3.11 python3.11-venv nodejs npm adb
+        sudo apt-get install -y python3 python3-venv nodejs npm adb
         ok "apt packages installed"
     elif command -v dnf &>/dev/null; then
         echo "Detected RHEL/Fedora — using dnf"
-        sudo dnf install -y python3.11 nodejs npm android-tools
+        sudo dnf install -y python3 nodejs npm android-tools
         ok "dnf packages installed"
     elif command -v yum &>/dev/null; then
         echo "Detected older RHEL — using yum"
-        sudo yum install -y python3.11 nodejs npm android-tools
+        sudo yum install -y python3 nodejs npm android-tools
         ok "yum packages installed"
     else
-        fail "Unsupported Linux distribution. Install python3.11, nodejs, npm, and adb manually, then re-run."
+        fail "Unsupported Linux distribution. Install python3, nodejs, npm, and adb manually, then re-run."
     fi
 }
 
@@ -136,10 +124,10 @@ main() {
     install_pnpm
 
     echo -e "\n[Python setup]\n"
-    if ! command -v python3.11 &>/dev/null; then
-        fail "python3.11 not found after install. Check your PATH or install Python 3.11 manually."
+    if ! command -v python3 &>/dev/null; then
+        fail "python3 not found after install. Check your PATH or install Python 3.10+ manually."
     fi
-    python3.11 scripts/setup.py
+    python3 scripts/setup.py
 }
 
 main "$@"

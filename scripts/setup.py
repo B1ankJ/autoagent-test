@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env python3
 """Post-system-install setup: Python deps, frontend build, Playwright, .env."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _run(label: str, cmd: list[str], *, cwd: Path = ROOT, fatal: bool = True) ->
 
 
 def install_python_deps() -> None:
-    _run("Python deps (uv sync)", ["uv", "sync", "--python", "3.11"], cwd=ROOT)
+    _run("Python deps (uv sync)", ["uv", "sync"], cwd=ROOT)
 
 
 def build_frontend() -> None:
@@ -37,8 +37,13 @@ def build_frontend() -> None:
 
 
 def install_playwright() -> None:
-    venv_python = ROOT / ".venv" / "bin" / "python3.11"
-    interpreter = str(venv_python) if venv_python.exists() else sys.executable
+    # Prefer the venv python; fall back to the interpreter running this script.
+    venv_bin = ROOT / ".venv" / "bin"
+    venv_python = next(
+        (p for p in [venv_bin / "python", venv_bin / "python3"] if p.exists()),
+        None,
+    )
+    interpreter = str(venv_python) if venv_python else sys.executable
     _run(
         "Playwright Chromium",
         [interpreter, "-m", "playwright", "install", "--with-deps", "chromium"],
@@ -91,7 +96,7 @@ def print_next_steps() -> None:
   Setup complete. Start the server with:
 
     source .venv/bin/activate
-    python3.11 -m uvicorn --app-dir src autoagent.main:app --host 0.0.0.0 --port 8000
+    python -m uvicorn --app-dir src autoagent.main:app --host 0.0.0.0 --port 8000
 
   Then open http://localhost:8000
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
