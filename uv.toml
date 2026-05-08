@@ -1,1 +1,2 @@
 python-preference = "only-system"
+python = "python3"
