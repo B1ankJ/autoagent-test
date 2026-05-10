@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
 from autoagent.models.api import AsyncTestResponse, Sample, SampleResult
+from autoagent.services import sync_tests as sync_tests_service
+from autoagent.services.sync_tests import execute_sync_sample
 from autoagent.storage.samples import list_samples_for_batch
 
 log = logging.getLogger(__name__)
@@ -15,21 +17,9 @@ router = APIRouter(prefix="/tests", tags=["tests"], dependencies=[Depends(requir
 
 
 async def execute_sync_test(sample: Sample) -> SampleResult:
-    sch = get_scheduler()
-    batch_id = await sch.submit(
-        name=f"sync-{sample.id}",
-        mode=sample.mode,
-        concurrency=1,
-        samples=[sample],
-    )
-    wait_timeout = sample.timeout_sec or (180 if sample.mode == "gui_android" else 600)
-    # sample.timeout_sec is the per-sample timeout; we wait slightly longer
-    # to absorb executor startup/teardown, including GUI driver startup time.
-    await sch.wait_done(batch_id, timeout_sec=wait_timeout + 30)
-    results = await list_samples_for_batch(batch_id)
-    if not results:
-        raise HTTPException(status_code=500, detail="no result recorded")
-    return results[0]
+    sync_tests_service.get_scheduler = get_scheduler
+    sync_tests_service.list_samples_for_batch = list_samples_for_batch
+    return await execute_sync_sample(sample)
 
 
 @router.post("/sync", response_model=SampleResult)
