@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -53,7 +55,15 @@ def _require_openai_bearer(request: Request) -> str:
 async def create_chat_completion(request: Request) -> JSONResponse:
     try:
         _require_openai_bearer(request)
-        payload = await request.json()
+        try:
+            payload = await request.json()
+        except json.JSONDecodeError as exc:
+            raise OpenAICompatError(
+                status_code=400,
+                message="invalid chat.completions request: malformed JSON body",
+                error_type="invalid_request_error",
+                code="invalid_request",
+            ) from exc
         body = parse_chat_completions_request(payload)
         ensure_supported_request(body)
         profile = resolve_profile(body.model)

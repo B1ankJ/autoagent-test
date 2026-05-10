@@ -86,6 +86,22 @@ async def test_chat_completions_rejects_stream_true(client: AsyncClient) -> None
     assert response.json()["error"]["param"] == "stream"
 
 
+async def test_chat_completions_returns_openai_shaped_400_for_malformed_json(
+    client: AsyncClient,
+) -> None:
+    headers = await _login(client)
+    response = await client.post(
+        "/v1/chat/completions",
+        content='{"model":"p_api","messages":[{"role":"user","content":"hello"}]',
+        headers={**headers, "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["type"] == "invalid_request_error"
+
+
 async def test_chat_completions_maps_extensions_and_profile_mode(client: AsyncClient, monkeypatch) -> None:
     save_profile_yaml(
         "fake_site",
