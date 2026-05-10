@@ -109,7 +109,7 @@ async def extract_response_via_llm(
     base_url: str,
     model: str,
     api_key: str,
-    timeout_sec: float = 30.0,
+    timeout_sec: float = 60.0,
     max_xml_chars: int = 120_000,
 ) -> LLMExtractionResult:
     trimmed, truncated = _truncate_xml(_preprocess_xml(xml), max_xml_chars)

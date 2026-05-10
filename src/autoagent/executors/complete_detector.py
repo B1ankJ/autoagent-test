@@ -169,6 +169,28 @@ def dump_hierarchy_via_adb(device: Any) -> str:
     return device.dump_hierarchy(compressed=False) or ""
 
 
+def _xml_text_fingerprint(xml: str) -> str:
+    """Hash the text content of all nodes, ignoring XML structure/attributes.
+
+    Comparing full XML strings breaks when dump_hierarchy() returns slightly
+    different attribute ordering or truncates at different points across calls.
+    Hashing only the visible text makes stability detection robust to those
+    cosmetic differences while still detecting real content changes.
+    """
+    try:
+        from xml.etree import ElementTree as ET
+
+        root = ET.fromstring(xml)
+        texts = sorted(
+            node.attrib.get("text", "").strip()
+            for node in root.iter("node")
+            if node.attrib.get("text", "").strip()
+        )
+        return hashlib.md5("\n".join(texts).encode()).hexdigest()
+    except Exception:
+        return hashlib.md5(xml.encode()).hexdigest()
+
+
 async def wait_for_ui_tree_stable(
     device: Any,
     *,
@@ -177,7 +199,8 @@ async def wait_for_ui_tree_stable(
     poll_interval_sec: float = 0.1,
 ) -> str:
     deadline = time.monotonic() + max_wait_sec
-    last_xml: str | None = None
+    last_fingerprint: str | None = None
+    last_xml: str = ""
     stable_since: float | None = None
 
     while time.monotonic() < deadline:
@@ -187,7 +210,9 @@ async def wait_for_ui_tree_stable(
             # Dump failed entirely — don't treat empty as stable, just retry.
             await asyncio.sleep(poll_interval_sec)
             continue
-        if xml == last_xml:
+        fingerprint = _xml_text_fingerprint(xml)
+        last_xml = xml
+        if fingerprint == last_fingerprint:
             if stable_since is None:
                 if stable_sec <= 0:
                     return xml
@@ -195,11 +220,12 @@ async def wait_for_ui_tree_stable(
             elif now - stable_since >= stable_sec:
                 return xml
         else:
-            last_xml = xml
+            last_fingerprint = fingerprint
             stable_since = None
         await asyncio.sleep(poll_interval_sec)
 
-    raise TimeoutError(f"ui_tree_stable not reached within {max_wait_sec}s")
+    # Return last xml even if stability was not reached (max_wait_sec expired).
+    return last_xml
 
 
 async def wait_for_pixel_stable(
