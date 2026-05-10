@@ -60,7 +60,9 @@ async def test_chat_completions_api_success(client: AsyncClient, httpx_mock: HTT
     assert body["x_autoagent"]["responses"] == ["hi!"]
 
 
-async def test_chat_completions_returns_openai_shaped_401_without_token(client: AsyncClient) -> None:
+async def test_chat_completions_returns_openai_shaped_401_without_token(
+    client: AsyncClient,
+) -> None:
     response = await client.post(
         "/v1/chat/completions",
         json={"model": "missing", "messages": [{"role": "user", "content": "hello"}]},
@@ -139,7 +141,10 @@ async def test_chat_completions_returns_openai_shaped_500_for_unexpected_runtime
     assert body["error"]["type"] == "api_error"
 
 
-async def test_chat_completions_maps_extensions_and_profile_mode(client: AsyncClient, monkeypatch) -> None:
+async def test_chat_completions_maps_extensions_and_profile_mode(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
     save_profile_yaml(
         "fake_site",
         yaml.safe_dump(

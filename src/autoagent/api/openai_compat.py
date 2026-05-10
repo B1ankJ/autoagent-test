@@ -76,7 +76,11 @@ async def create_chat_completion(request: Request) -> JSONResponse:
         response = build_chat_completion_response(body, result, profile)
         return JSONResponse(status_code=200, content=response.model_dump())
     except SyncSampleResultMissingError:
-        error = OpenAICompatError(status_code=500, message="no result recorded", error_type="api_error")
+        error = OpenAICompatError(
+            status_code=500,
+            message="no result recorded",
+            error_type="api_error",
+        )
         return JSONResponse(status_code=500, content=error.to_response().model_dump())
     except OpenAICompatError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.to_response().model_dump())

@@ -55,7 +55,10 @@ def parse_chat_completions_request(payload: dict) -> ChatCompletionsRequest:
         param = loc[0] if loc else None
         raise OpenAICompatError(
             status_code=400,
-            message=f"invalid chat.completions request: {first_error.get('msg', 'validation failed')}",
+            message=(
+                "invalid chat.completions request: "
+                f"{first_error.get('msg', 'validation failed')}"
+            ),
             param=str(param) if param is not None else None,
             code="invalid_request",
         ) from exc

@@ -173,6 +173,45 @@ curl -X POST http://localhost:8000/api/v1/batches \
   -d '{"name":"test","mode":"api","concurrency":2,"target_profile_default":"my_api","samples":[...]}'
 ```
 
+## OpenAI-compatible single test
+
+用户也可以通过 OpenAI-compatible 同步接口调用 AutoAgent：
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<密码>"}' | jq -r .token)
+```
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key=TOKEN,
+)
+
+resp = client.chat.completions.create(
+    model="my_profile",
+    messages=[{"role": "user", "content": "你好"}],
+    extra_body={
+        "new_session": True,
+        "timeout_sec": 120,
+        "retry": 1,
+        "dry_run": False,
+    },
+)
+
+print(resp.choices[0].message.content)
+```
+
+注意：
+
+- `model` 会映射到 AutoAgent 的 `target_profile`
+- v1 仅使用最后一条 `user` 消息
+- v1 不支持 `stream=true`
+- 当 profile 启用了 LLM response extraction 时，AutoAgent 会优先使用 `llm_responses`，提取失败时回退到静态 `responses`
+
 ## Android 使用
 
 ### 前提
