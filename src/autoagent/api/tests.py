@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
 from autoagent.models.api import AsyncTestResponse, Sample, SampleResult
-from autoagent.services import sync_tests as sync_tests_service
 from autoagent.services.sync_tests import execute_sync_sample
 from autoagent.storage.samples import list_samples_for_batch
 
@@ -17,9 +16,11 @@ router = APIRouter(prefix="/tests", tags=["tests"], dependencies=[Depends(requir
 
 
 async def execute_sync_test(sample: Sample) -> SampleResult:
-    sync_tests_service.get_scheduler = get_scheduler
-    sync_tests_service.list_samples_for_batch = list_samples_for_batch
-    return await execute_sync_sample(sample)
+    return await execute_sync_sample(
+        sample,
+        get_scheduler_fn=get_scheduler,
+        list_samples_for_batch_fn=list_samples_for_batch,
+    )
 
 
 @router.post("/sync", response_model=SampleResult)
