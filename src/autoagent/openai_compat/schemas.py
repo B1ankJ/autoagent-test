@@ -9,7 +9,7 @@ class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: str | list[dict[str, Any]]
 
 
 class ChatCompletionsRequest(BaseModel):
@@ -23,6 +23,12 @@ class ChatCompletionsRequest(BaseModel):
     timeout_sec: int | None = Field(default=None, gt=0)
     retry: int = Field(default=2, ge=0)
     dry_run: bool = False
+    temperature: float | None = None
+    max_tokens: int | None = None
+    max_completion_tokens: int | None = None
+    top_p: float | None = None
+    stop: str | list[str] | None = None
+    user: str | None = None
     tools: Any | None = None
     tool_choice: Any | None = None
     functions: Any | None = None

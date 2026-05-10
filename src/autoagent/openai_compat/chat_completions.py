@@ -4,6 +4,8 @@ import time
 import uuid
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from autoagent.models.api import Sample, SampleResult
 from autoagent.openai_compat.schemas import (
     AutoAgentPayload,
@@ -44,12 +46,69 @@ class OpenAICompatError(Exception):
         )
 
 
+def parse_chat_completions_request(payload: dict) -> ChatCompletionsRequest:
+    try:
+        return ChatCompletionsRequest.model_validate(payload)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        loc = first_error.get("loc", ())
+        param = loc[0] if loc else None
+        raise OpenAICompatError(
+            status_code=400,
+            message=f"invalid chat.completions request: {first_error.get('msg', 'validation failed')}",
+            param=str(param) if param is not None else None,
+            code="invalid_request",
+        ) from exc
+
+
 def ensure_supported_request(body: ChatCompletionsRequest) -> None:
     if body.stream:
         raise OpenAICompatError(
             status_code=400,
             message="stream=true is not supported",
             param="stream",
+            code="unsupported_parameter",
+        )
+    if body.temperature is not None:
+        raise OpenAICompatError(
+            400,
+            "temperature is not supported",
+            param="temperature",
+            code="unsupported_parameter",
+        )
+    if body.max_tokens is not None:
+        raise OpenAICompatError(
+            400,
+            "max_tokens is not supported",
+            param="max_tokens",
+            code="unsupported_parameter",
+        )
+    if body.max_completion_tokens is not None:
+        raise OpenAICompatError(
+            400,
+            "max_completion_tokens is not supported",
+            param="max_completion_tokens",
+            code="unsupported_parameter",
+        )
+    if body.top_p is not None:
+        raise OpenAICompatError(
+            400,
+            "top_p is not supported",
+            param="top_p",
+            code="unsupported_parameter",
+        )
+    if body.stop is not None:
+        raise OpenAICompatError(
+            400,
+            "stop is not supported",
+            param="stop",
+            code="unsupported_parameter",
+        )
+    if body.user is not None:
+        raise OpenAICompatError(
+            400,
+            "user is not supported",
+            param="user",
             code="unsupported_parameter",
         )
     if body.tools is not None:
@@ -115,10 +174,26 @@ def ensure_supported_request(body: ChatCompletionsRequest) -> None:
             param="parallel_tool_calls",
             code="unsupported_parameter",
         )
+    for index, message in enumerate(body.messages):
+        if not isinstance(message.content, str):
+            raise OpenAICompatError(
+                400,
+                f"messages[{index}].content non-text content is not supported",
+                param="messages",
+                code="unsupported_parameter",
+            )
 
 
 def resolve_profile(name: str) -> Profile:
-    profile = load_profile(name)
+    try:
+        profile = load_profile(name)
+    except ValueError as exc:
+        raise OpenAICompatError(
+            status_code=400,
+            message=str(exc),
+            param="model",
+            code="invalid_value",
+        ) from exc
     if profile is None:
         raise OpenAICompatError(
             status_code=404,
@@ -149,7 +224,16 @@ def mode_for_profile(profile: Profile) -> str:
 
 def extract_last_user_text(body: ChatCompletionsRequest) -> str:
     for message in reversed(body.messages):
-        if message.role == "user" and message.content.strip():
+        if message.role != "user":
+            continue
+        if not isinstance(message.content, str):
+            raise OpenAICompatError(
+                status_code=400,
+                message="non-text message content is not supported",
+                param="messages",
+                code="unsupported_parameter",
+            )
+        if message.content.strip():
             return message.content
     raise OpenAICompatError(
         status_code=400,

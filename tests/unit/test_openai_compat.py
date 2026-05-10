@@ -9,6 +9,8 @@ from autoagent.openai_compat.chat_completions import (
     build_sample_from_request,
     ensure_supported_request,
     mode_for_profile,
+    parse_chat_completions_request,
+    resolve_profile,
     select_message_content,
 )
 from autoagent.openai_compat.schemas import ChatCompletionsRequest
@@ -62,6 +64,30 @@ def test_request_rejects_stream_true():
 
     assert exc.value.status_code == 400
     assert exc.value.param == "stream"
+
+
+def test_parser_wraps_validation_error_as_compat_error():
+    with pytest.raises(OpenAICompatError) as exc:
+        parse_chat_completions_request({"messages": [{"role": "user", "content": "hi"}]})
+
+    assert exc.value.status_code == 400
+    assert exc.value.param == "model"
+
+
+def test_request_rejects_temperature():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [{"role": "user", "content": "hi"}],
+            "temperature": 0.7,
+        }
+    )
+
+    with pytest.raises(OpenAICompatError) as exc:
+        ensure_supported_request(body)
+
+    assert exc.value.status_code == 400
+    assert exc.value.param == "temperature"
 
 
 def test_build_sample_uses_last_user_message():
@@ -143,6 +169,26 @@ def test_select_message_content_falls_back_when_llm_error_slot_missing():
     assert select_message_content(result, _web_profile_with_llm()) == "static result"
 
 
+def test_non_text_message_content_is_rejected_by_compat_layer():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "hi"}],
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(OpenAICompatError) as exc:
+        ensure_supported_request(body)
+
+    assert exc.value.status_code == 400
+    assert exc.value.param == "messages"
+
+
 def test_build_chat_completion_response_includes_x_autoagent():
     body = ChatCompletionsRequest.model_validate(
         {"model": "p_api", "messages": [{"role": "user", "content": "hi"}]}
@@ -162,3 +208,11 @@ def test_build_chat_completion_response_includes_x_autoagent():
     assert response.choices[0].message.content == "hello"
     assert response.x_autoagent.sample_id == "chatcmpl_s3"
     assert response.x_autoagent.responses == ["hello"]
+
+
+def test_resolve_profile_invalid_name_returns_compat_error():
+    with pytest.raises(OpenAICompatError) as exc:
+        resolve_profile("../bad")
+
+    assert exc.value.status_code == 400
+    assert exc.value.param == "model"
