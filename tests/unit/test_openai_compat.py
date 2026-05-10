@@ -128,12 +128,27 @@ def test_select_message_content_falls_back_when_llm_failed():
     assert select_message_content(result, _web_profile_with_llm()) == "static result"
 
 
+def test_select_message_content_falls_back_when_llm_error_slot_missing():
+    result = SampleResult(
+        id="s_missing_err",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["static result"],
+        llm_responses=["llm result"],
+        llm_errors=[],
+        mode="gui_pc_web",
+        target_profile="p_web",
+    )
+
+    assert select_message_content(result, _web_profile_with_llm()) == "static result"
+
+
 def test_build_chat_completion_response_includes_x_autoagent():
     body = ChatCompletionsRequest.model_validate(
         {"model": "p_api", "messages": [{"role": "user", "content": "hi"}]}
     )
     result = SampleResult(
-        id="s3",
+        id="chatcmpl_s3",
         status="done",
         prompts_sent=["hi"],
         responses=["hello"],
@@ -143,6 +158,7 @@ def test_build_chat_completion_response_includes_x_autoagent():
 
     response = build_chat_completion_response(body, result, _api_profile())
 
+    assert response.id == "chatcmpl_s3"
     assert response.choices[0].message.content == "hello"
-    assert response.x_autoagent.sample_id == "s3"
+    assert response.x_autoagent.sample_id == "chatcmpl_s3"
     assert response.x_autoagent.responses == ["hello"]

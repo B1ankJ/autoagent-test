@@ -175,8 +175,8 @@ def build_sample_from_request(body: ChatCompletionsRequest, profile: Profile) ->
 
 def select_message_content(result: SampleResult, profile: Profile) -> str:
     llm_enabled = bool(getattr(profile, "llm_response_enabled", lambda: False)())
-    if llm_enabled and result.llm_responses:
-        first_error = result.llm_errors[0] if result.llm_errors else None
+    if llm_enabled and result.llm_responses and result.llm_errors:
+        first_error = result.llm_errors[0]
         first_llm = result.llm_responses[0]
         if first_error is None and first_llm:
             return first_llm
@@ -189,8 +189,9 @@ def build_chat_completion_response(
     profile: Profile,
 ) -> ChatCompletionResponse:
     content = select_message_content(result, profile)
+    sample_id = result.id.removeprefix("chatcmpl_")
     return ChatCompletionResponse(
-        id=f"chatcmpl_{result.id}",
+        id=f"chatcmpl_{sample_id}",
         created=int(time.time()),
         model=body.model,
         choices=[
