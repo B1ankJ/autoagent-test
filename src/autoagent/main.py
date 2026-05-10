@@ -13,6 +13,7 @@ from autoagent.api.auth import router as auth_router
 from autoagent.api.batches import router as batches_router
 from autoagent.api.config import router as config_router
 from autoagent.api.devices import router as devices_router
+from autoagent.api.openai_compat import router as openai_compat_router
 from autoagent.api.profile_builder import router as profile_builder_router
 from autoagent.api.profiles import router as profiles_router
 from autoagent.api.tests import router as tests_router
@@ -57,6 +58,7 @@ if _cors_origins:
         allow_headers=["*"],
     )
 
+app.include_router(openai_compat_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(profiles_router, prefix="/api/v1")
 app.include_router(tests_router, prefix="/api/v1")
