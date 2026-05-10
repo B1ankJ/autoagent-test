@@ -102,6 +102,43 @@ async def test_chat_completions_returns_openai_shaped_400_for_malformed_json(
     assert body["error"]["type"] == "invalid_request_error"
 
 
+async def test_chat_completions_returns_openai_shaped_500_for_unexpected_runtime_error(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    save_profile_yaml(
+        "p_api",
+        yaml.safe_dump(
+            {
+                "name": "p_api",
+                "platform": "api",
+                "api": {
+                    "base_url": "https://api.example.com/v1",
+                    "model": "m",
+                    "api_key": "OPENAI_TEST_KEY",
+                },
+            }
+        ),
+    )
+
+    async def fake_execute(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("autoagent.api.openai_compat.execute_sync_sample", fake_execute)
+    headers = await _login(client)
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json={"model": "p_api", "messages": [{"role": "user", "content": "hello"}]},
+        headers=headers,
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["type"] == "api_error"
+
+
 async def test_chat_completions_maps_extensions_and_profile_mode(client: AsyncClient, monkeypatch) -> None:
     save_profile_yaml(
         "fake_site",

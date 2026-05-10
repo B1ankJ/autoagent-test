@@ -80,3 +80,10 @@ async def create_chat_completion(request: Request) -> JSONResponse:
         return JSONResponse(status_code=500, content=error.to_response().model_dump())
     except OpenAICompatError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.to_response().model_dump())
+    except Exception:
+        error = OpenAICompatError(
+            status_code=500,
+            message="internal execution failure",
+            error_type="api_error",
+        )
+        return JSONResponse(status_code=500, content=error.to_response().model_dump())
