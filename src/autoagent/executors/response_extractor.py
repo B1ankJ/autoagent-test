@@ -244,6 +244,31 @@ def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int,
     return (1, bounds[3] - y_penalty, len(text), index)
 
 
+def _is_zero_bounds(node: ET.Element) -> bool:
+    bounds = _node_bounds(node)
+    return bounds is not None and bounds[0] == 0 and bounds[1] == 0 and bounds[2] == 0 and bounds[3] == 0
+
+
+def _collect_offscreen_text(container: ET.Element, locator: Locator) -> str:
+    """Collect text from zero-bounds nodes matching the locator within container.
+
+    WebView-based apps report off-screen nodes with bounds="[0,0][0,0]" instead
+    of real coordinates. These are excluded from layout-based extraction but still
+    hold the full response text. Collecting them in document order recovers content
+    that has scrolled above the visible viewport.
+    """
+    parts: list[str] = []
+    for node in container.iter("node"):
+        if not _matches_locator(node, locator):
+            continue
+        if not _is_zero_bounds(node):
+            continue
+        text = (node.attrib.get("text") or "").strip()
+        if text and not _is_suspect(text) and not _looks_like_ui_chrome(text):
+            parts.append(text)
+    return " ".join(parts)
+
+
 class UiTreeExtractor:
     def extract_from_xml(
         self,
@@ -294,6 +319,13 @@ class UiTreeExtractor:
                 key=lambda item: _block_score(item[1], index=item[0]),
             )
             winner_text = _expand_winner_text(winner_block, blocks)
+            # Prepend off-screen text from zero-bounds nodes in the same container.
+            # WebView-based apps (e.g. Alipay mini-programs) expose scrolled-away
+            # content with bounds="[0,0][0,0]"; these are filtered out of candidate
+            # blocks but still carry the full response text in document order.
+            offscreen_text = _collect_offscreen_text(container, latest_bubble_locator)
+            if offscreen_text and offscreen_text not in winner_text:
+                winner_text = offscreen_text + " " + winner_text
             winner_score = _block_score(winner_block, index=winner_index)
             if best_score is None or winner_score > best_score:
                 best_score = winner_score

@@ -160,7 +160,7 @@ def dump_hierarchy_via_adb(device: Any) -> str:
             timeout=30,
         )
         xml = result.stdout.decode("utf-8", errors="replace").strip()
-        if xml:
+        if xml.startswith("<?xml") and "</hierarchy>" in xml:
             return xml
         if attempt < _DUMP_RETRIES - 1:
             time.sleep(_DUMP_RETRY_DELAY_SEC)
