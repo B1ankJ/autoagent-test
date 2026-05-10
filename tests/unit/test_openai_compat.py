@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+import pytest
+
+from autoagent.models.api import SampleResult
+from autoagent.openai_compat.chat_completions import (
+    OpenAICompatError,
+    build_chat_completion_response,
+    build_sample_from_request,
+    ensure_supported_request,
+    mode_for_profile,
+    select_message_content,
+)
+from autoagent.openai_compat.schemas import ChatCompletionsRequest
+from autoagent.profiles.schemas import ApiProfile, WebProfile
+
+
+def _api_profile() -> ApiProfile:
+    return ApiProfile.model_validate(
+        {
+            "name": "p_api",
+            "platform": "api",
+            "api": {
+                "base_url": "https://api.example.com/v1",
+                "model": "m",
+                "api_key": "OPENAI_TEST_KEY",
+            },
+        }
+    )
+
+
+def _web_profile_with_llm() -> WebProfile:
+    return WebProfile.model_validate(
+        {
+            "name": "p_web",
+            "platform": "web",
+            "url": "file:///tmp/fake.html",
+            "ready_check": {"type": "dom_selector", "selector": "#input"},
+            "recovery_path": [],
+            "input_selector": "#input",
+            "send_method": {"type": "keyboard"},
+            "response_container_selector": "#responses",
+            "complete_detection": {"type": "dom_stable"},
+            "base_url": "https://llm.example.com/v1",
+            "model": "vlm",
+            "api_key": "secret",
+        }
+    )
+
+
+def test_request_rejects_stream_true():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        }
+    )
+
+    with pytest.raises(OpenAICompatError) as exc:
+        ensure_supported_request(body)
+
+    assert exc.value.status_code == 400
+    assert exc.value.param == "stream"
+
+
+def test_build_sample_uses_last_user_message():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [
+                {"role": "system", "content": "ignore"},
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": "also ignore"},
+                {"role": "user", "content": "last"},
+            ],
+            "new_session": True,
+            "timeout_sec": 123,
+            "retry": 1,
+            "dry_run": True,
+            "metadata": {"tag": "sdk"},
+        }
+    )
+
+    sample = build_sample_from_request(body, _api_profile())
+
+    assert sample.prompts == ["last"]
+    assert sample.target_profile == "p_api"
+    assert sample.mode == "api"
+    assert sample.new_session is True
+    assert sample.timeout_sec == 123
+    assert sample.retry == 1
+    assert sample.dry_run is True
+    assert sample.metadata == {"tag": "sdk"}
+
+
+def test_mode_for_profile_maps_web_to_gui_pc_web():
+    assert mode_for_profile(_web_profile_with_llm()) == "gui_pc_web"
+
+
+def test_select_message_content_prefers_successful_llm_result():
+    result = SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["static result"],
+        llm_responses=["llm result"],
+        llm_errors=[None],
+        mode="gui_pc_web",
+        target_profile="p_web",
+    )
+
+    assert select_message_content(result, _web_profile_with_llm()) == "llm result"
+
+
+def test_select_message_content_falls_back_when_llm_failed():
+    result = SampleResult(
+        id="s2",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["static result"],
+        llm_responses=[""],
+        llm_errors=["auth"],
+        mode="gui_pc_web",
+        target_profile="p_web",
+    )
+
+    assert select_message_content(result, _web_profile_with_llm()) == "static result"
+
+
+def test_build_chat_completion_response_includes_x_autoagent():
+    body = ChatCompletionsRequest.model_validate(
+        {"model": "p_api", "messages": [{"role": "user", "content": "hi"}]}
+    )
+    result = SampleResult(
+        id="s3",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["hello"],
+        mode="api",
+        target_profile="p_api",
+    )
+
+    response = build_chat_completion_response(body, result, _api_profile())
+
+    assert response.choices[0].message.content == "hello"
+    assert response.x_autoagent.sample_id == "s3"
+    assert response.x_autoagent.responses == ["hello"]
