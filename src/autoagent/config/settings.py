@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     admin_password: str = Field(default="admin123456")
     jwt_secret: str = Field(default="dev-secret-key-32-chars-minimum-length", min_length=32)
     jwt_expires_hours: int = 24
+    static_api_key: str | None = None
 
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
