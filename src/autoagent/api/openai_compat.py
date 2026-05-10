@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from autoagent.api._deps import get_scheduler
-from autoagent.auth.jwt import decode_token
+from autoagent.auth.bearer import BearerAuthError, resolve_bearer_subject
 from autoagent.openai_compat.chat_completions import (
     OpenAICompatError,
     build_chat_completion_response,
@@ -32,23 +32,15 @@ def _require_openai_bearer(request: Request) -> str:
             code="invalid_api_key",
         )
     try:
-        payload = decode_token(token)
-    except Exception as exc:  # noqa: BLE001
+        return resolve_bearer_subject(token)
+    except BearerAuthError as exc:
+        message = "Malformed token" if exc.reason == "malformed" else "Invalid or expired token"
         raise OpenAICompatError(
             status_code=401,
-            message="Invalid or expired token",
+            message=message,
             error_type="invalid_request_error",
             code="invalid_api_key",
         ) from exc
-    subject = payload.get("sub")
-    if not isinstance(subject, str):
-        raise OpenAICompatError(
-            status_code=401,
-            message="Malformed token",
-            error_type="invalid_request_error",
-            code="invalid_api_key",
-        )
-    return subject
 
 
 @router.post("/chat/completions")

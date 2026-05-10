@@ -45,6 +45,9 @@ python3.11 -m playwright install --with-deps chromium
 
 # 配置
 cp .env.example .env  # 填写 ADMIN_PASSWORD 和 JWT_SECRET
+
+# 可选：配置长期 Bearer key
+# STATIC_API_KEY=your-long-lived-key
 ```
 
 ## 启动服务
@@ -173,6 +176,15 @@ curl -X POST http://localhost:8000/api/v1/batches \
   -d '{"name":"test","mode":"api","concurrency":2,"target_profile_default":"my_api","samples":[...]}'
 ```
 
+如果配置了 `STATIC_API_KEY`，也可以直接使用长期 Bearer key，不必先登录：
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tests/sync \
+  -H "Authorization: Bearer $STATIC_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"t1","prompts":["你好，介绍一下自己"],"mode":"gui_android","target_profile":"nxb","new_session":false}'
+```
+
 ## OpenAI-compatible single test
 
 用户也可以通过 OpenAI-compatible 同步接口调用 AutoAgent：
@@ -205,12 +217,24 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
+如果服务端配置了 `STATIC_API_KEY`，OpenAI SDK 也可以直接使用这个长期 key：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="your-long-lived-key",
+)
+```
+
 注意：
 
 - `model` 会映射到 AutoAgent 的 `target_profile`
 - v1 仅使用最后一条 `user` 消息
 - v1 不支持 `stream=true`
 - 当 profile 启用了 LLM response extraction 时，AutoAgent 会优先使用 `llm_responses`，提取失败时回退到静态 `responses`
+- `STATIC_API_KEY` 和 JWT 可以并存；静态 key 会以 `admin` 身份通过 Bearer 鉴权
 
 ## Android 使用
 
@@ -258,6 +282,7 @@ Agent 模式使用视觉 AI 模型（需 OpenAI-compatible 视觉 API）自主�
 | `ADMIN_USERNAME` | `admin` | 管理员用户名 |
 | `ADMIN_PASSWORD` | `admin123456` | 管理员密码（**生产必须修改**） |
 | `JWT_SECRET` | `dev-secret-...` | JWT 签名密钥（**生产必须修改**，≥32字符） |
+| `STATIC_API_KEY` | - | 可选的长期 Bearer key；配置后所有 Bearer 鉴权接口都接受它 |
 | `DATA_ROOT` | `./data` | 数据库和 profile 存储路径 |
 | `LOGS_ROOT` | `./logs` | 截图和执行日志路径 |
 | `PORT` | `8000` | 服务端口 |

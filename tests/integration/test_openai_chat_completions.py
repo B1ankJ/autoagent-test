@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from pytest_httpx import HTTPXMock
 
 from autoagent.auth.passwords import hash_password
+from autoagent.config.settings import get_settings
 from autoagent.models.api import SampleResult
 from autoagent.profiles.registry import save_profile_yaml
 from autoagent.storage.database import init_db
@@ -60,6 +61,44 @@ async def test_chat_completions_api_success(client: AsyncClient, httpx_mock: HTT
     assert body["x_autoagent"]["responses"] == ["hi!"]
 
 
+async def test_chat_completions_api_success_with_static_api_key(
+    client: AsyncClient,
+    httpx_mock: HTTPXMock,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("STATIC_API_KEY", "permanent-key")
+    get_settings.cache_clear()
+    save_profile_yaml(
+        "p_api",
+        yaml.safe_dump(
+            {
+                "name": "p_api",
+                "platform": "api",
+                "api": {
+                    "base_url": "https://api.example.com/v1",
+                    "model": "m",
+                    "api_key": "OPENAI_TEST_KEY",
+                },
+            }
+        ),
+    )
+    httpx_mock.add_response(
+        url="https://api.example.com/v1/chat/completions",
+        json={"choices": [{"message": {"content": "hi from static key"}}]},
+    )
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json={"model": "p_api", "messages": [{"role": "user", "content": "hello"}]},
+        headers={"Authorization": "Bearer permanent-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["choices"][0]["message"]["content"] == "hi from static key"
+    assert body["x_autoagent"]["responses"] == ["hi from static key"]
+
+
 async def test_chat_completions_returns_openai_shaped_401_without_token(
     client: AsyncClient,
 ) -> None:
@@ -70,6 +109,25 @@ async def test_chat_completions_returns_openai_shaped_401_without_token(
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "invalid_api_key"
+
+
+async def test_chat_completions_rejects_wrong_static_api_key(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("STATIC_API_KEY", "permanent-key")
+    get_settings.cache_clear()
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json={"model": "missing", "messages": [{"role": "user", "content": "hello"}]},
+        headers={"Authorization": "Bearer wrong-key"},
+    )
+
+    assert response.status_code == 401
+    body = response.json()
+    assert body["error"]["code"] == "invalid_api_key"
+    assert body["error"]["message"] == "Invalid or expired token"
 
 
 async def test_chat_completions_rejects_stream_true(client: AsyncClient) -> None:
