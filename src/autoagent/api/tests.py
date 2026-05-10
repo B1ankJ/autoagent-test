@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
 from autoagent.models.api import AsyncTestResponse, Sample, SampleResult
-from autoagent.services.sync_tests import execute_sync_sample
+from autoagent.services.sync_tests import SyncSampleResultMissingError, execute_sync_sample
 from autoagent.storage.samples import list_samples_for_batch
 
 log = logging.getLogger(__name__)
@@ -16,11 +16,14 @@ router = APIRouter(prefix="/tests", tags=["tests"], dependencies=[Depends(requir
 
 
 async def execute_sync_test(sample: Sample) -> SampleResult:
-    return await execute_sync_sample(
-        sample,
-        get_scheduler_fn=get_scheduler,
-        list_samples_for_batch_fn=list_samples_for_batch,
-    )
+    try:
+        return await execute_sync_sample(
+            sample,
+            get_scheduler_fn=get_scheduler,
+            list_samples_for_batch_fn=list_samples_for_batch,
+        )
+    except SyncSampleResultMissingError as exc:
+        raise HTTPException(status_code=500, detail="no result recorded") from exc
 
 
 @router.post("/sync", response_model=SampleResult)

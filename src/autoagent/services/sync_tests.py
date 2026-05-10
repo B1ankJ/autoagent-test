@@ -3,13 +3,22 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from fastapi import HTTPException
-
 from autoagent.models.api import Sample, SampleResult
 
 
+class SyncSampleResultMissingError(RuntimeError):
+    """Raised when batch execution finishes without a recorded sample result."""
+
+
 class SyncSampleScheduler(Protocol):
-    async def submit(self, **kwargs) -> str: ...
+    async def submit(
+        self,
+        *,
+        name: str,
+        mode: str,
+        concurrency: int,
+        samples: list[Sample],
+    ) -> str: ...
 
     async def wait_done(self, batch_id: str, timeout_sec: float | None = None) -> None: ...
 
@@ -33,5 +42,5 @@ async def execute_sync_sample(
     await scheduler.wait_done(batch_id, timeout_sec=wait_timeout + 30)
     results = await list_samples_for_batch_fn(batch_id)
     if not results:
-        raise HTTPException(status_code=500, detail="no result recorded")
+        raise SyncSampleResultMissingError("no result recorded")
     return results[0]

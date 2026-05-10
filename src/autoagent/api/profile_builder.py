@@ -42,7 +42,7 @@ from autoagent.models.api import (
     VLMConfig,
 )
 from autoagent.profiles.registry import delete_profile, save_profile_yaml
-from autoagent.services.sync_tests import execute_sync_sample
+from autoagent.services.sync_tests import SyncSampleResultMissingError, execute_sync_sample
 from autoagent.storage.configs import get_config
 from autoagent.storage.samples import list_samples_for_batch
 
@@ -1433,17 +1433,20 @@ async def validate_draft(session_id: str) -> dict:
     temp_profile_name = f"pb_{session.id}"
     save_profile_yaml(temp_profile_name, draft_profile_yaml)
     try:
-        result = await execute_sync_sample(
-            Sample(
-                id=f"pb-validate-{session.id}",
-                prompts=["hello"],
-                mode="gui_android",
-                target_profile=temp_profile_name,
-                timeout_sec=get_settings().default_gui_timeout_sec,
-            ),
-            get_scheduler_fn=get_scheduler,
-            list_samples_for_batch_fn=list_samples_for_batch,
-        )
+        try:
+            result = await execute_sync_sample(
+                Sample(
+                    id=f"pb-validate-{session.id}",
+                    prompts=["hello"],
+                    mode="gui_android",
+                    target_profile=temp_profile_name,
+                    timeout_sec=get_settings().default_gui_timeout_sec,
+                ),
+                get_scheduler_fn=get_scheduler,
+                list_samples_for_batch_fn=list_samples_for_batch,
+            )
+        except SyncSampleResultMissingError as exc:
+            raise HTTPException(status_code=500, detail="no result recorded") from exc
     finally:
         delete_profile(temp_profile_name)
 

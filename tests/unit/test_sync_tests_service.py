@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import HTTPException
 
 from autoagent.models.api import Sample, SampleResult
 from autoagent.services import sync_tests as mod
@@ -156,12 +155,11 @@ async def test_execute_sync_sample_raises_when_no_result_recorded():
 
     sample = Sample(id="s2", prompts=["yo"], mode="api", target_profile="p_api")
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(mod.SyncSampleResultMissingError) as exc:
         await mod.execute_sync_sample(
             sample,
             get_scheduler_fn=lambda: Scheduler(),
             list_samples_for_batch_fn=fake_list,
         )
 
-    assert exc.value.status_code == 500
-    assert exc.value.detail == "no result recorded"
+    assert str(exc.value) == "no result recorded"
