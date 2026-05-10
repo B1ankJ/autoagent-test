@@ -1035,7 +1035,7 @@ async def test_profile_builder_review_and_validate_flow(client, monkeypatch):
 
     from autoagent.models.api import SampleResult
 
-    async def _run_sync(sample):
+    async def _run_sync(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
         assert sample.target_profile == f"pb_{session['id']}"
         return SampleResult(
             id=sample.id,
@@ -1046,7 +1046,7 @@ async def test_profile_builder_review_and_validate_flow(client, monkeypatch):
             target_profile=sample.target_profile,
         )
 
-    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_test", _run_sync)
+    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_sample", _run_sync)
 
     review = await client.post(
         f"/api/v1/profile-builder/sessions/{session['id']}/review",
@@ -1218,7 +1218,7 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
         encoding="utf-8",
     )
 
-    async def _run_sync(sample):
+    async def _run_sync(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
         logs_dir = artifact_dir / "validate_logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         for name in (
@@ -1238,7 +1238,7 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
             logs_dir=str(logs_dir),
         )
 
-    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_test", _run_sync)
+    monkeypatch.setattr("autoagent.api.profile_builder.execute_sync_sample", _run_sync)
 
     validate = await client.post(
         f"/api/v1/profile-builder/sessions/{session['id']}/validate",

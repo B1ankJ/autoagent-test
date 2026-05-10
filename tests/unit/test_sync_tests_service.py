@@ -53,6 +53,49 @@ async def test_execute_sync_sample_uses_gui_android_wait_timeout():
 
 
 @pytest.mark.asyncio
+async def test_execute_sync_sample_uses_non_android_default_timeout():
+    captured: dict[str, object] = {}
+
+    class Scheduler:
+        async def submit(self, **kwargs):
+            captured.update(kwargs)
+            return "b4"
+
+        async def wait_done(self, batch_id, timeout_sec):
+            captured["batch_id"] = batch_id
+            captured["timeout_sec"] = timeout_sec
+
+    async def fake_list(_batch_id: str):
+        return [
+            SampleResult(
+                id="s4",
+                status="done",
+                prompts_sent=["hey"],
+                responses=["echo: hey"],
+                mode="api",
+                target_profile="p_api",
+            )
+        ]
+
+    sample = Sample(
+        id="s4",
+        prompts=["hey"],
+        mode="api",
+        target_profile="p_api",
+    )
+
+    result = await mod.execute_sync_sample(
+        sample,
+        get_scheduler_fn=lambda: Scheduler(),
+        list_samples_for_batch_fn=fake_list,
+    )
+
+    assert result.status == "done"
+    assert captured["batch_id"] == "b4"
+    assert captured["timeout_sec"] == 630
+
+
+@pytest.mark.asyncio
 async def test_execute_sync_sample_uses_explicit_timeout_override():
     captured: dict[str, object] = {}
 

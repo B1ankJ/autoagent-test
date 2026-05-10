@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Protocol
 
 from fastapi import HTTPException
 
-from autoagent.api._deps import get_scheduler
 from autoagent.models.api import Sample, SampleResult
-from autoagent.storage.samples import list_samples_for_batch
+
+
+class SyncSampleScheduler(Protocol):
+    async def submit(self, **kwargs) -> str: ...
+
+    async def wait_done(self, batch_id: str, timeout_sec: float | None = None) -> None: ...
 
 
 async def execute_sync_sample(
     sample: Sample,
     *,
-    get_scheduler_fn: Callable[[], object] = get_scheduler,
-    list_samples_for_batch_fn: Callable[[str], Awaitable[list[SampleResult]]] = list_samples_for_batch,
+    get_scheduler_fn: Callable[[], SyncSampleScheduler],
+    list_samples_for_batch_fn: Callable[[str], Awaitable[list[SampleResult]]],
 ) -> SampleResult:
     scheduler = get_scheduler_fn()
     batch_id = await scheduler.submit(
