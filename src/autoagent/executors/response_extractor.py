@@ -169,7 +169,11 @@ def _group_candidate_blocks(
 
 
 def _block_text(block: list[ET.Element]) -> str:
-    return " ".join((node.attrib.get("text") or "").strip() for node in block if (node.attrib.get("text") or "").strip())
+    return " ".join(
+        (node.attrib.get("text") or "").strip()
+        for node in block
+        if (node.attrib.get("text") or "").strip()
+    )
 
 
 def _expand_winner_text(
@@ -244,9 +248,30 @@ def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int,
     return (1, bounds[3] - y_penalty, len(text), index)
 
 
+def find_copy_button_center(xml: str, button_text: str) -> tuple[int, int] | None:
+    """Return the (x, y) center of the first node whose text matches button_text.
+
+    Used to locate runtime copy buttons (e.g. text="Copy" or text="复制") whose
+    screen position changes with response length and cannot be hardcoded.
+    Returns None if no matching node with valid bounds is found.
+    """
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return None
+    for node in root.iter("node"):
+        if node.attrib.get("text", "").strip() != button_text:
+            continue
+        bounds = _node_bounds(node)
+        if bounds is None or (bounds[0] == 0 and bounds[2] == 0):
+            continue
+        return ((bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2)
+    return None
+
+
 def _is_zero_bounds(node: ET.Element) -> bool:
     bounds = _node_bounds(node)
-    return bounds is not None and bounds[0] == 0 and bounds[1] == 0 and bounds[2] == 0 and bounds[3] == 0
+    return bounds is not None and bounds[0] == 0 and bounds[1] == 0 and bounds[2] == 0 and bounds[3] == 0  # noqa: E501
 
 
 def _collect_offscreen_text(container: ET.Element, locator: Locator) -> str:
@@ -301,7 +326,8 @@ class UiTreeExtractor:
             candidate_nodes = [
                 node
                 for node in matches
-                if _is_latest_bubble_candidate(node) and not _is_suspect(node.attrib.get("text", ""))
+                if _is_latest_bubble_candidate(node)
+                and not _is_suspect(node.attrib.get("text", ""))
             ]
             blocks = _group_candidate_blocks(candidate_nodes, parents)
             if not blocks:

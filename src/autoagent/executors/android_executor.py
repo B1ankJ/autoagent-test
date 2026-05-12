@@ -21,7 +21,11 @@ from autoagent.executors.complete_detector import (
     wait_for_pixel_stable,
     wait_for_ui_tree_stable,
 )
-from autoagent.executors.response_extractor import OcrExtractor, UiTreeExtractor
+from autoagent.executors.response_extractor import (
+    OcrExtractor,
+    UiTreeExtractor,
+    find_copy_button_center,
+)
 from autoagent.executors.response_llm_extractor import extract_response_via_llm
 from autoagent.executors.screenshot_store import ScreenshotResult, ScreenshotStore
 from autoagent.models.api import Sample
@@ -237,6 +241,71 @@ class AndroidExecutor(Executor):
                             stable_sec=profile.complete_detection.stable_sec,
                             max_wait_sec=profile.complete_detection.max_wait_sec,
                         )
+
+                    # Copy-button clipboard extraction: if the profile specifies a
+                    # copy_button_text, find it in the current XML at runtime and tap
+                    # it; the full response text lands in the clipboard and is more
+                    # complete than UI-tree or OCR extraction for scrolled WebViews.
+                    if profile.response_extraction.copy_button_text and xml:
+                        center = find_copy_button_center(
+                            xml, profile.response_extraction.copy_button_text
+                        )
+                        if center is not None:
+                            await asyncio.to_thread(device.click, center[0], center[1])
+                            await asyncio.sleep(0.5)
+                            clipboard_text = await asyncio.to_thread(
+                                lambda: device.clipboard or ""
+                            )
+                            if clipboard_text.strip():
+                                sample_log.info(
+                                    "android sample %s prompt %s clipboard extraction: "
+                                    "button=%r center=%s chars=%d",
+                                    sample.id,
+                                    idx,
+                                    profile.response_extraction.copy_button_text,
+                                    center,
+                                    len(clipboard_text),
+                                )
+                                responses.append(clipboard_text.strip())
+                                after_result_xml_path = store.artifact_path(
+                                    f"after_result_{idx}", "xml"
+                                )
+                                if xml is not None:
+                                    await asyncio.to_thread(
+                                        after_result_xml_path.write_text, xml, "utf-8"
+                                    )
+                                after_result_path = store.artifact_path(
+                                    f"after_result_{idx}", "png"
+                                )
+                                after_result = await asyncio.to_thread(
+                                    capture_screenshot_bytes, device
+                                )
+                                await asyncio.to_thread(
+                                    after_result_path.write_bytes, after_result
+                                )
+                                ctx.screenshot_index.append(
+                                    ScreenshotResult(
+                                        path=after_result_path,
+                                        label=f"after_result_{idx}",
+                                    )
+                                )
+                                continue
+                            sample_log.info(
+                                "android sample %s prompt %s clipboard empty after "
+                                "copy button tap, falling back to method=%s",
+                                sample.id,
+                                idx,
+                                profile.response_extraction.method,
+                            )
+                        else:
+                            sample_log.info(
+                                "android sample %s prompt %s copy button %r not found "
+                                "in xml, falling back to method=%s",
+                                sample.id,
+                                idx,
+                                profile.response_extraction.copy_button_text,
+                                profile.response_extraction.method,
+                            )
 
                     if profile.response_extraction.method == "ui_tree_only":
                         if xml is None:

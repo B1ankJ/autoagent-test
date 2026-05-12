@@ -122,6 +122,7 @@ class AndroidResponseExtraction(BaseModel):
     response_container_locator: Locator
     scroll_container_locator: Locator
     latest_bubble_match: Locator
+    copy_button_text: str | None = None
 
 
 class AndroidProfile(BaseModel):
