@@ -249,24 +249,30 @@ def _block_score(block: list[ET.Element], *, index: int) -> tuple[int, int, int,
 
 
 def find_copy_button_center(xml: str, button_text: str) -> tuple[int, int] | None:
-    """Return the (x, y) center of the first node whose text matches button_text.
+    """Return the (x, y) center of the bottom-most node whose text matches button_text.
 
-    Used to locate runtime copy buttons (e.g. text="Copy" or text="复制") whose
-    screen position changes with response length and cannot be hardcoded.
+    When multiple rounds of conversation are visible, there will be one copy button per
+    round. We pick the one with the largest bottom-y coordinate (lowest on screen) so we
+    always copy the latest AI response, not an earlier one.
     Returns None if no matching node with valid bounds is found.
     """
     try:
         root = ET.fromstring(xml)
     except ET.ParseError:
         return None
+    best: tuple[int, tuple[int, int, int, int]] | None = None  # (bottom_y, bounds)
     for node in root.iter("node"):
         if node.attrib.get("text", "").strip() != button_text:
             continue
         bounds = _node_bounds(node)
         if bounds is None or (bounds[0] == 0 and bounds[2] == 0):
             continue
-        return ((bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2)
-    return None
+        if best is None or bounds[3] > best[0]:
+            best = (bounds[3], bounds)
+    if best is None:
+        return None
+    b = best[1]
+    return ((b[0] + b[2]) // 2, (b[1] + b[3]) // 2)
 
 
 def _is_zero_bounds(node: ET.Element) -> bool:
