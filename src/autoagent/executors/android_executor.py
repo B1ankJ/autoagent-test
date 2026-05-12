@@ -17,6 +17,7 @@ from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.complete_detector import (
     capture_screenshot_bytes,
     dump_hierarchy_via_adb,
+    ensure_screen_awake,
     wait_for_pixel_stable,
     wait_for_ui_tree_stable,
 )
@@ -125,6 +126,7 @@ class AndroidExecutor(Executor):
                 profile.package,
                 profile.activity,
             )
+            await asyncio.to_thread(ensure_screen_awake, ctx.device_serial)
             await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
             async with AndroidInput(device, profile.input_method) as input_ctl:
                 action_runner = AndroidActionRunner(

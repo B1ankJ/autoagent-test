@@ -129,6 +129,43 @@ _DUMP_RETRIES = 3
 _DUMP_RETRY_DELAY_SEC = 1.0
 
 
+def ensure_screen_awake(serial: str) -> None:
+    """Wake the screen and dismiss the swipe lock screen if needed.
+
+    Sends KEYCODE_POWER when the device is asleep, then swipes up to dismiss
+    a swipe-only lock screen. PIN/pattern lock screens are not handled here —
+    the device should be set to swipe-only unlock for automated testing.
+    """
+    power = subprocess.run(
+        ["adb", "-s", serial, "shell", "dumpsys", "power"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    ).stdout
+    asleep = "mWakefulness=Asleep" in power or "mWakefulness=Dozing" in power
+    if asleep:
+        subprocess.run(
+            ["adb", "-s", serial, "shell", "input", "keyevent", "26"],
+            capture_output=True,
+            timeout=10,
+        )
+        time.sleep(1.0)
+
+    window = subprocess.run(
+        ["adb", "-s", serial, "shell", "dumpsys", "window"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    ).stdout
+    if "mDreamingLockscreen=true" in window:
+        subprocess.run(
+            ["adb", "-s", serial, "shell", "input", "swipe", "540", "1800", "540", "900"],
+            capture_output=True,
+            timeout=10,
+        )
+        time.sleep(0.5)
+
+
 def dump_hierarchy_via_adb(device: Any) -> str:
     """Dump the UI hierarchy via adb shell uiautomator dump.
 
