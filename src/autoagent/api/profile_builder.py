@@ -923,6 +923,11 @@ def _draft_profile_from_candidates(
             "response_container_locator": first_response["response_container_locator"],
             "scroll_container_locator": first_response["scroll_container_locator"],
             "latest_bubble_match": first_response["latest_bubble_match"],
+            **(
+                {"copy_button_text": candidates.copy_button_text}
+                if candidates.copy_button_text
+                else {}
+            ),
         },
         "new_session_action": [],
         "input_focus_action": input_focus_action,

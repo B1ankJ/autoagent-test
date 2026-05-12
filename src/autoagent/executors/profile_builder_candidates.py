@@ -19,12 +19,16 @@ _SYSTEM_PACKAGE_PREFIXES = (
 )
 
 
+_COPY_BUTTON_TEXTS = ("Copy", "复制", "全部复制", "copy", "COPY")
+
+
 @dataclass
 class AndroidCandidateDraft:
     input_candidates: list[dict]
     send_candidates: list[dict]
     response_candidates: list[dict]
     review_items: list[dict]
+    copy_button_text: str | None = None
 
     def asdict(self) -> dict:
         return asdict(self)
@@ -718,6 +722,25 @@ def _build_review_items(
     return review_items
 
 
+def _detect_copy_button_text(response_xml: str) -> str | None:
+    """Scan response XML for a known copy-button text label.
+
+    Copy buttons (e.g. text="Copy" or text="复制") appear after AI response
+    bubbles and allow clipboard extraction of the full response text. Their
+    position varies with response length so they cannot be hardcoded; instead
+    the text label is recorded here and matched at runtime.
+    """
+    try:
+        root = ElementTree.fromstring(response_xml)
+    except ElementTree.ParseError:
+        return None
+    for node in root.iter("node"):
+        text = (node.attrib.get("text") or "").strip()
+        if text in _COPY_BUTTON_TEXTS:
+            return text
+    return None
+
+
 def build_android_candidates(
     *,
     idle_xml: str,
@@ -738,10 +761,12 @@ def build_android_candidates(
         send_candidates,
         response_candidates,
     )
+    copy_button_text = _detect_copy_button_text(response_xml)
 
     return AndroidCandidateDraft(
         input_candidates=input_candidates,
         send_candidates=send_candidates,
         response_candidates=response_candidates,
         review_items=review_items,
+        copy_button_text=copy_button_text,
     )
