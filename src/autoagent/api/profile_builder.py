@@ -924,8 +924,8 @@ def _draft_profile_from_candidates(
             "scroll_container_locator": first_response["scroll_container_locator"],
             "latest_bubble_match": first_response["latest_bubble_match"],
             **(
-                {"copy_button_text": candidates.copy_button_text}
-                if candidates.copy_button_text
+                {"copy_button_text": candidates["copy_button_text"]}
+                if candidates.get("copy_button_text")
                 else {}
             ),
         },
