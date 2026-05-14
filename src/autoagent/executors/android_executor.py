@@ -131,7 +131,7 @@ class AndroidExecutor(Executor):
                 profile.activity,
             )
             await asyncio.to_thread(ensure_screen_awake, ctx.device_serial)
-            await asyncio.to_thread(device.app_start, profile.package, profile.activity, True)
+            await asyncio.to_thread(device.app_start, profile.package, profile.activity, False)
             async with AndroidInput(device, profile.input_method) as input_ctl:
                 action_runner = AndroidActionRunner(
                     device=device,

@@ -103,7 +103,7 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     )
 
     assert out == ["echo: hi", "echo: bb"]
-    device.app_start.assert_called_once_with("demo.app", None, True)
+    device.app_start.assert_called_once_with("demo.app", None, False)
     assert input_target.click.call_count == 2
     device.shell.assert_any_call(["input", "text", "hi"])
     device.shell.assert_any_call(["input", "text", "bb"])
