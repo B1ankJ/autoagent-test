@@ -111,6 +111,7 @@ response_extraction:
   latest_bubble_match:
     type: last_child_with_class
     value: android.widget.TextView
+  copy_button_text: "复制"   # 可选：若 AI 回复旁有复制按钮，填入按钮文字可提升提取准确率
 complete_detection:
   type: ui_tree_stable
   stable_sec: 2
@@ -206,7 +207,7 @@ client = OpenAI(
 resp = client.chat.completions.create(
     model="my_profile",
     messages=[{"role": "user", "content": "你好"}],
-    extra_body={
+    extra_body={          # SDK 会将 extra_body 展开到请求顶层
         "new_session": True,
         "timeout_sec": 120,
         "retry": 1,
@@ -216,6 +217,15 @@ resp = client.chat.completions.create(
 
 print(resp.choices[0].message.content)
 ```
+
+> **注意**：`extra_body` 是 OpenAI Python SDK 的客户端参数，SDK 会自动将其展开到 HTTP 请求体的顶层。直接用 `curl` 时，应将这些字段写在 JSON 顶层，不要包含 `extra_body` 键：
+>
+> ```bash
+> curl http://localhost:8000/v1/chat/completions \
+>   -H "Content-Type: application/json" \
+>   -H "Authorization: Bearer $TOKEN" \
+>   -d '{"model":"my_profile","messages":[{"role":"user","content":"你好"}],"new_session":true,"timeout_sec":120}'
+> ```
 
 如果服务端配置了 `STATIC_API_KEY`，OpenAI SDK 也可以直接使用这个长期 key：
 
