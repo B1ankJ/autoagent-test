@@ -7,72 +7,82 @@ import sys
 import time
 from typing import Any
 
-import mss
-import mss.tools
-import pyautogui
-
-try:
-    import pyperclip
-except ImportError:  # pragma: no cover - exercised through fallback behavior
-    class _ClipboardFallback:
-        @staticmethod
-        def copy(text: str) -> None:
-            if sys.platform == "darwin":
-                subprocess.run(["pbcopy"], input=text, text=True, check=True)
-                return
-            if sys.platform.startswith("win"):
-                subprocess.run(["clip"], input=text, text=True, check=True)
-                return
-            subprocess.run(["xclip", "-selection", "clipboard"], input=text, text=True, check=True)
-
-    pyperclip = _ClipboardFallback()
-
 from autoagent.executors.agent_core.device import Device, Screenshot
 
 _log = logging.getLogger(__name__)
 
-pyautogui.FAILSAFE = False
+
+def _pyautogui():
+    import pyautogui as _m  # noqa: PLC0415
+    _m.FAILSAFE = False
+    return _m
+
+
+
+def _pyperclip():
+    try:
+        import pyperclip as _m  # noqa: PLC0415
+        return _m
+    except ImportError:
+        class _ClipboardFallback:
+            @staticmethod
+            def copy(text: str) -> None:
+                if sys.platform == "darwin":
+                    subprocess.run(["pbcopy"], input=text, text=True, check=True)
+                    return
+                if sys.platform.startswith("win"):
+                    subprocess.run(["clip"], input=text, text=True, check=True)
+                    return
+                subprocess.run(
+                    ["xclip", "-selection", "clipboard"], input=text, text=True, check=True
+                )
+
+        return _ClipboardFallback()
 
 
 class PcDeviceAdapter(Device):
     def capture(self) -> Screenshot:
-        with mss.mss() as sct:
+        import mss as _mss_mod  # noqa: PLC0415
+        import mss.tools as _mss_tools  # noqa: PLC0415
+        with _mss_mod.mss() as sct:
             monitor = sct.monitors[1]
             grab = sct.grab(monitor)
-            png_bytes = mss.tools.to_png(grab.rgb, grab.size)
+            png_bytes = _mss_tools.to_png(grab.rgb, grab.size)
             b64 = base64.b64encode(png_bytes).decode()
             return Screenshot(base64_data=b64, width=grab.width, height=grab.height)
 
     def tap(self, x: int, y: int) -> None:
-        pyautogui.click(x, y)
+        _pyautogui().click(x, y)
 
     def double_tap(self, x: int, y: int) -> None:
-        pyautogui.doubleClick(x, y)
+        _pyautogui().doubleClick(x, y)
 
     def long_press(self, x: int, y: int, duration_ms: int = 800) -> None:
-        pyautogui.mouseDown(x, y)
+        pg = _pyautogui()
+        pg.mouseDown(x, y)
         time.sleep(duration_ms / 1000.0)
-        pyautogui.mouseUp(x, y)
+        pg.mouseUp(x, y)
 
     def type_text(self, text: str) -> None:
-        pyperclip.copy(text)
+        _pyperclip().copy(text)
         paste_modifier = "command" if sys.platform == "darwin" else "ctrl"
-        pyautogui.hotkey(paste_modifier, "v")
+        _pyautogui().hotkey(paste_modifier, "v")
         time.sleep(0.1)
 
     def press_key(self, key: str) -> None:
-        pyautogui.press(key)
+        _pyautogui().press(key)
 
     def hotkey(self, *keys: str) -> None:
-        pyautogui.hotkey(*keys)
+        _pyautogui().hotkey(*keys)
 
     def swipe(self, start_x: int, start_y: int, end_x: int, end_y: int) -> None:
-        pyautogui.moveTo(start_x, start_y)
-        pyautogui.dragTo(end_x, end_y, duration=0.3, button="left")
+        pg = _pyautogui()
+        pg.moveTo(start_x, start_y)
+        pg.dragTo(end_x, end_y, duration=0.3, button="left")
 
     def scroll(self, direction: str, clicks: int) -> None:
         delta = int(clicks) * 300
-        pyautogui.scroll(delta if direction == "up" else -delta)
+        _pyautogui().scroll(delta if direction == "up" else -delta)
 
     def execute_action(self, action: dict[str, Any]) -> None:
         legacy_action = _coerce_legacy_action(action)
