@@ -91,11 +91,11 @@ async def test_input_requires_auth(client):
 async def test_input_rejects_invalid_serial(client):
     h = await _auth(client)
     r = await client.post(
-        "/api/v1/devices/../evil/input",
+        "/api/v1/devices/bad..serial!/input",
         json={"type": "tap", "x": 0, "y": 0},
         headers=h,
     )
-    assert r.status_code in (400, 404)
+    assert r.status_code == 400
 
 
 async def test_input_adb_error_returns_502(client):
