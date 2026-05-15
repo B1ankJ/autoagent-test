@@ -1,6 +1,8 @@
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import WebSocketDisconnect
 
 from autoagent.devices.adb import AdbCommandError, get_screen_resolution, run_input_command
 
@@ -76,3 +78,71 @@ def test_run_input_text_escapes_special_chars():
 def test_run_input_rejects_invalid_type():
     with pytest.raises(AdbCommandError):
         run_input_command("emulator-5554", {"type": "unknown"})
+
+
+async def test_stream_kills_process_on_disconnect(monkeypatch):
+    """WebSocket 断开时，screenrecord 子进程必须被终止。"""
+    fake_proc = MagicMock()
+    fake_proc.stdout = AsyncMock()
+    fake_proc.stdout.read = AsyncMock(side_effect=[b"\x00\x00\x00\x01abc", b""])
+    fake_proc.terminate = MagicMock()
+    fake_proc.wait = AsyncMock(return_value=0)
+    fake_proc.returncode = None
+
+    async def fake_create_subprocess(*args, **kwargs):
+        return fake_proc
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess)
+
+    from autoagent.api.device_stream import _stream_h264
+
+    frames_sent = []
+
+    class FakeWS:
+        async def send_bytes(self, data):
+            frames_sent.append(data)
+            raise WebSocketDisconnect()
+
+    with patch("autoagent.api.device_stream.get_screen_resolution", return_value=(720, 1600)):
+        try:
+            await _stream_h264(FakeWS(), "emulator-5554")
+        except WebSocketDisconnect:
+            pass
+
+    fake_proc.terminate.assert_called_once()
+    assert frames_sent
+
+
+async def test_stream_sends_error_frame_on_immediate_exit(monkeypatch):
+    """screenrecord 立即退出时，发送 JSON 错误帧后关闭连接。"""
+    fake_proc = MagicMock()
+    fake_proc.stdout = AsyncMock()
+    fake_proc.stdout.read = AsyncMock(return_value=b"")  # 立即 EOF
+    fake_proc.terminate = MagicMock()
+    fake_proc.wait = AsyncMock(return_value=1)
+    fake_proc.returncode = 1
+
+    async def fake_create_subprocess(*args, **kwargs):
+        return fake_proc
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess)
+
+    from autoagent.api.device_stream import _stream_h264
+
+    messages_sent = []
+
+    class FakeWS:
+        async def send_bytes(self, data):
+            messages_sent.append(("bytes", data))
+
+        async def send_text(self, data):
+            messages_sent.append(("text", data))
+
+        async def close(self):
+            pass
+
+    with patch("autoagent.api.device_stream.get_screen_resolution", return_value=(720, 1600)):
+        await _stream_h264(FakeWS(), "emulator-5554")
+
+    text_frames = [m for m in messages_sent if m[0] == "text"]
+    assert any("error" in m[1] for m in text_frames)
