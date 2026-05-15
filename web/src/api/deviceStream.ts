@@ -1,0 +1,213 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { client, getToken } from './client'
+import type { DeviceInputRequest } from '../types/api'
+
+export type StreamState = 'connecting' | 'live' | 'error' | 'unsupported' | 'closed'
+
+export interface DeviceStreamHandle {
+  canvasRef: React.RefObject<HTMLCanvasElement>
+  state: StreamState
+  latencyMs: number | null
+  reconnect: () => void
+}
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 2000
+
+export function useDeviceStream(serial: string | null): DeviceStreamHandle {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [state, setState] = useState<StreamState>('closed')
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
+  const retryCount = useRef(0)
+  const wsRef = useRef<WebSocket | null>(null)
+  const decoderRef = useRef<VideoDecoder | null>(null)
+  const bufferRef = useRef<Uint8Array>(new Uint8Array(0))
+  const spsRef = useRef<Uint8Array | null>(null)
+  const ppsRef = useRef<Uint8Array | null>(null)
+  const frameCountRef = useRef(0)
+  const frameTimestampRef = useRef(0)
+
+  const connect = useCallback(() => {
+    if (!serial) return
+    if (typeof VideoDecoder === 'undefined') {
+      setState('unsupported')
+      return
+    }
+
+    setState('connecting')
+    const token = getToken()
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const wsUrl = `${proto}://${window.location.host}/api/v1/devices/${encodeURIComponent(serial)}/stream?token=${token}`
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+    ws.binaryType = 'arraybuffer'
+
+    bufferRef.current = new Uint8Array(0)
+    spsRef.current = null
+    ppsRef.current = null
+    frameCountRef.current = 0
+    frameTimestampRef.current = 0
+
+    const decoder = new VideoDecoder({
+      output: (frame) => {
+        const canvas = canvasRef.current
+        if (canvas) {
+          canvas.width = frame.displayWidth
+          canvas.height = frame.displayHeight
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(frame, 0, 0)
+        }
+        frame.close()
+      },
+      error: (e) => {
+        console.error('VideoDecoder error', e)
+      },
+    })
+    decoderRef.current = decoder
+
+    ws.onopen = () => {
+      retryCount.current = 0
+      setState('live')
+    }
+
+    ws.onmessage = (event) => {
+      if (typeof event.data === 'string') {
+        try {
+          const msg = JSON.parse(event.data)
+          if (msg.error) setState('error')
+        } catch {
+          // ignore malformed control frames
+        }
+        return
+      }
+
+      const incoming = new Uint8Array(event.data as ArrayBuffer)
+      const combined = new Uint8Array(bufferRef.current.length + incoming.length)
+      combined.set(bufferRef.current)
+      combined.set(incoming, bufferRef.current.length)
+      bufferRef.current = combined
+
+      parseAndDecodeNALUs(
+        combined,
+        decoder,
+        spsRef,
+        ppsRef,
+        frameCountRef,
+        frameTimestampRef,
+        setLatencyMs,
+      )
+    }
+
+    ws.onclose = () => {
+      decoder.close()
+      if (retryCount.current < MAX_RETRIES) {
+        retryCount.current++
+        setTimeout(connect, RETRY_DELAY_MS)
+      } else {
+        setState('error')
+      }
+    }
+
+    ws.onerror = () => {
+      ws.close()
+    }
+  }, [serial])
+
+  const reconnect = useCallback(() => {
+    retryCount.current = 0
+    wsRef.current?.close()
+    connect()
+  }, [connect])
+
+  useEffect(() => {
+    if (!serial) return
+    connect()
+    return () => {
+      retryCount.current = MAX_RETRIES
+      wsRef.current?.close()
+      decoderRef.current?.close()
+    }
+  }, [serial, connect])
+
+  return { canvasRef, state, latencyMs, reconnect }
+}
+
+function findStartCodes(data: Uint8Array): number[] {
+  const positions: number[] = []
+  for (let i = 0; i < data.length - 3; i++) {
+    if (data[i] === 0 && data[i + 1] === 0) {
+      if (data[i + 2] === 0 && data[i + 3] === 1) {
+        positions.push(i)
+        i += 3
+      } else if (data[i + 2] === 1) {
+        positions.push(i)
+        i += 2
+      }
+    }
+  }
+  return positions
+}
+
+function parseAndDecodeNALUs(
+  buffer: Uint8Array,
+  decoder: VideoDecoder,
+  spsRef: React.MutableRefObject<Uint8Array | null>,
+  ppsRef: React.MutableRefObject<Uint8Array | null>,
+  frameCountRef: React.MutableRefObject<number>,
+  frameTimestampRef: React.MutableRefObject<number>,
+  setLatencyMs: (ms: number) => void,
+) {
+  const starts = findStartCodes(buffer)
+  if (starts.length < 2) return
+
+  for (let i = 0; i < starts.length - 1; i++) {
+    const scStart = starts[i]
+    const scLen = buffer[scStart + 2] === 1 ? 3 : 4
+    const nalStart = scStart + scLen
+    const nalEnd = starts[i + 1]
+    if (nalEnd <= nalStart) continue
+
+    const nalu = buffer.slice(nalStart, nalEnd)
+    if (nalu.length === 0) continue
+    const nalType = nalu[0] & 0x1f
+
+    if (nalType === 7) {
+      spsRef.current = nalu
+    } else if (nalType === 8) {
+      ppsRef.current = nalu
+      if (spsRef.current && decoder.state === 'unconfigured') {
+        try {
+          decoder.configure({ codec: 'avc1.42E01E', optimizeForLatency: true })
+        } catch (e) {
+          console.error('VideoDecoder configure failed', e)
+        }
+      }
+    } else if ((nalType === 5 || nalType === 1) && decoder.state === 'configured') {
+      const isKey = nalType === 5
+      const chunkData = new Uint8Array(4 + nalu.length)
+      chunkData.set([0, 0, 0, 1])
+      chunkData.set(nalu, 4)
+
+      const ts = frameTimestampRef.current
+      frameTimestampRef.current += 33333
+      frameCountRef.current++
+
+      const wallStart = performance.now()
+      decoder.decode(
+        new EncodedVideoChunk({
+          type: isKey ? 'key' : 'delta',
+          timestamp: ts,
+          data: chunkData,
+        }),
+      )
+      if (frameCountRef.current % 30 === 0) {
+        setLatencyMs(Math.round(performance.now() - wallStart + 33))
+      }
+    }
+  }
+}
+
+export async function postDeviceInput(serial: string, cmd: DeviceInputRequest): Promise<void> {
+  await client.post(`/devices/${serial}/input`, cmd)
+}

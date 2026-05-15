@@ -329,3 +329,36 @@ export interface ProfileBuilderValidateResponse {
   draft_profile_yaml: string
   connectivity_result: SingleTestSyncResponse
 }
+
+export type DeviceInputType = 'tap' | 'swipe' | 'text' | 'key'
+
+export interface DeviceInputTap {
+  type: 'tap'
+  x: number
+  y: number
+}
+
+export interface DeviceInputSwipe {
+  type: 'swipe'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  duration_ms?: number
+}
+
+export interface DeviceInputText {
+  type: 'text'
+  value: string
+}
+
+export interface DeviceInputKey {
+  type: 'key'
+  keycode: string
+}
+
+export type DeviceInputRequest =
+  | DeviceInputTap
+  | DeviceInputSwipe
+  | DeviceInputText
+  | DeviceInputKey
