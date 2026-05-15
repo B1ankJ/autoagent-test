@@ -79,7 +79,13 @@ async def _kill_proc(proc: asyncio.subprocess.Process) -> None:
 
 
 async def _stream_h264(ws: WebSocket, serial: str) -> None:
-    w, h = get_screen_resolution(serial, target_width=720)
+    try:
+        w, h = await asyncio.to_thread(get_screen_resolution, serial, 720)
+    except AdbCommandError as exc:
+        await ws.send_text(json.dumps({"error": "device_not_found", "detail": str(exc)}))
+        await ws.close()
+        return
+
     old = _active_streams.pop(serial, None)
     if old is not None:
         await _kill_proc(old)
@@ -136,5 +142,10 @@ async def device_stream(websocket: WebSocket, serial: str, token: str | None = N
         await _stream_h264(websocket, serial)
     except WebSocketDisconnect:
         pass
-    except Exception:
-        log.exception("device_stream %s error", serial)
+    except Exception as exc:
+        log.warning("device_stream %s unexpected error: %s", serial, exc)
+        try:
+            await websocket.send_text(json.dumps({"error": "internal", "detail": str(exc)}))
+            await websocket.close()
+        except Exception:
+            pass
