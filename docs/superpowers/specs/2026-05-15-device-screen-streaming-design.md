@@ -60,7 +60,8 @@ Frontend (React)
 ### WS /api/v1/devices/{serial}/stream
 
 - **鉴权**：复用现有 Bearer token（URL query param `?token=...`，WebSocket 不支持自定义 header）
-- **子进程**：`asyncio.create_subprocess_exec("adb", "-s", serial, "exec-out", "screenrecord", "--output-format=h264", "--size", "720x1280", "-", stdout=PIPE)`
+- **分辨率**：启动前先执行 `adb -s {serial} shell wm size` 获取设备实际分辨率，宽度缩放到 720（保持宽高比），传入 `--size WxH`
+- **子进程**：`asyncio.create_subprocess_exec("adb", "-s", serial, "exec-out", "screenrecord", "--output-format=h264", "--size", "{w}x{h}", "-", stdout=PIPE)`
 - **推流**：循环 `await proc.stdout.read(65536)`，非空则 `await ws.send_bytes(chunk)`
 - **生命周期**：WS 关闭（正常/异常）时 `proc.terminate()`，等待最多 3s 后 `proc.kill()`
 - **每 serial 限一路**：用模块级 `dict[str, Process]` 记录活跃进程，新连接到来时先终止旧进程
@@ -163,7 +164,7 @@ web/src/types/api.ts                        # DeviceInputRequest 类型
 - text input 中单引号、反斜杠做转义
 - WS 端点复用现有 Bearer 鉴权，token 通过 URL query param 传递
 
-## Open Questions
+## Decisions
 
-- 云手机是否支持 `screenrecord --output-format=h264`？需在 `192.168.235.240:5555` 上验证后再实施。验证命令：`adb -s 192.168.235.240:5555 shell screenrecord --output-format=h264 --time-limit=3 /sdcard/test.mp4 && echo ok`
-- `--size` 参数应动态读取设备分辨率（`adb shell wm size`）还是固定 720x1280？建议动态读取后按比例缩放到宽度 720。
+- 云手机已确认支持 `screenrecord --output-format=h264`
+- `--size` 动态读取设备分辨率（`adb shell wm size`），宽度缩放到 720 保持比例
