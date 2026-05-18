@@ -86,9 +86,8 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
       const combined = new Uint8Array(bufferRef.current.length + incoming.length)
       combined.set(bufferRef.current)
       combined.set(incoming, bufferRef.current.length)
-      bufferRef.current = combined
 
-      parseAndDecodeNALUs(
+      bufferRef.current = parseAndDecodeNALUs(
         combined,
         decoder,
         spsRef,
@@ -149,6 +148,16 @@ function findStartCodes(data: Uint8Array): number[] {
   return positions
 }
 
+// Extract codec string from SPS NALU: avc1.PPCCLL
+function codecFromSPS(sps: Uint8Array): string {
+  if (sps.length < 4) return 'avc1.640028'
+  const p = sps[1].toString(16).padStart(2, '0')
+  const c = sps[2].toString(16).padStart(2, '0')
+  const l = sps[3].toString(16).padStart(2, '0')
+  return `avc1.${p}${c}${l}`
+}
+
+// Returns remaining unprocessed tail of the buffer (from last incomplete NAL start code).
 function parseAndDecodeNALUs(
   buffer: Uint8Array,
   decoder: VideoDecoder,
@@ -157,9 +166,9 @@ function parseAndDecodeNALUs(
   frameCountRef: React.MutableRefObject<number>,
   frameTimestampRef: React.MutableRefObject<number>,
   setLatencyMs: (ms: number) => void,
-) {
+): Uint8Array {
   const starts = findStartCodes(buffer)
-  if (starts.length < 2) return
+  if (starts.length < 2) return buffer
 
   for (let i = 0; i < starts.length - 1; i++) {
     const scStart = starts[i]
@@ -178,7 +187,8 @@ function parseAndDecodeNALUs(
       ppsRef.current = nalu
       if (spsRef.current && decoder.state === 'unconfigured') {
         try {
-          decoder.configure({ codec: 'avc1.42E01E', optimizeForLatency: true })
+          const codec = codecFromSPS(spsRef.current)
+          decoder.configure({ codec, optimizeForLatency: true })
         } catch (e) {
           console.error('VideoDecoder configure failed', e)
         }
@@ -206,6 +216,9 @@ function parseAndDecodeNALUs(
       }
     }
   }
+
+  // Keep only the tail starting from the last start code (may be incomplete)
+  return buffer.slice(starts[starts.length - 1])
 }
 
 export async function postDeviceInput(serial: string, cmd: DeviceInputRequest): Promise<void> {
