@@ -157,7 +157,16 @@ function codecFromSPS(sps: Uint8Array): string {
   return `avc1.${p}${c}${l}`
 }
 
+function annexBNAL(nalu: Uint8Array): Uint8Array {
+  const out = new Uint8Array(4 + nalu.length)
+  out.set([0, 0, 0, 1])
+  out.set(nalu, 4)
+  return out
+}
+
 // Returns remaining unprocessed tail of the buffer (from last incomplete NAL start code).
+// IDR keyframes are bundled as SPS+PPS+IDR in a single EncodedVideoChunk so the decoder
+// receives a complete Access Unit, which is required by the WebCodecs VideoDecoder spec.
 function parseAndDecodeNALUs(
   buffer: Uint8Array,
   decoder: VideoDecoder,
@@ -182,38 +191,42 @@ function parseAndDecodeNALUs(
     const nalType = nalu[0] & 0x1f
 
     if (nalType === 7) {
+      // SPS — store and configure decoder
       spsRef.current = nalu
-    } else if (nalType === 8) {
-      ppsRef.current = nalu
-      if (spsRef.current && decoder.state === 'unconfigured') {
+      if (decoder.state === 'unconfigured') {
         try {
-          const codec = codecFromSPS(spsRef.current)
-          decoder.configure({ codec, optimizeForLatency: true })
+          decoder.configure({ codec: codecFromSPS(nalu), optimizeForLatency: true })
         } catch (e) {
           console.error('VideoDecoder configure failed', e)
         }
       }
-    } else if ((nalType === 5 || nalType === 1) && decoder.state === 'configured') {
-      const isKey = nalType === 5
-      const chunkData = new Uint8Array(4 + nalu.length)
-      chunkData.set([0, 0, 0, 1])
-      chunkData.set(nalu, 4)
+    } else if (nalType === 8) {
+      // PPS — just store; configure was triggered by SPS
+      ppsRef.current = nalu
+    } else if (nalType === 5 && decoder.state === 'configured') {
+      // IDR keyframe: bundle SPS + PPS + IDR as a single Access Unit
+      const sps = spsRef.current
+      const pps = ppsRef.current
+      const parts = sps && pps
+        ? [annexBNAL(sps), annexBNAL(pps), annexBNAL(nalu)]
+        : [annexBNAL(nalu)]
+      const totalLen = parts.reduce((s, p) => s + p.length, 0)
+      const chunkData = new Uint8Array(totalLen)
+      let off = 0
+      for (const p of parts) { chunkData.set(p, off); off += p.length }
 
       const ts = frameTimestampRef.current
       frameTimestampRef.current += 33333
       frameCountRef.current++
-
       const wallStart = performance.now()
-      decoder.decode(
-        new EncodedVideoChunk({
-          type: isKey ? 'key' : 'delta',
-          timestamp: ts,
-          data: chunkData,
-        }),
-      )
-      if (frameCountRef.current % 30 === 0) {
-        setLatencyMs(Math.round(performance.now() - wallStart + 33))
-      }
+      decoder.decode(new EncodedVideoChunk({ type: 'key', timestamp: ts, data: chunkData }))
+      if (frameCountRef.current % 30 === 0) setLatencyMs(Math.round(performance.now() - wallStart + 33))
+    } else if (nalType === 1 && decoder.state === 'configured') {
+      // Non-IDR slice
+      const ts = frameTimestampRef.current
+      frameTimestampRef.current += 33333
+      frameCountRef.current++
+      decoder.decode(new EncodedVideoChunk({ type: 'delta', timestamp: ts, data: annexBNAL(nalu) }))
     }
   }
 
