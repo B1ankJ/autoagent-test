@@ -75,6 +75,7 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data)
+          console.warn('[stream] control frame:', msg)
           if (msg.error) setState('error')
         } catch {
           // ignore malformed control frames
@@ -194,10 +195,13 @@ function parseAndDecodeNALUs(
       // SPS — store and configure decoder
       spsRef.current = nalu
       if (decoder.state === 'unconfigured') {
+        const codec = codecFromSPS(nalu)
+        console.log('[stream] SPS received, configuring decoder codec=', codec, 'sps=', Array.from(nalu.slice(0,8)).map(b=>b.toString(16).padStart(2,'0')).join(' '))
         try {
-          decoder.configure({ codec: codecFromSPS(nalu), optimizeForLatency: true })
+          decoder.configure({ codec, optimizeForLatency: true })
+          console.log('[stream] decoder state after configure:', decoder.state)
         } catch (e) {
-          console.error('VideoDecoder configure failed', e)
+          console.error('[stream] VideoDecoder configure failed', e)
         }
       }
     } else if (nalType === 8) {
@@ -218,6 +222,7 @@ function parseAndDecodeNALUs(
       const ts = frameTimestampRef.current
       frameTimestampRef.current += 33333
       frameCountRef.current++
+      if (frameCountRef.current <= 3) console.log('[stream] IDR keyframe #', frameCountRef.current, 'chunkLen=', chunkData.length, 'decoderState=', decoder.state)
       const wallStart = performance.now()
       decoder.decode(new EncodedVideoChunk({ type: 'key', timestamp: ts, data: chunkData }))
       if (frameCountRef.current % 30 === 0) setLatencyMs(Math.round(performance.now() - wallStart + 33))

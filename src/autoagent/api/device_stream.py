@@ -95,20 +95,51 @@ async def _stream_h264(ws: WebSocket, serial: str) -> None:
         "-s",
         serial,
         "exec-out",
-        "screenrecord",
-        "--output-format=h264",
-        f"--size={w}x{h}",
-        "-",
+        "sh",
+        "-c",
+        f"screenrecord --output-format=h264 --size={w}x{h} -"
+        " 2>/tmp/sr_err.txt; cat /tmp/sr_err.txt >&2",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     _active_streams[serial] = proc
     log.info("device_stream %s started pid=%s size=%sx%s", serial, proc.pid, w, h)
+    first = True
     try:
         while True:
-            chunk = await proc.stdout.read(65536)
+            try:
+                chunk = await asyncio.wait_for(proc.stdout.read(65536), timeout=8.0)
+            except asyncio.TimeoutError:
+                try:
+                    stderr_data = await asyncio.wait_for(proc.stderr.read(4096), timeout=1.0)
+                except asyncio.TimeoutError:
+                    stderr_data = b""
+                log.warning(
+                    "device_stream %s no data in 8s, stderr=%r",
+                    serial,
+                    stderr_data.decode(errors="replace"),
+                )
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "error": "no_data",
+                            "detail": "screenrecord produced no output",
+                            "stderr": stderr_data.decode(errors="replace"),
+                        }
+                    )
+                )
+                await ws.close()
+                return
             if not chunk:
                 break
+            if first:
+                log.info(
+                    "device_stream %s first chunk: %d bytes magic=%s",
+                    serial,
+                    len(chunk),
+                    chunk[:8].hex(),
+                )
+                first = False
             await ws.send_bytes(chunk)
     except (WebSocketDisconnect, Exception):
         raise
@@ -117,9 +148,7 @@ async def _stream_h264(ws: WebSocket, serial: str) -> None:
         await _kill_proc(proc)
         log.info("device_stream %s stopped", serial)
 
-    await ws.send_text(
-        json.dumps({"error": "screenrecord_exited", "returncode": proc.returncode})
-    )
+    await ws.send_text(json.dumps({"error": "screenrecord_exited", "returncode": proc.returncode}))
     await ws.close()
 
 
