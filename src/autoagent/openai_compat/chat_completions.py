@@ -185,7 +185,7 @@ def mode_for_profile(profile: Profile) -> str:
 
 def extract_last_user_text(body: ChatCompletionsRequest) -> str:
     for message in reversed(body.messages):
-        if message.role != "user":
+        if message.role not in ("user", "assistant"):
             continue
         if not isinstance(message.content, str):
             raise OpenAICompatError(
@@ -198,7 +198,7 @@ def extract_last_user_text(body: ChatCompletionsRequest) -> str:
             return message.content
     raise OpenAICompatError(
         status_code=400,
-        message="messages must include at least one non-empty user message",
+        message="messages must include at least one non-empty user or assistant message",
         param="messages",
         code="invalid_messages",
     )

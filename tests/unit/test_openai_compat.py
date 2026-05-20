@@ -121,6 +121,22 @@ def test_build_sample_uses_last_user_message():
     assert sample.metadata == {"tag": "sdk"}
 
 
+def test_build_sample_accepts_assistant_as_last_message():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "assistant prompt"},
+            ],
+        }
+    )
+
+    sample = build_sample_from_request(body, _api_profile())
+
+    assert sample.prompts == ["assistant prompt"]
+
+
 def test_mode_for_profile_maps_web_to_gui_pc_web():
     assert mode_for_profile(_web_profile_with_llm()) == "gui_pc_web"
 
