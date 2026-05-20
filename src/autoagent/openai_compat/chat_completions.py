@@ -72,48 +72,6 @@ def ensure_supported_request(body: ChatCompletionsRequest) -> None:
             param="stream",
             code="unsupported_parameter",
         )
-    if body.temperature is not None:
-        raise OpenAICompatError(
-            400,
-            "temperature is not supported",
-            param="temperature",
-            code="unsupported_parameter",
-        )
-    if body.max_tokens is not None:
-        raise OpenAICompatError(
-            400,
-            "max_tokens is not supported",
-            param="max_tokens",
-            code="unsupported_parameter",
-        )
-    if body.max_completion_tokens is not None:
-        raise OpenAICompatError(
-            400,
-            "max_completion_tokens is not supported",
-            param="max_completion_tokens",
-            code="unsupported_parameter",
-        )
-    if body.top_p is not None:
-        raise OpenAICompatError(
-            400,
-            "top_p is not supported",
-            param="top_p",
-            code="unsupported_parameter",
-        )
-    if body.stop is not None:
-        raise OpenAICompatError(
-            400,
-            "stop is not supported",
-            param="stop",
-            code="unsupported_parameter",
-        )
-    if body.user is not None:
-        raise OpenAICompatError(
-            400,
-            "user is not supported",
-            param="user",
-            code="unsupported_parameter",
-        )
     if body.tools is not None:
         raise OpenAICompatError(
             400,

@@ -74,20 +74,21 @@ def test_parser_wraps_validation_error_as_compat_error():
     assert exc.value.param == "model"
 
 
-def test_request_rejects_temperature():
+def test_request_ignores_sampling_params():
     body = ChatCompletionsRequest.model_validate(
         {
             "model": "p_api",
             "messages": [{"role": "user", "content": "hi"}],
             "temperature": 0.7,
+            "max_tokens": 256,
+            "max_completion_tokens": 256,
+            "top_p": 0.9,
+            "stop": ["\n"],
+            "user": "abc",
         }
     )
 
-    with pytest.raises(OpenAICompatError) as exc:
-        ensure_supported_request(body)
-
-    assert exc.value.status_code == 400
-    assert exc.value.param == "temperature"
+    ensure_supported_request(body)
 
 
 def test_build_sample_uses_last_user_message():
