@@ -21,6 +21,34 @@ def test_pc_handler_executes_tap() -> None:
     assert result.should_finish is False
 
 
+def test_pc_handler_accepts_click_alias_for_tap() -> None:
+    device = Mock()
+    handler = PcActionHandler(device=device)
+
+    result = handler.execute(
+        {"_metadata": "do", "action": "Click", "element": [500, 500]},
+        1920,
+        1080,
+    )
+
+    device.tap.assert_called_once_with(960, 540)
+    assert result.success is True
+
+
+def test_pc_handler_accepts_double_click_alias() -> None:
+    device = Mock()
+    handler = PcActionHandler(device=device)
+
+    result = handler.execute(
+        {"_metadata": "do", "action": "double_click", "element": [500, 500]},
+        1920,
+        1080,
+    )
+
+    device.double_tap.assert_called_once_with(960, 540)
+    assert result.success is True
+
+
 def test_pc_handler_executes_hotkey() -> None:
     device = Mock()
     handler = PcActionHandler(device=device)

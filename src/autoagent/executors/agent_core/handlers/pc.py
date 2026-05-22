@@ -6,6 +6,21 @@ from typing import Any
 from autoagent.executors.agent_core.devices.pc import PcDeviceAdapter
 from autoagent.executors.agent_core.result import ActionResult
 
+# Tolerate common name drift from different VLM families (Qwen/GLM/etc.).
+# Keys are case-insensitive on lookup; values are the handler's canonical names.
+_ACTION_ALIASES: dict[str, str] = {
+    "click": "Tap",
+    "leftclick": "Tap",
+    "doubleclick": "Double Tap",
+    "longpress": "Long Press",
+    "drag": "Swipe",
+    "keypress": "Press",
+}
+
+
+def _normalize_action_name(name: str) -> str:
+    return name.lower().replace("_", "").replace(" ", "")
+
 
 class PcActionHandler:
     def __init__(self, device: PcDeviceAdapter) -> None:
@@ -20,7 +35,8 @@ class PcActionHandler:
         if metadata != "do":
             return ActionResult(False, False, f"Unknown action type: {metadata}")
 
-        action_name = str(action.get("action", ""))
+        raw_name = str(action.get("action", "")).strip()
+        action_name = _ACTION_ALIASES.get(_normalize_action_name(raw_name), raw_name)
         try:
             if action_name == "Tap":
                 x, y = _relative_point(action.get("element"), screen_width, screen_height)
