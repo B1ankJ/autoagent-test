@@ -154,6 +154,22 @@ class AndroidProfile(BaseModel):
 # ---- Agent PC profile ----
 
 
+class CopyExtraction(BaseModel):
+    """Clipboard-based response extraction for chat UIs that expose a copy button.
+
+    When `enabled`, after the main agent loop finishes the executor runs a small
+    sub-loop with `task` (instructing the model to click the copy button), then
+    reads the clipboard as the response text. Falls back to VLM screenshot
+    extraction if the clipboard stays empty and `fallback_to_vlm` is true.
+    """
+
+    enabled: bool = True
+    task: str
+    wait_ms: int = 300
+    fallback_to_vlm: bool = True
+    max_steps: int = 5
+
+
 class AgentPcProfile(BaseModel):
     name: str
     platform: Literal["agent_pc"]
@@ -164,6 +180,7 @@ class AgentPcProfile(BaseModel):
     new_session_task_template: str | None = None
     response_hint: str
     max_steps: int = 20
+    copy_extraction: CopyExtraction | None = None
 
 
 # ---- Agent Android profile ----

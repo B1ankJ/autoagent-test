@@ -171,6 +171,216 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
 
 
 @pytest.mark.asyncio
+async def test_agent_pc_executor_uses_clipboard_when_copy_extraction_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from autoagent.executors.agent_core.device import Screenshot
+    from autoagent.executors.agent_pc_executor import AgentPcExecutor
+
+    seen: dict[str, object] = {}
+
+    class FakeDevice:
+        def __init__(self) -> None:
+            self._clipboard = ""
+
+        def capture(self) -> Screenshot:
+            return Screenshot(
+                base64_data=base64.b64encode(b"pc-final-shot").decode(),
+                width=10,
+                height=10,
+            )
+
+        def clear_clipboard(self) -> None:
+            seen["cleared"] = True
+            self._clipboard = ""
+
+        def read_clipboard(self) -> str:
+            return "clipboard reply"
+
+    class FakeClient:
+        def __init__(self, config) -> None:  # noqa: ANN001
+            pass
+
+    class FakeHandler:
+        def __init__(self, device) -> None:  # noqa: ANN001
+            pass
+
+    class FakeLoop:
+        instances: list[FakeLoop] = []
+
+        def __init__(
+            self,
+            device,
+            client,
+            handler,
+            system_prompt,
+            max_steps,
+            response_hint=None,
+            response_observer=None,
+            action_observer=None,
+        ) -> None:  # noqa: ANN001
+            self.max_steps = max_steps
+            self.response_hint = response_hint
+            self.is_copy = response_observer is None and response_hint is None
+            FakeLoop.instances.append(self)
+
+        def run(self, task: str) -> AgentResult:
+            return AgentResult(
+                finished=True,
+                finish_message="ok",
+                step_count=1,
+                stop_reason="handler_finish",
+                conversation=[],
+                steps=[
+                    AgentStepRecord(
+                        step=1,
+                        raw='do(action="Tap")',
+                        action={"_metadata": "do", "action": "Tap"},
+                        screenshot=Screenshot(
+                            base64_data=base64.b64encode(b"shot").decode(),
+                            width=10,
+                            height=10,
+                        ),
+                        execution=ActionResult(success=True, should_finish=False),
+                    )
+                ],
+            )
+
+    async def fail_extract(**kwargs):  # noqa: ANN003
+        raise AssertionError("VLM extraction should not run when clipboard succeeds")
+
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcDevice", FakeDevice)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcActionHandler", FakeHandler)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.ModelClient", FakeClient)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.AgentLoop", FakeLoop)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_pc_executor.extract_response_from_screenshot",
+        fail_extract,
+    )
+
+    profile = AgentPcProfile.model_validate(
+        {
+            "name": "pc",
+            "platform": "agent_pc",
+            "base_url": "https://api.example.com/v1",
+            "model": "m",
+            "api_key": "k",
+            "task_template": "do {prompt}",
+            "response_hint": "latest reply",
+            "max_steps": 5,
+            "copy_extraction": {
+                "task": "click the copy button",
+                "wait_ms": 0,
+                "max_steps": 3,
+            },
+        }
+    )
+    sample = Sample(id="s1", prompts=["hello"], mode="agent_pc", target_profile="pc", retry=0)
+
+    ctx = ExecutorContext(logs_dir="batch-cp")
+    result = await AgentPcExecutor(screenshots_root=tmp_path).execute(sample, profile, ctx)
+
+    assert result == ["clipboard reply"]
+    assert ctx.llm_responses == ["clipboard reply"]
+    assert ctx.llm_errors == [None]
+    assert seen.get("cleared") is True
+    copy_trace = tmp_path / "batch-cp" / "s1" / "copy_1.json"
+    assert copy_trace.is_file()
+    payload = json.loads(copy_trace.read_text(encoding="utf-8"))
+    assert payload["clipboard_text"] == "clipboard reply"
+    extract_payload = json.loads(
+        (tmp_path / "batch-cp" / "s1" / "extract_1.json").read_text(encoding="utf-8")
+    )
+    assert extract_payload["method"] == "clipboard"
+    assert extract_payload["text"] == "clipboard reply"
+    # sub-loop got its own max_steps
+    sub_loops = [inst for inst in FakeLoop.instances if inst.is_copy]
+    assert sub_loops and sub_loops[0].max_steps == 3
+
+
+@pytest.mark.asyncio
+async def test_agent_pc_executor_falls_back_to_vlm_when_clipboard_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from autoagent.executors.agent_core.device import Screenshot
+    from autoagent.executors.agent_pc_executor import AgentPcExecutor
+
+    class FakeDevice:
+        def capture(self) -> Screenshot:
+            return Screenshot(
+                base64_data=base64.b64encode(b"shot").decode(), width=10, height=10
+            )
+
+        def clear_clipboard(self) -> None:
+            pass
+
+        def read_clipboard(self) -> str:
+            return "   "  # only whitespace -> treated as empty
+
+    class FakeClient:
+        def __init__(self, config) -> None:  # noqa: ANN001
+            pass
+
+    class FakeHandler:
+        def __init__(self, device) -> None:  # noqa: ANN001
+            pass
+
+    class FakeLoop:
+        def __init__(self, *a, **kw) -> None:  # noqa: ANN001, ANN003
+            pass
+
+        def run(self, task: str) -> AgentResult:
+            return AgentResult(
+                finished=True,
+                finish_message="ok",
+                step_count=0,
+                stop_reason="handler_finish",
+                conversation=[],
+                steps=[],
+            )
+
+    async def fake_extract(**kwargs):  # noqa: ANN003
+        return LLMExtractionResult(text="vlm reply", error=None, latency_ms=1, status_code=200)
+
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcDevice", FakeDevice)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.PcActionHandler", FakeHandler)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.ModelClient", FakeClient)
+    monkeypatch.setattr("autoagent.executors.agent_pc_executor.AgentLoop", FakeLoop)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_pc_executor.extract_response_from_screenshot",
+        fake_extract,
+    )
+
+    profile = AgentPcProfile.model_validate(
+        {
+            "name": "pc",
+            "platform": "agent_pc",
+            "base_url": "https://api.example.com/v1",
+            "model": "m",
+            "api_key": "k",
+            "task_template": "do {prompt}",
+            "response_hint": "latest reply",
+            "copy_extraction": {
+                "task": "click the copy button",
+                "wait_ms": 0,
+                "fallback_to_vlm": True,
+            },
+        }
+    )
+    sample = Sample(id="s1", prompts=["hi"], mode="agent_pc", target_profile="pc", retry=0)
+    ctx = ExecutorContext(logs_dir="batch-fb")
+    result = await AgentPcExecutor(screenshots_root=tmp_path).execute(sample, profile, ctx)
+
+    assert result == ["vlm reply"]
+    extract_payload = json.loads(
+        (tmp_path / "batch-fb" / "s1" / "extract_1.json").read_text(encoding="utf-8")
+    )
+    assert extract_payload["method"] == "vlm_fallback"
+
+
+@pytest.mark.asyncio
 async def test_agent_android_executor_prefers_ctx_device_serial(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,

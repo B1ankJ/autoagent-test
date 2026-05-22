@@ -16,6 +16,21 @@ def test_agent_pc_profile_defaults():
     assert p.new_session_task_template is None
 
 
+def test_agent_pc_profile_copy_extraction():
+    p = AgentPcProfile.model_validate({
+        "name": "test", "platform": "agent_pc",
+        "base_url": "http://x", "model": "m", "api_key": "k",
+        "task_template": "type '{prompt}'", "response_hint": "latest reply",
+        "copy_extraction": {"task": "click the copy button"},
+    })
+    assert p.copy_extraction is not None
+    assert p.copy_extraction.enabled is True
+    assert p.copy_extraction.task == "click the copy button"
+    assert p.copy_extraction.fallback_to_vlm is True
+    assert p.copy_extraction.max_steps == 5
+    assert p.copy_extraction.wait_ms == 300
+
+
 def test_agent_pc_task_template_format():
     p = AgentPcProfile.model_validate({
         "name": "test", "platform": "agent_pc",

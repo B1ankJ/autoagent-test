@@ -69,6 +69,20 @@ class PcDeviceAdapter(Device):
         _pyautogui().hotkey(paste_modifier, "v")
         time.sleep(0.1)
 
+    def clear_clipboard(self) -> None:
+        _pyperclip().copy("")
+
+    def read_clipboard(self) -> str:
+        clip = _pyperclip()
+        paste = getattr(clip, "paste", None)
+        if paste is None:
+            return ""
+        try:
+            return paste() or ""
+        except Exception:
+            _log.exception("pc_device: read_clipboard failed")
+            return ""
+
     def press_key(self, key: str) -> None:
         _pyautogui().press(key)
 
