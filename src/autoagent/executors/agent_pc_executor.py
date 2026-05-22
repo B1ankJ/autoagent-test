@@ -138,6 +138,8 @@ class AgentPcExecutor(Executor):
                 else profile.task_template
             )
             task = template.format(prompt=prompt)
+            if profile.pre_task_wait_ms > 0:
+                await asyncio.sleep(profile.pre_task_wait_ms / 1000.0)
             loop_result = await loop.run_in_executor(None, agent_loop.run, task)
             ctx.action_log.extend(step.to_metadata() for step in loop_result.steps)
             trace_path = store.artifact_path(f"loop_trace_{len(responses) + 1}", "json")
@@ -165,6 +167,8 @@ class AgentPcExecutor(Executor):
                         label=f"step_{len(responses) + 1}_{step.step}",
                     )
                 )
+            if profile.pre_extract_wait_ms > 0:
+                await asyncio.sleep(profile.pre_extract_wait_ms / 1000.0)
             screenshot = await loop.run_in_executor(None, device.capture)
             final_path = store.artifact_path(f"final_{len(responses) + 1}", "png")
             final_path.write_bytes(base64.b64decode(screenshot.base64_data))

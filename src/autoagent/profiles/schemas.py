@@ -180,6 +180,8 @@ class AgentPcProfile(BaseModel):
     new_session_task_template: str | None = None
     response_hint: str
     max_steps: int = 20
+    pre_task_wait_ms: int = 0
+    pre_extract_wait_ms: int = 0
     copy_extraction: CopyExtraction | None = None
 
 

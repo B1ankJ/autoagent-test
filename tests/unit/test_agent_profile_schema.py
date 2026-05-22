@@ -14,6 +14,20 @@ def test_agent_pc_profile_defaults():
     })
     assert p.max_steps == 20
     assert p.new_session_task_template is None
+    assert p.pre_task_wait_ms == 0
+    assert p.pre_extract_wait_ms == 0
+
+
+def test_agent_pc_profile_wait_overrides():
+    p = AgentPcProfile.model_validate({
+        "name": "test", "platform": "agent_pc",
+        "base_url": "http://x", "model": "m", "api_key": "k",
+        "task_template": "do {prompt}", "response_hint": "reply",
+        "pre_task_wait_ms": 1500,
+        "pre_extract_wait_ms": 2000,
+    })
+    assert p.pre_task_wait_ms == 1500
+    assert p.pre_extract_wait_ms == 2000
 
 
 def test_agent_pc_profile_copy_extraction():
