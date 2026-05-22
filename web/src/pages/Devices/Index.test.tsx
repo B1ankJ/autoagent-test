@@ -8,6 +8,16 @@ import { DevicesPage } from './Index'
 
 const mutateAsync = vi.fn()
 
+vi.mock('../../api/deviceStream', () => ({
+  useDeviceStream: () => ({
+    canvasRef: { current: null },
+    state: 'closed',
+    latencyMs: null,
+    reconnect: vi.fn(),
+  }),
+  postDeviceInput: vi.fn(),
+}))
+
 vi.mock('../../api/devices', () => ({
   useDevices: () => ({
     data: [
@@ -41,6 +51,17 @@ it('renders device rows', () => {
   expect(screen.getByText('emulator-5554')).toBeInTheDocument()
   expect(screen.getByText('Pixel 8')).toBeInTheDocument()
   expect(screen.getByText('not installed')).toBeInTheDocument()
+})
+
+it('renders 查看画面 button for online device', () => {
+  render(
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <DevicesPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('查看画面')).toBeInTheDocument()
 })
 
 it('installs adb keyboard from device table action', async () => {

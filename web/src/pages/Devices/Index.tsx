@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Button, Card, Empty, Space, Table, Tag, Typography } from 'antd'
 
 import { useDevices, useDisableIme, useEnableIme, useInstallAdbKeyboard, useRefreshDevices } from '../../api/devices'
+import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { Device } from '../../types/api'
 
 export function DevicesPage() {
@@ -9,8 +11,11 @@ export function DevicesPage() {
   const installAdbKeyboard = useInstallAdbKeyboard()
   const enableIme = useEnableIme()
   const disableIme = useDisableIme()
+  const [streamSerial, setStreamSerial] = useState<string | null>(null)
 
   return (
+    <>
+    <DeviceStreamModal serial={streamSerial} onClose={() => setStreamSerial(null)} />
     <Card
       title="Devices"
       extra={
@@ -85,6 +90,13 @@ export function DevicesPage() {
                 <Space wrap>
                   <Button
                     size="small"
+                    disabled={!row.online}
+                    onClick={() => setStreamSerial(row.serial)}
+                  >
+                    查看画面
+                  </Button>
+                  <Button
+                    size="small"
                     disabled={!row.online || row.adb_keyboard_installed === true}
                     loading={installAdbKeyboard.isPending}
                     onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
@@ -121,5 +133,6 @@ export function DevicesPage() {
         />
       )}
     </Card>
+    </>
   )
 }
