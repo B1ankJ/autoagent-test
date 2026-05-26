@@ -3,11 +3,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import logging
 import subprocess
 import time
 from typing import Any
 
 from autoagent.profiles.schemas import CompleteDetection, DomStable, SendButtonReenable
+
+_log = logging.getLogger(__name__)
 
 
 async def wait_for_complete(
@@ -176,6 +179,7 @@ def dump_hierarchy_via_adb(device: Any) -> str:
     serial: str = device.serial
     dump_path = "/sdcard/window_dump.xml"
 
+    last_stderr = ""
     for attempt in range(_DUMP_RETRIES):
         # Remove stale file so a failed dump doesn't return old content.
         subprocess.run(
@@ -183,7 +187,7 @@ def dump_hierarchy_via_adb(device: Any) -> str:
             capture_output=True,
             timeout=10,
         )
-        subprocess.run(
+        dump_proc = subprocess.run(
             ["adb", "-s", serial, "shell", "uiautomator", "dump", dump_path],
             capture_output=True,
             timeout=30,
@@ -196,12 +200,23 @@ def dump_hierarchy_via_adb(device: Any) -> str:
         xml = result.stdout.decode("utf-8", errors="replace").strip()
         if xml.startswith("<?xml") and "</hierarchy>" in xml:
             return xml
+        last_stderr = (
+            dump_proc.stdout.decode("utf-8", errors="replace")
+            + dump_proc.stderr.decode("utf-8", errors="replace")
+        ).strip()
+        _log.warning(
+            "uiautomator dump attempt %d/%d failed on %s: %s",
+            attempt + 1,
+            _DUMP_RETRIES,
+            serial,
+            last_stderr or "<no output>",
+        )
         # Android only allows one UiAutomation connection. uiautomator2's
-        # instrumentation holds it persistently, which blocks `uiautomator dump`
-        # from getting the slot. Force-stop BOTH the test runner package and
-        # the host package — only stopping `.test` leaves the app_process host
-        # alive holding the binder. The next uiautomator2 call will lazily
-        # re-init instrumentation.
+        # instrumentation holds it persistently, blocking `uiautomator dump`.
+        # On rooted devices the instrumentation runs as root and `am force-stop`
+        # cannot kill it — fall through to `pkill -f` which matches the host
+        # package in /proc/<pid>/cmdline. The `uiautomator` CLI itself doesn't
+        # carry that string in its cmdline, so we don't kill our own process.
         if attempt == 0:
             for pkg in ("com.github.uiautomator.test", "com.github.uiautomator"):
                 subprocess.run(
@@ -209,12 +224,20 @@ def dump_hierarchy_via_adb(device: Any) -> str:
                     capture_output=True,
                     timeout=10,
                 )
+            subprocess.run(
+                ["adb", "-s", serial, "shell", "pkill", "-9", "-f", "com.github.uiautomator"],
+                capture_output=True,
+                timeout=10,
+            )
             # Give the kernel a moment to release the UiAutomation binder.
-            time.sleep(0.3)
+            time.sleep(0.5)
         if attempt < _DUMP_RETRIES - 1:
             time.sleep(_DUMP_RETRY_DELAY_SEC)
 
-    raise RuntimeError(f"uiautomator dump failed after {_DUMP_RETRIES} attempts on {serial}")
+    raise RuntimeError(
+        f"uiautomator dump failed after {_DUMP_RETRIES} attempts on {serial}: "
+        f"{last_stderr or 'no error output'}"
+    )
 
 
 def _xml_text_fingerprint(xml: str) -> str:
