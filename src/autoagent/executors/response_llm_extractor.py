@@ -205,9 +205,11 @@ async def extract_response_via_llm(
             xml_sent=trimmed,
         )
 
+    # Input XML truncation is signalled via `truncated_input` only — the LLM
+    # still returned a valid extracted response, so this is not an error.
     return LLMExtractionResult(
         text=_clean_extracted_text(parsed["response"]),
-        error="truncated" if truncated else None,
+        error=None,
         latency_ms=latency_ms,
         status_code=resp.status_code,
         raw_response_text=raw_response_text,

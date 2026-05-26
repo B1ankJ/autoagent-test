@@ -231,10 +231,15 @@ class AndroidExecutor(Executor):
                         sample_log.info(
                             "android sample %s prompt %s wait ui_tree_stable", sample.id, idx
                         )
+                        # When the profile relies on a copy-button for the real
+                        # response text, the XML only needs to locate the button.
+                        # u2's dump is fast and never blocks on the UiAutomation
+                        # slot — truncation in the chat history doesn't matter.
                         xml = await wait_for_ui_tree_stable(
                             device,
                             stable_sec=profile.complete_detection.stable_sec,
                             max_wait_sec=profile.complete_detection.max_wait_sec,
+                            prefer_u2=bool(profile.response_extraction.copy_button_text),
                         )
 
                     # Copy-button clipboard extraction: if the profile specifies a

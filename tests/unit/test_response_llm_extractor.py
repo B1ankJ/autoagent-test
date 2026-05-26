@@ -120,6 +120,6 @@ async def test_extract_truncates_oversized_xml(monkeypatch):
         max_xml_chars=120_000,
     )
     assert r.text == "ok"
-    assert r.error == "truncated"
+    assert r.error is None
     assert r.truncated_input is True
     assert captured["len"] < 300_000 + 5000  # truncated, not full huge
