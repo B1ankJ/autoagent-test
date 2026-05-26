@@ -34,6 +34,11 @@ from autoagent.profiles.schemas import ActionStep, AndroidProfile
 log = logging.getLogger(__name__)
 _NEW_SESSION_STEP_DELAY_SEC = 2.0
 _LOADING_RETRY_MAX = 5
+# VLM copy-button: initial attempt + 2 retries, each restarting from a fresh
+# screenshot. When configured, the VLM path is authoritative — failure means
+# the run records an empty response, no fallback to ui_tree / ocr extraction.
+_VLM_MAX_ATTEMPTS = 3
+_VLM_RETRY_BACKOFF_SEC = 0.5
 _LOADING_RETRY_SEC = 3.0
 _LOADING_INDICATOR_PATTERNS = (
     "正在思考",
@@ -276,62 +281,87 @@ class AndroidExecutor(Executor):
                     # VLM-based copy-button location: skip XML entirely and ask a
                     # vision LLM for the button coordinates. Used for WebView /
                     # browser pages where the UI tree is empty or meaningless.
+                    # When configured, this is the only valid extraction path —
+                    # if all attempts fail we record an empty response rather
+                    # than falling back to ui_tree / ocr, which wouldn't work
+                    # for this kind of page anyway.
                     if profile.response_extraction.copy_button_vlm:
-                        vlm_shot = await asyncio.to_thread(
-                            capture_screenshot_bytes, device
-                        )
-                        vlm_res = await locate_copy_button_via_vlm(
-                            vlm_shot, profile.response_extraction.copy_button_vlm
-                        )
-                        sample_log.info(
-                            "android sample %s prompt %s vlm copy-button locate: "
-                            "coords=%s latency_ms=%s error=%s",
-                            sample.id,
-                            idx,
-                            vlm_res.coords,
-                            vlm_res.latency_ms,
-                            vlm_res.error,
-                        )
-                        if vlm_res.coords is not None:
-                            await asyncio.to_thread(
-                                device.click, vlm_res.coords[0], vlm_res.coords[1]
+                        vlm_clipboard: str | None = None
+                        vlm_last_error: str | None = None
+                        for vlm_attempt in range(_VLM_MAX_ATTEMPTS):
+                            vlm_shot = await asyncio.to_thread(
+                                capture_screenshot_bytes, device
                             )
-                            await asyncio.sleep(0.5)
-                            clipboard_text = await asyncio.to_thread(
-                                lambda: device.clipboard or ""
+                            vlm_res = await locate_copy_button_via_vlm(
+                                vlm_shot, profile.response_extraction.copy_button_vlm
                             )
-                            if clipboard_text.strip():
-                                sample_log.info(
-                                    "android sample %s prompt %s vlm clipboard "
-                                    "extraction: chars=%d",
-                                    sample.id,
-                                    idx,
-                                    len(clipboard_text),
-                                )
-                                responses.append(clipboard_text.strip())
-                                after_result_path = store.artifact_path(
-                                    f"after_result_{idx}", "png"
-                                )
-                                after_result = await asyncio.to_thread(
-                                    capture_screenshot_bytes, device
-                                )
-                                await asyncio.to_thread(
-                                    after_result_path.write_bytes, after_result
-                                )
-                                ctx.screenshot_index.append(
-                                    ScreenshotResult(
-                                        path=after_result_path,
-                                        label=f"after_result_{idx}",
-                                    )
-                                )
-                                continue
                             sample_log.info(
-                                "android sample %s prompt %s vlm tapped but "
-                                "clipboard empty, falling back to method=%s",
+                                "android sample %s prompt %s vlm copy-button "
+                                "attempt %d/%d: coords=%s latency_ms=%s error=%s",
                                 sample.id,
                                 idx,
-                                profile.response_extraction.method,
+                                vlm_attempt + 1,
+                                _VLM_MAX_ATTEMPTS,
+                                vlm_res.coords,
+                                vlm_res.latency_ms,
+                                vlm_res.error,
                             )
+                            if vlm_res.coords is None:
+                                vlm_last_error = vlm_res.error or "no_coords"
+                            else:
+                                await asyncio.to_thread(
+                                    device.click,
+                                    vlm_res.coords[0],
+                                    vlm_res.coords[1],
+                                )
+                                await asyncio.sleep(0.5)
+                                clipboard_text = await asyncio.to_thread(
+                                    lambda: device.clipboard or ""
+                                )
+                                if clipboard_text.strip():
+                                    vlm_clipboard = clipboard_text.strip()
+                                    break
+                                vlm_last_error = "empty_clipboard"
+                            if vlm_attempt < _VLM_MAX_ATTEMPTS - 1:
+                                await asyncio.sleep(_VLM_RETRY_BACKOFF_SEC)
+                        # Always snapshot final state for diagnostics.
+                        after_result_path = store.artifact_path(
+                            f"after_result_{idx}", "png"
+                        )
+                        after_result = await asyncio.to_thread(
+                            capture_screenshot_bytes, device
+                        )
+                        await asyncio.to_thread(
+                            after_result_path.write_bytes, after_result
+                        )
+                        ctx.screenshot_index.append(
+                            ScreenshotResult(
+                                path=after_result_path,
+                                label=f"after_result_{idx}",
+                            )
+                        )
+                        if vlm_clipboard is not None:
+                            sample_log.info(
+                                "android sample %s prompt %s vlm clipboard "
+                                "extraction: chars=%d",
+                                sample.id,
+                                idx,
+                                len(vlm_clipboard),
+                            )
+                            responses.append(vlm_clipboard)
+                        else:
+                            sample_log.warning(
+                                "android sample %s prompt %s vlm copy-button "
+                                "failed after %d attempts: last_error=%s; "
+                                "recording empty response (no fallback for "
+                                "vlm-only configuration)",
+                                sample.id,
+                                idx,
+                                _VLM_MAX_ATTEMPTS,
+                                vlm_last_error,
+                            )
+                            responses.append("")
+                        continue
 
                     # Copy-button clipboard extraction: if the profile specifies a
                     # copy_button_text, find it in the current XML at runtime and tap
