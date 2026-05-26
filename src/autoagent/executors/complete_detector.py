@@ -208,16 +208,45 @@ def dump_hierarchy_via_adb(device: Any) -> str:
         xml = result.stdout.decode("utf-8", errors="replace").strip()
         if xml.startswith("<?xml") and "</hierarchy>" in xml:
             return xml
+        # Full diagnostic snapshot so we can root-cause without re-running.
+        ls_proc = subprocess.run(
+            ["adb", "-s", serial, "shell", "ls", "-la", dump_path],
+            capture_output=True,
+            timeout=10,
+        )
+        ps_proc = subprocess.run(
+            ["adb", "-s", serial, "shell", "ps", "-A", "-o", "USER,PID,NAME,CMD"],
+            capture_output=True,
+            timeout=10,
+        )
+        ps_filtered = "\n".join(
+            line
+            for line in ps_proc.stdout.decode("utf-8", errors="replace").splitlines()
+            if "uiautomator" in line or "app_process" in line
+        )
         last_stderr = (
             dump_proc.stdout.decode("utf-8", errors="replace")
             + dump_proc.stderr.decode("utf-8", errors="replace")
         ).strip()
         _log.warning(
-            "uiautomator dump attempt %d/%d failed on %s: %s",
+            "uiautomator dump attempt %d/%d failed on %s:\n"
+            "  dump_rc=%d dump_out=%r dump_err=%r\n"
+            "  ls_rc=%d ls_out=%r ls_err=%r\n"
+            "  cat_rc=%d cat_bytes=%d cat_err=%r\n"
+            "  device_procs:\n%s",
             attempt + 1,
             _DUMP_RETRIES,
             serial,
-            last_stderr or "<no output>",
+            dump_proc.returncode,
+            dump_proc.stdout.decode("utf-8", errors="replace").strip(),
+            dump_proc.stderr.decode("utf-8", errors="replace").strip(),
+            ls_proc.returncode,
+            ls_proc.stdout.decode("utf-8", errors="replace").strip(),
+            ls_proc.stderr.decode("utf-8", errors="replace").strip(),
+            result.returncode,
+            len(result.stdout),
+            result.stderr.decode("utf-8", errors="replace").strip(),
+            ps_filtered or "  (no uiautomator/app_process found)",
         )
         # Re-release the slot in case something respawned instrumentation.
         _release_uiautomation_slot(serial)
@@ -250,7 +279,7 @@ def _release_uiautomation_slot(serial: str) -> None:
         capture_output=True,
         timeout=10,
     )
-    _log.debug(
+    _log.info(
         "uiautomator pkill on %s rc=%d stdout=%r stderr=%r",
         serial,
         pkill.returncode,
