@@ -97,6 +97,11 @@ class AndroidActionRunner:
             )
         elif step.action == "tap_xy":
             await asyncio.to_thread(self.device.click, step.x, step.y)
+        elif step.action == "sleep":
+            # Accept either "sec" or "seconds" for ergonomic YAML authoring.
+            seconds = float(getattr(step, "sec", None) or getattr(step, "seconds", 0))
+            if seconds > 0:
+                await asyncio.sleep(seconds)
         else:
             raise ValueError(f"unknown android action: {step.action}")
 
