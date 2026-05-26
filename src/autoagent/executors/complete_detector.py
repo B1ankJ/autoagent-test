@@ -172,9 +172,6 @@ def dump_hierarchy_via_adb(device: Any) -> str:
     uiautomator2's device.dump_hierarchy() can silently truncate large trees
     (RecyclerView-heavy chat UIs with hundreds of nodes). Calling adb directly
     returns the full XML that uiautomator writes to disk.
-
-    `uiautomator dump` can fail when the screen has active animations; we retry
-    up to _DUMP_RETRIES times before falling back to uiautomator2's own dump.
     """
     serial: str = device.serial
     dump_path = "/sdcard/window_dump.xml"
@@ -199,11 +196,28 @@ def dump_hierarchy_via_adb(device: Any) -> str:
         xml = result.stdout.decode("utf-8", errors="replace").strip()
         if xml.startswith("<?xml") and "</hierarchy>" in xml:
             return xml
+        # Android only allows one UiAutomation connection. uiautomator2's
+        # instrumentation holds it persistently, which blocks `uiautomator dump`
+        # from getting the slot. Force-stop it so the CLI can attach on retry.
+        # The next uiautomator2 call will lazily re-init instrumentation.
+        if attempt == 0:
+            subprocess.run(
+                [
+                    "adb",
+                    "-s",
+                    serial,
+                    "shell",
+                    "am",
+                    "force-stop",
+                    "com.github.uiautomator.test",
+                ],
+                capture_output=True,
+                timeout=10,
+            )
         if attempt < _DUMP_RETRIES - 1:
             time.sleep(_DUMP_RETRY_DELAY_SEC)
 
-    # All adb attempts failed (animation/lock). Fall back to uiautomator2.
-    return device.dump_hierarchy(compressed=False) or ""
+    raise RuntimeError(f"uiautomator dump failed after {_DUMP_RETRIES} attempts on {serial}")
 
 
 def _xml_text_fingerprint(xml: str) -> str:
