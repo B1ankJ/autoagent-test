@@ -20,6 +20,7 @@ from autoagent.executors.complete_detector import (
     wait_for_pixel_stable,
     wait_for_ui_tree_stable,
 )
+from autoagent.executors.copy_button_vlm import locate_copy_button_via_vlm
 from autoagent.executors.response_extractor import (
     OcrExtractor,
     UiTreeExtractor,
@@ -165,13 +166,17 @@ class AndroidExecutor(Executor):
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=before_input_path, label=f"before_input_{idx}")
                     )
+                    locator_desc = (
+                        f"{profile.input_locator.type}:{profile.input_locator.value}"
+                        if profile.input_locator is not None
+                        else "<focused-field>"
+                    )
                     sample_log.info(
-                        "android sample %s prompt %s set_text start: method=%s locator=%s:%s",
+                        "android sample %s prompt %s set_text start: method=%s locator=%s",
                         sample.id,
                         idx,
                         resolved_input,
-                        profile.input_locator.type,
-                        profile.input_locator.value,
+                        locator_desc,
                     )
                     await input_ctl.set_text(profile.input_locator, prompt)
                     screenshot_path = store.artifact_path(f"after_input_{idx}", "png")
@@ -195,6 +200,11 @@ class AndroidExecutor(Executor):
                         )
                         await action_runner.run(profile.send_action)
                     else:
+                        if profile.send_button_locator is None:
+                            raise RuntimeError(
+                                "profile must define either send_action or "
+                                "send_button_locator"
+                            )
                         sample_log.info(
                             "android sample %s prompt %s send click: locator=%s:%s",
                             sample.id,
@@ -241,6 +251,87 @@ class AndroidExecutor(Executor):
                             max_wait_sec=profile.complete_detection.max_wait_sec,
                             prefer_u2=bool(profile.response_extraction.copy_button_text),
                         )
+
+                    # Optional pre-extract actions, e.g. tap a "scroll to bottom"
+                    # arrow that some chat UIs show only after the reply lands.
+                    # Behaviour is unchanged when the list is empty.
+                    if profile.pre_extract_action:
+                        sample_log.info(
+                            "android sample %s prompt %s pre_extract_action: steps=%s",
+                            sample.id,
+                            idx,
+                            len(profile.pre_extract_action),
+                        )
+                        await action_runner.run(profile.pre_extract_action)
+                        # UI just shifted; grab a fresh XML so the extraction
+                        # below sees the post-action visible state. stable_sec=0
+                        # returns on the first successful dump.
+                        xml = await wait_for_ui_tree_stable(
+                            device,
+                            stable_sec=0.0,
+                            max_wait_sec=5.0,
+                            prefer_u2=bool(profile.response_extraction.copy_button_text),
+                        )
+
+                    # VLM-based copy-button location: skip XML entirely and ask a
+                    # vision LLM for the button coordinates. Used for WebView /
+                    # browser pages where the UI tree is empty or meaningless.
+                    if profile.response_extraction.copy_button_vlm:
+                        vlm_shot = await asyncio.to_thread(
+                            capture_screenshot_bytes, device
+                        )
+                        vlm_res = await locate_copy_button_via_vlm(
+                            vlm_shot, profile.response_extraction.copy_button_vlm
+                        )
+                        sample_log.info(
+                            "android sample %s prompt %s vlm copy-button locate: "
+                            "coords=%s latency_ms=%s error=%s",
+                            sample.id,
+                            idx,
+                            vlm_res.coords,
+                            vlm_res.latency_ms,
+                            vlm_res.error,
+                        )
+                        if vlm_res.coords is not None:
+                            await asyncio.to_thread(
+                                device.click, vlm_res.coords[0], vlm_res.coords[1]
+                            )
+                            await asyncio.sleep(0.5)
+                            clipboard_text = await asyncio.to_thread(
+                                lambda: device.clipboard or ""
+                            )
+                            if clipboard_text.strip():
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm clipboard "
+                                    "extraction: chars=%d",
+                                    sample.id,
+                                    idx,
+                                    len(clipboard_text),
+                                )
+                                responses.append(clipboard_text.strip())
+                                after_result_path = store.artifact_path(
+                                    f"after_result_{idx}", "png"
+                                )
+                                after_result = await asyncio.to_thread(
+                                    capture_screenshot_bytes, device
+                                )
+                                await asyncio.to_thread(
+                                    after_result_path.write_bytes, after_result
+                                )
+                                ctx.screenshot_index.append(
+                                    ScreenshotResult(
+                                        path=after_result_path,
+                                        label=f"after_result_{idx}",
+                                    )
+                                )
+                                continue
+                            sample_log.info(
+                                "android sample %s prompt %s vlm tapped but "
+                                "clipboard empty, falling back to method=%s",
+                                sample.id,
+                                idx,
+                                profile.response_extraction.method,
+                            )
 
                     # Copy-button clipboard extraction: if the profile specifies a
                     # copy_button_text, find it in the current XML at runtime and tap

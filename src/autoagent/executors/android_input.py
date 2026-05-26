@@ -68,27 +68,43 @@ class AndroidInput:
             adb_keyboard_available=adb_keyboard_available,
         )
 
-    async def set_text(self, locator: Locator, text: str) -> None:
+    async def set_text(self, locator: Locator | None, text: str) -> None:
         method = await self.prepare_for_prompt(text)
-        target = resolve_target(self.device, locator)
+        # When locator is omitted, trust the caller's input_focus_action to
+        # have left focus on the correct field. Skip the re-click and the
+        # u2 clear_text (which needs an element handle); for cleanup we fall
+        # back to ADB_CLEAR_TEXT on the adb_keyboard path and to a select-all
+        # + delete on the u2_send_keys path.
+        target = resolve_target(self.device, locator) if locator is not None else None
         if method == "u2_send_keys":
-            await asyncio.to_thread(target.click)
-            # Clear so retries don't append onto stale text from a prior attempt.
-            try:
-                await asyncio.to_thread(target.clear_text)
-            except Exception:
-                pass
+            if target is not None:
+                await asyncio.to_thread(target.click)
+                try:
+                    await asyncio.to_thread(target.clear_text)
+                except Exception:
+                    pass
+            else:
+                # Approximate clear: select-all then delete on the focused field.
+                await asyncio.to_thread(
+                    self.device.shell, ["input", "keyevent", "KEYCODE_MOVE_END"]
+                )
+                await asyncio.to_thread(
+                    self.device.shell, ["input", "keyevent", "--longpress"]
+                    + ["KEYCODE_DEL"] * 200
+                )
             await asyncio.to_thread(self.device.shell, ["input", "text", _escape_input_text(text)])
             return
         if method == "adb_keyboard":
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
-            try:
-                await asyncio.to_thread(_click_target, target, 1.0)
-            except Exception:
-                # The focus action may already have opened the editor while the
-                # EditText is not visible in UIA XML. In that state the ADB
-                # keyboard broadcast can still insert into the focused field.
-                pass
+            if target is not None:
+                try:
+                    await asyncio.to_thread(_click_target, target, 1.0)
+                except Exception:
+                    # The focus action may already have opened the editor while
+                    # the EditText is not visible in UIA XML. In that state the
+                    # ADB keyboard broadcast can still insert into the focused
+                    # field.
+                    pass
             # Clear focused field first — ADB_INPUT_B64 appends, so retries
             # would otherwise stack text from previous attempts.
             await asyncio.to_thread(

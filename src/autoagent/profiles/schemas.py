@@ -117,12 +117,29 @@ class WebProfile(BaseModel):
 # ---- Android profile ----
 
 
+class CopyButtonVLMConfig(BaseModel):
+    """VLM-based copy-button locator.
+
+    Used when the response is rendered inside a WebView/browser whose DOM is
+    not exposed to uiautomator. The current screenshot is sent to a vision
+    LLM which returns the pixel coordinates of the copy button; we tap and
+    read the clipboard. No XML dump is needed in this path.
+    """
+
+    base_url: str
+    model: str
+    api_key: str
+    prompt: str | None = None
+    timeout_sec: float = 60.0
+
+
 class AndroidResponseExtraction(BaseModel):
     method: Literal["ui_tree_only", "ocr_only", "ui_tree_then_ocr"]
     response_container_locator: Locator
     scroll_container_locator: Locator
     latest_bubble_match: Locator
     copy_button_text: str | None = None
+    copy_button_vlm: CopyButtonVLMConfig | None = None
 
 
 class AndroidProfile(BaseModel):
@@ -137,12 +154,16 @@ class AndroidProfile(BaseModel):
     model: str | None = None
     api_key: str | None = None
     input_method: Literal["auto", "adb_keyboard", "u2_send_keys"] = "auto"
-    input_locator: Locator
-    send_button_locator: Locator
+    input_locator: Locator | None = None
+    send_button_locator: Locator | None = None
     response_extraction: AndroidResponseExtraction
     new_session_action: list[ActionStep] = Field(default_factory=list)
     input_focus_action: list[ActionStep] = Field(default_factory=list)
     send_action: list[ActionStep] = Field(default_factory=list)
+    # Runs after complete_detection succeeds and before response_extraction.
+    # Use for fixed taps that reveal the full reply (e.g. a "scroll to bottom"
+    # arrow). Empty (default) ⇒ no-op, downstream behaviour unchanged.
+    pre_extract_action: list[ActionStep] = Field(default_factory=list)
     complete_detection: CompleteDetection
     new_session_wait_sec: float = 3.0
     post_send_wait_sec: float = 10.0
