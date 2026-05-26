@@ -198,22 +198,19 @@ def dump_hierarchy_via_adb(device: Any) -> str:
             return xml
         # Android only allows one UiAutomation connection. uiautomator2's
         # instrumentation holds it persistently, which blocks `uiautomator dump`
-        # from getting the slot. Force-stop it so the CLI can attach on retry.
-        # The next uiautomator2 call will lazily re-init instrumentation.
+        # from getting the slot. Force-stop BOTH the test runner package and
+        # the host package — only stopping `.test` leaves the app_process host
+        # alive holding the binder. The next uiautomator2 call will lazily
+        # re-init instrumentation.
         if attempt == 0:
-            subprocess.run(
-                [
-                    "adb",
-                    "-s",
-                    serial,
-                    "shell",
-                    "am",
-                    "force-stop",
-                    "com.github.uiautomator.test",
-                ],
-                capture_output=True,
-                timeout=10,
-            )
+            for pkg in ("com.github.uiautomator.test", "com.github.uiautomator"):
+                subprocess.run(
+                    ["adb", "-s", serial, "shell", "am", "force-stop", pkg],
+                    capture_output=True,
+                    timeout=10,
+                )
+            # Give the kernel a moment to release the UiAutomation binder.
+            time.sleep(0.3)
         if attempt < _DUMP_RETRIES - 1:
             time.sleep(_DUMP_RETRY_DELAY_SEC)
 

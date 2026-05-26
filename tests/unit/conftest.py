@@ -8,7 +8,3 @@ def _patch_dump_hierarchy_via_adb(monkeypatch):
         "autoagent.executors.complete_detector.dump_hierarchy_via_adb",
         lambda _device: "<hierarchy/>",
     )
-    monkeypatch.setattr(
-        "autoagent.executors.android_executor.dump_hierarchy_via_adb",
-        lambda _device: "<hierarchy/>",
-    )

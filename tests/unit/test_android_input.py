@@ -105,7 +105,8 @@ async def test_set_text_adb_keyboard_switches_and_restores_ime(
         ]
     )
     assert restored == [(device.serial, "com.example/.Ime")]
-    assert events == ["ensure", "click", "shell:am"]
+    assert events == ["ensure", "click", "shell:am", "shell:am"]
+    device.shell.assert_any_call(["am", "broadcast", "-a", "ADB_CLEAR_TEXT"])
 
 
 @pytest.mark.asyncio
@@ -138,7 +139,8 @@ async def test_set_text_auto_prefers_adb_keyboard_for_ascii(
         )
         await ctl.restore_pending_ime()
 
-    device.shell.assert_called_once_with(
+    device.shell.assert_any_call(["am", "broadcast", "-a", "ADB_CLEAR_TEXT"])
+    device.shell.assert_any_call(
         [
             "am",
             "broadcast",
@@ -204,7 +206,8 @@ async def test_set_text_adb_keyboard_broadcasts_when_refocus_locator_is_missing(
         )
 
     target.click.assert_called_once()
-    device.shell.assert_called_once_with(
+    device.shell.assert_any_call(["am", "broadcast", "-a", "ADB_CLEAR_TEXT"])
+    device.shell.assert_any_call(
         [
             "am",
             "broadcast",

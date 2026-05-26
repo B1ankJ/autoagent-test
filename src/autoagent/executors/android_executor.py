@@ -16,7 +16,6 @@ from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.executors.complete_detector import (
     capture_screenshot_bytes,
-    dump_hierarchy_via_adb,
     ensure_screen_awake,
     wait_for_pixel_stable,
     wait_for_ui_tree_stable,
@@ -175,20 +174,16 @@ class AndroidExecutor(Executor):
                         profile.input_locator.value,
                     )
                     await input_ctl.set_text(profile.input_locator, prompt)
-                    xml_path = store.artifact_path(f"after_input_{idx}", "xml")
                     screenshot_path = store.artifact_path(f"after_input_{idx}", "png")
-                    current_xml = await asyncio.to_thread(dump_hierarchy_via_adb, device)
-                    await asyncio.to_thread(xml_path.write_text, current_xml, "utf-8")
                     after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
                     await asyncio.to_thread(screenshot_path.write_bytes, after_input)
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=screenshot_path, label=f"after_input_{idx}")
                     )
                     sample_log.info(
-                        "android sample %s prompt %s captured after_input artifacts: xml=%s png=%s",
+                        "android sample %s prompt %s captured after_input screenshot: png=%s",
                         sample.id,
                         idx,
-                        xml_path.name,
                         screenshot_path.name,
                     )
                     if profile.send_action:

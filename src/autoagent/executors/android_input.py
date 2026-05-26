@@ -73,6 +73,11 @@ class AndroidInput:
         target = resolve_target(self.device, locator)
         if method == "u2_send_keys":
             await asyncio.to_thread(target.click)
+            # Clear so retries don't append onto stale text from a prior attempt.
+            try:
+                await asyncio.to_thread(target.clear_text)
+            except Exception:
+                pass
             await asyncio.to_thread(self.device.shell, ["input", "text", _escape_input_text(text)])
             return
         if method == "adb_keyboard":
@@ -84,6 +89,12 @@ class AndroidInput:
                 # EditText is not visible in UIA XML. In that state the ADB
                 # keyboard broadcast can still insert into the focused field.
                 pass
+            # Clear focused field first — ADB_INPUT_B64 appends, so retries
+            # would otherwise stack text from previous attempts.
+            await asyncio.to_thread(
+                self.device.shell,
+                ["am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
+            )
             await asyncio.to_thread(
                 self.device.shell,
                 [

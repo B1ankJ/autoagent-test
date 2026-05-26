@@ -113,10 +113,9 @@ async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
     assert "start: device=emulator-5554 package=demo.app activity=None" in log_text
     assert "prompt 1 set_text start: method=u2_send_keys" in log_text
     assert "locator=resource_id:demo:id/input" in log_text
-    assert "captured after_input artifacts: xml=after_input_1.xml png=after_input_1.png" in log_text
+    assert "captured after_input screenshot: png=after_input_1.png" in log_text
     assert "prompt 1 extraction done: method=ui_tree_only text='echo: hi'" in log_text
     assert (tmp_path / "ad_hoc" / "s1" / "before_input_1.png").is_file()
-    assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.xml").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_input_1.png").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_send_1.png").is_file()
     assert (tmp_path / "ad_hoc" / "s1" / "after_result_1.xml").is_file()
