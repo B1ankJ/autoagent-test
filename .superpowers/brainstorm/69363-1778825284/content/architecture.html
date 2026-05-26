@@ -1,0 +1,85 @@
+<h2>系统架构</h2>
+<p class="subtitle">H264 流式传输 + 全交互方案总览</p>
+
+<div style="display:flex;flex-direction:column;gap:20px;margin-top:8px;">
+
+  <!-- Row 1: Device + ADB -->
+  <div style="display:flex;align-items:stretch;gap:0;">
+    <div style="background:#0f3460;border-radius:8px;padding:14px 20px;min-width:160px;text-align:center;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">云手机</div>
+      <div style="font-size:14px;color:#e0e0e0;font-weight:600;">Android Device</div>
+      <div style="font-size:10px;color:#4caf50;margin-top:4px;">192.168.235.240:5555</div>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+        <div style="background:#1a1a2e;border-radius:4px;padding:3px 6px;font-size:10px;color:#aaa;">screenrecord → H264 bitstream</div>
+        <div style="background:#1a1a2e;border-radius:4px;padding:3px 6px;font-size:10px;color:#aaa;">input tap / swipe / text</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;padding:0 8px;color:#e94560;font-size:18px;">⟷</div>
+
+    <!-- Backend -->
+    <div style="background:#16213e;border-radius:8px;padding:14px 20px;flex:1;border:1px solid #e94560;">
+      <div style="font-size:11px;color:#e94560;margin-bottom:6px;font-weight:600;">BACKEND — FastAPI</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="background:#0f3460;border-radius:6px;padding:8px 12px;flex:1;min-width:150px;">
+          <div style="font-size:11px;color:#4caf50;font-weight:600;margin-bottom:4px;">WebSocket</div>
+          <div style="font-size:10px;color:#aaa;">GET /api/v1/devices/{serial}/stream</div>
+          <div style="font-size:10px;color:#888;margin-top:4px;">• 启动 screenrecord 子进程<br>• 读取 H264 分块<br>• 推送 binary WS 帧<br>• 关闭时杀进程</div>
+        </div>
+        <div style="background:#0f3460;border-radius:6px;padding:8px 12px;flex:1;min-width:150px;">
+          <div style="font-size:11px;color:#4caf50;font-weight:600;margin-bottom:4px;">REST</div>
+          <div style="font-size:10px;color:#aaa;">POST /api/v1/devices/{serial}/input</div>
+          <div style="font-size:10px;color:#888;margin-top:4px;">• type: tap {x,y}<br>• type: swipe {x1,y1,x2,y2}<br>• type: text {value}<br>• type: key {keycode}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;padding:0 8px;color:#e94560;font-size:18px;">⟷</div>
+
+    <!-- Frontend -->
+    <div style="background:#16213e;border-radius:8px;padding:14px 20px;flex:1;border:1px solid #4caf50;">
+      <div style="font-size:11px;color:#4caf50;margin-bottom:6px;font-weight:600;">FRONTEND — React</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="background:#0f3460;border-radius:6px;padding:8px 12px;flex:1;min-width:140px;">
+          <div style="font-size:11px;color:#e94560;font-weight:600;margin-bottom:4px;">DeviceStreamModal</div>
+          <div style="font-size:10px;color:#888;">• WebSocket 接收 H264<br>• WebCodecs VideoDecoder<br>• &lt;canvas&gt; 渲染帧<br>• 鼠标事件 → 坐标换算<br>• 拖拽识别 → swipe<br>• 文字输入 overlay</div>
+        </div>
+        <div style="background:#0f3460;border-radius:6px;padding:8px 12px;flex:1;min-width:100px;">
+          <div style="font-size:11px;color:#e94560;font-weight:600;margin-bottom:4px;">Devices 页</div>
+          <div style="font-size:10px;color:#888;">• 每行新增<br>"查看画面"按钮<br>• 点击打开<br>DeviceStreamModal</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data flow detail -->
+  <div style="background:#0d1117;border-radius:8px;padding:14px 20px;border:1px solid #333;">
+    <div style="font-size:11px;color:#888;margin-bottom:10px;font-weight:600;letter-spacing:1px;">H264 解码关键流程</div>
+    <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;gap:6px;">
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">screenrecord<br><span style="color:#888">裸 H264</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">NAL 单元<br><span style="color:#888">按起始码分割</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">SPS/PPS<br><span style="color:#888">配置 VideoDecoder</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">I/P 帧<br><span style="color:#888">EncodedVideoChunk</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">VideoFrame<br><span style="color:#888">canvas.drawImage</span></div>
+    </div>
+  </div>
+
+  <!-- Interaction flow -->
+  <div style="background:#0d1117;border-radius:8px;padding:14px 20px;border:1px solid #333;">
+    <div style="font-size:11px;color:#888;margin-bottom:10px;font-weight:600;letter-spacing:1px;">交互坐标换算</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">canvas 点击<br><span style="color:#888">(cx, cy)</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">缩放换算<br><span style="color:#888">dx = cx × W/cw<br>dy = cy × H/ch</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">POST /input<br><span style="color:#888">{type,x,y}</span></div>
+      <div style="color:#e94560;">→</div>
+      <div style="background:#0f3460;border-radius:5px;padding:5px 10px;font-size:10px;color:#e0e0e0;text-align:center;">adb input tap<br><span style="color:#888">dx dy</span></div>
+    </div>
+  </div>
+
+</div>

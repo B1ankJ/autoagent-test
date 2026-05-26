@@ -1,0 +1,88 @@
+<h2>DeviceStreamModal 界面设计</h2>
+<p class="subtitle">弹窗布局与交互控件</p>
+
+<div style="display:flex;justify-content:center;margin-top:12px;">
+  <!-- Modal mockup -->
+  <div style="width:520px;background:#16213e;border-radius:12px;border:1px solid #333;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,0.8);">
+
+    <!-- Modal header -->
+    <div style="background:#0f3460;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1a1a2e;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#4caf50;"></div>
+        <span style="color:#e0e0e0;font-size:13px;font-weight:600;">192.168.235.240:5555</span>
+        <span style="color:#888;font-size:11px;">Redmi Note 12 · Android 13</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="background:#1a1a2e;border-radius:4px;padding:3px 8px;font-size:10px;color:#4caf50;">● 直播中 ~150ms</div>
+        <div style="color:#888;font-size:16px;cursor:pointer;">✕</div>
+      </div>
+    </div>
+
+    <!-- Main area: screen + sidebar -->
+    <div style="display:flex;gap:0;">
+
+      <!-- Phone screen canvas area -->
+      <div style="flex:1;background:#0d1117;display:flex;flex-direction:column;align-items:center;padding:16px;gap:10px;">
+        <!-- Simulated phone screen -->
+        <div style="width:200px;height:355px;background:#1a1a2e;border-radius:8px;border:2px solid #333;position:relative;overflow:hidden;cursor:crosshair;">
+          <!-- Simulated app UI -->
+          <div style="background:#0f3460;padding:8px;display:flex;align-items:center;gap:6px;">
+            <div style="width:16px;height:16px;border-radius:50%;background:#e94560;"></div>
+            <div style="flex:1;background:#1a1a2e;height:8px;border-radius:2px;"></div>
+          </div>
+          <div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+            <div style="background:#0f3460;border-radius:6px;padding:8px;margin-left:30px;">
+              <div style="background:#4caf50;height:6px;border-radius:2px;width:90%;margin-bottom:3px;"></div>
+              <div style="background:#4caf50;height:6px;border-radius:2px;width:70%;"></div>
+            </div>
+            <div style="background:#1a4a2e;border-radius:6px;padding:8px;margin-right:30px;">
+              <div style="background:#81c784;height:6px;border-radius:2px;width:80%;margin-bottom:3px;"></div>
+              <div style="background:#81c784;height:6px;border-radius:2px;width:55%;"></div>
+            </div>
+            <div style="background:#0f3460;border-radius:6px;padding:8px;margin-left:30px;">
+              <div style="background:#4caf50;height:6px;border-radius:2px;width:75%;margin-bottom:3px;"></div>
+              <div style="background:#4caf50;height:6px;border-radius:2px;width:60%;margin-bottom:3px;"></div>
+              <div style="background:#4caf50;height:6px;border-radius:2px;width:85%;"></div>
+            </div>
+          </div>
+          <!-- Tap indicator -->
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;border:2px solid #e94560;opacity:0.6;animation:none;"></div>
+          <!-- Click hint overlay -->
+          <div style="position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:9px;color:#555;">点击发送 tap · 拖动发送 swipe</div>
+        </div>
+
+        <!-- System buttons -->
+        <div style="display:flex;gap:8px;">
+          <button style="background:#0f3460;border:1px solid #333;border-radius:5px;padding:5px 12px;color:#aaa;font-size:11px;cursor:pointer;">◁ 返回</button>
+          <button style="background:#0f3460;border:1px solid #333;border-radius:5px;padding:5px 12px;color:#aaa;font-size:11px;cursor:pointer;">○ 主页</button>
+          <button style="background:#0f3460;border:1px solid #333;border-radius:5px;padding:5px 12px;color:#aaa;font-size:11px;cursor:pointer;">□ 任务</button>
+        </div>
+      </div>
+
+      <!-- Right sidebar: text input + info -->
+      <div style="width:160px;background:#0d1117;border-left:1px solid #1a1a2e;padding:14px;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div style="font-size:10px;color:#888;margin-bottom:6px;letter-spacing:1px;">文字输入</div>
+          <textarea style="width:100%;background:#16213e;border:1px solid #333;border-radius:5px;color:#e0e0e0;font-size:11px;padding:6px;resize:none;height:60px;box-sizing:border-box;" placeholder="输入后按 Enter 发送..."></textarea>
+          <div style="font-size:9px;color:#555;margin-top:3px;">Enter 发送 · Shift+Enter 换行</div>
+        </div>
+
+        <div style="border-top:1px solid #1a1a2e;padding-top:10px;">
+          <div style="font-size:10px;color:#888;margin-bottom:6px;letter-spacing:1px;">快捷按键</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <button style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:4px;color:#aaa;font-size:10px;cursor:pointer;text-align:left;">Esc / 返回</button>
+            <button style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:4px;color:#aaa;font-size:10px;cursor:pointer;text-align:left;">Enter / 回车</button>
+            <button style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:4px;color:#aaa;font-size:10px;cursor:pointer;text-align:left;">Del / 删除</button>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #1a1a2e;padding-top:10px;margin-top:auto;">
+          <div style="font-size:10px;color:#888;margin-bottom:4px;">分辨率</div>
+          <div style="font-size:11px;color:#aaa;">720 × 1280</div>
+          <div style="font-size:10px;color:#888;margin-top:6px;margin-bottom:4px;">延迟</div>
+          <div style="font-size:11px;color:#4caf50;">~150ms</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

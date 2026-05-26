@@ -1,0 +1,105 @@
+<h2>设备画面查看器放在哪里？</h2>
+<p class="subtitle">选择设备实时画面的 UI 集成方式</p>
+
+<div class="cards">
+  <div class="card" data-choice="side-panel" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1a1a2e;padding:16px;min-height:200px;display:flex;gap:12px;">
+      <!-- Devices page with side panel -->
+      <div style="flex:1;background:#16213e;border-radius:6px;padding:10px;">
+        <div style="background:#0f3460;height:12px;border-radius:3px;margin-bottom:8px;width:60%"></div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px;display:flex;align-items:center;gap:8px;border:1px solid #e94560;cursor:pointer">
+            <div style="width:8px;height:8px;border-radius:50%;background:#4caf50"></div>
+            <div style="flex:1;background:#0f3460;height:8px;border-radius:2px"></div>
+            <div style="font-size:10px;color:#e94560;">▶ 查看</div>
+          </div>
+          <div style="background:#1a1a2e;border-radius:4px;padding:6px;display:flex;align-items:center;gap:8px;border:1px solid #333">
+            <div style="width:8px;height:8px;border-radius:50%;background:#4caf50"></div>
+            <div style="flex:1;background:#0f3460;height:8px;border-radius:2px"></div>
+            <div style="font-size:10px;color:#888;">▶ 查看</div>
+          </div>
+        </div>
+      </div>
+      <div style="width:110px;background:#0d1117;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:6px;border:1px solid #e94560;">
+        <div style="font-size:9px;color:#e94560;text-align:center;border-bottom:1px solid #e94560;padding-bottom:4px;">192.168.1.1:5555</div>
+        <div style="flex:1;background:#1a1a2e;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+          <div style="width:45px;height:80px;background:#0f3460;border-radius:4px;display:flex;flex-direction:column;gap:4px;padding:4px;border:1px solid #4caf50">
+            <div style="background:#e94560;height:6px;border-radius:2px;width:80%"></div>
+            <div style="background:#4caf50;height:4px;border-radius:2px;width:60%"></div>
+            <div style="background:#4caf50;height:4px;border-radius:2px;width:90%"></div>
+          </div>
+        </div>
+        <div style="font-size:8px;color:#888;text-align:center;">点击可交互</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 右侧面板</h3>
+      <p>点击设备行的"查看"按钮，在 Devices 页面右侧展开画面。列表与画面同时可见，适合对比多设备状态。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="modal" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1a1a2e;padding:16px;min-height:200px;display:flex;align-items:center;justify-content:center;position:relative;">
+      <!-- Background dimmed -->
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+        <div style="width:120px;background:#16213e;border-radius:8px;border:1px solid #e94560;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.8)">
+          <div style="background:#0f3460;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:9px;color:#e0e0e0;">192.168.1.1</div>
+            <div style="font-size:10px;color:#888;cursor:pointer;">✕</div>
+          </div>
+          <div style="background:#0d1117;padding:8px;display:flex;justify-content:center;">
+            <div style="width:55px;height:95px;background:#0f3460;border-radius:4px;border:2px solid #4caf50;display:flex;flex-direction:column;gap:4px;padding:4px;">
+              <div style="background:#e94560;height:6px;border-radius:2px;width:80%"></div>
+              <div style="background:#4caf50;height:4px;border-radius:2px;width:60%"></div>
+              <div style="background:#4caf50;height:4px;border-radius:2px;width:90%"></div>
+              <div style="background:#888;height:4px;border-radius:2px;width:70%"></div>
+            </div>
+          </div>
+          <div style="padding:6px;display:flex;justify-content:center;gap:4px;">
+            <div style="background:#0f3460;border-radius:3px;padding:3px 6px;font-size:8px;color:#e0e0e0;">Home</div>
+            <div style="background:#0f3460;border-radius:3px;padding:3px 6px;font-size:8px;color:#e0e0e0;">Back</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 模态弹窗</h3>
+      <p>点击后弹出覆盖层，画面居中显示，带关闭按钮。简单直接，不影响当前布局，但无法同时看设备列表。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="dedicated-page" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1a1a2e;padding:16px;min-height:200px;display:flex;gap:10px;">
+      <!-- Nav + page -->
+      <div style="width:60px;background:#0d1117;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+        <div style="background:#0f3460;height:8px;border-radius:2px;width:80%"></div>
+        <div style="background:#0f3460;height:6px;border-radius:2px;width:60%;opacity:0.5"></div>
+        <div style="background:#e94560;height:6px;border-radius:2px;width:70%"></div>
+        <div style="background:#0f3460;height:6px;border-radius:2px;width:60%;opacity:0.5"></div>
+      </div>
+      <div style="flex:1;background:#16213e;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px;">
+        <div style="background:#0f3460;height:10px;border-radius:3px;width:40%"></div>
+        <div style="display:flex;gap:8px;flex:1;">
+          <div style="width:70px;background:#0d1117;border-radius:6px;border:1px solid #4caf50;display:flex;flex-direction:column;gap:3px;padding:6px;">
+            <div style="background:#e94560;height:5px;border-radius:2px;width:80%"></div>
+            <div style="background:#4caf50;height:4px;border-radius:2px;width:60%"></div>
+            <div style="background:#4caf50;height:4px;border-radius:2px;width:90%"></div>
+            <div style="flex:1"></div>
+            <div style="font-size:8px;color:#4caf50;text-align:center;">设备 1</div>
+          </div>
+          <div style="width:70px;background:#0d1117;border-radius:6px;border:1px solid #333;display:flex;flex-direction:column;gap:3px;padding:6px;opacity:0.5;">
+            <div style="background:#888;height:5px;border-radius:2px;width:80%"></div>
+            <div style="background:#888;height:4px;border-radius:2px;width:60%"></div>
+            <div style="background:#888;height:4px;border-radius:2px;width:90%"></div>
+            <div style="flex:1"></div>
+            <div style="font-size:8px;color:#888;text-align:center;">设备 2</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 独立页面（多设备监控）</h3>
+      <p>侧边栏新增"监控"入口，页面可同时平铺多个设备画面。适合需要同时监控多台设备的场景。</p>
+    </div>
+  </div>
+</div>

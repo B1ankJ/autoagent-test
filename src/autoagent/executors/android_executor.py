@@ -270,13 +270,16 @@ class AndroidExecutor(Executor):
                         await action_runner.run(profile.pre_extract_action)
                         # UI just shifted; grab a fresh XML so the extraction
                         # below sees the post-action visible state. stable_sec=0
-                        # returns on the first successful dump.
-                        xml = await wait_for_ui_tree_stable(
-                            device,
-                            stable_sec=0.0,
-                            max_wait_sec=5.0,
-                            prefer_u2=bool(profile.response_extraction.copy_button_text),
-                        )
+                        # returns on the first successful dump. Skip entirely
+                        # when copy_button_vlm is configured — that path uses
+                        # screenshots + clipboard and never reads the XML.
+                        if not profile.response_extraction.copy_button_vlm:
+                            xml = await wait_for_ui_tree_stable(
+                                device,
+                                stable_sec=0.0,
+                                max_wait_sec=5.0,
+                                prefer_u2=bool(profile.response_extraction.copy_button_text),
+                            )
 
                     # VLM-based copy-button location: skip XML entirely and ask a
                     # vision LLM for the button coordinates. Used for WebView /
