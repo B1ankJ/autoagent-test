@@ -1,4 +1,17 @@
-import Editor from '@monaco-editor/react'
+import Editor, { loader } from '@monaco-editor/react'
+import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import yamlWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+
+// Bundle Monaco locally instead of fetching from jsdelivr CDN at runtime.
+loader.config({ monaco })
+
+self.MonacoEnvironment = {
+  getWorker(_workerId, label) {
+    if (label === 'yaml' || label === 'json') return new yamlWorker()
+    return new editorWorker()
+  },
+}
 
 interface Props {
   value: string
