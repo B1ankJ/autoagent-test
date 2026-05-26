@@ -177,7 +177,15 @@ def dump_hierarchy_via_adb(device: Any) -> str:
     returns the full XML that uiautomator writes to disk.
     """
     serial: str = device.serial
-    dump_path = "/sdcard/window_dump.xml"
+    # /data/local/tmp is always writable by the shell uid and the uiautomator
+    # CLI uid; /sdcard depends on scoped-storage policy on Android 11+.
+    dump_path = "/data/local/tmp/window_dump.xml"
+
+    # Always free the UiAutomation slot before dumping. The executor calls
+    # uiautomator2 (tap/screenshot/set_text) all over the place, so the
+    # instrumentation host is essentially always attached by the time we get
+    # here. Doing this unconditionally is cheaper than letting attempt 1 fail.
+    _release_uiautomation_slot(serial)
 
     last_stderr = ""
     for attempt in range(_DUMP_RETRIES):
@@ -211,26 +219,8 @@ def dump_hierarchy_via_adb(device: Any) -> str:
             serial,
             last_stderr or "<no output>",
         )
-        # Android only allows one UiAutomation connection. uiautomator2's
-        # instrumentation holds it persistently, blocking `uiautomator dump`.
-        # On rooted devices the instrumentation runs as root and `am force-stop`
-        # cannot kill it — fall through to `pkill -f` which matches the host
-        # package in /proc/<pid>/cmdline. The `uiautomator` CLI itself doesn't
-        # carry that string in its cmdline, so we don't kill our own process.
-        if attempt == 0:
-            for pkg in ("com.github.uiautomator.test", "com.github.uiautomator"):
-                subprocess.run(
-                    ["adb", "-s", serial, "shell", "am", "force-stop", pkg],
-                    capture_output=True,
-                    timeout=10,
-                )
-            subprocess.run(
-                ["adb", "-s", serial, "shell", "pkill", "-9", "-f", "com.github.uiautomator"],
-                capture_output=True,
-                timeout=10,
-            )
-            # Give the kernel a moment to release the UiAutomation binder.
-            time.sleep(0.5)
+        # Re-release the slot in case something respawned instrumentation.
+        _release_uiautomation_slot(serial)
         if attempt < _DUMP_RETRIES - 1:
             time.sleep(_DUMP_RETRY_DELAY_SEC)
 
@@ -238,6 +228,38 @@ def dump_hierarchy_via_adb(device: Any) -> str:
         f"uiautomator dump failed after {_DUMP_RETRIES} attempts on {serial}: "
         f"{last_stderr or 'no error output'}"
     )
+
+
+def _release_uiautomation_slot(serial: str) -> None:
+    """Kill any process holding the device's UiAutomation slot.
+
+    On rooted devices uiautomator2's instrumentation runs as root and
+    `am force-stop` is a no-op against it, so we fall through to `pkill -9`
+    matched against the host package name in /proc/<pid>/cmdline. The
+    `uiautomator` CLI doesn't carry that string in its own cmdline, so this
+    won't kill the dump command we're about to run.
+    """
+    for pkg in ("com.github.uiautomator.test", "com.github.uiautomator"):
+        subprocess.run(
+            ["adb", "-s", serial, "shell", "am", "force-stop", pkg],
+            capture_output=True,
+            timeout=10,
+        )
+    pkill = subprocess.run(
+        ["adb", "-s", serial, "shell", "pkill", "-9", "-f", "com.github.uiautomator"],
+        capture_output=True,
+        timeout=10,
+    )
+    _log.debug(
+        "uiautomator pkill on %s rc=%d stdout=%r stderr=%r",
+        serial,
+        pkill.returncode,
+        pkill.stdout.decode("utf-8", errors="replace").strip(),
+        pkill.stderr.decode("utf-8", errors="replace").strip(),
+    )
+    # Give the kernel time to release the UiAutomation binder. Manual testing
+    # shows 0.5s can be too tight on some ROMs; 1s matches a known-good flow.
+    time.sleep(1.0)
 
 
 def _xml_text_fingerprint(xml: str) -> str:
