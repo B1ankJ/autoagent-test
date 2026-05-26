@@ -131,6 +131,11 @@ class CopyButtonVLMConfig(BaseModel):
     api_key: str
     prompt: str | None = None
     timeout_sec: float = 60.0
+    # Optional cached coordinate to try before invoking the VLM. Most pages
+    # render the copy button at a stable position, so tapping it directly is
+    # zero-cost. If the tap doesn't yield clipboard content, fall through to
+    # the VLM. Format: [x, y] in screen pixels.
+    default_coords: tuple[int, int] | None = None
 
 
 class AndroidResponseExtraction(BaseModel):

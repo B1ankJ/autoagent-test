@@ -286,9 +286,51 @@ class AndroidExecutor(Executor):
                     # than falling back to ui_tree / ocr, which wouldn't work
                     # for this kind of page anyway.
                     if profile.response_extraction.copy_button_vlm:
+                        vlm_cfg = profile.response_extraction.copy_button_vlm
+                        # Clear clipboard so a previous prompt's text can't be
+                        # mistaken for a successful copy. Cheapest possible
+                        # check for "did the tap actually copy something new?"
+                        try:
+                            await asyncio.to_thread(
+                                lambda: setattr(device, "clipboard", "")
+                            )
+                        except Exception:
+                            pass
                         vlm_clipboard: str | None = None
                         vlm_last_error: str | None = None
+                        # Optional fast path: if a stable button coord is
+                        # configured, tap it once before paying for a VLM call.
+                        if vlm_cfg.default_coords is not None:
+                            dx, dy = vlm_cfg.default_coords
+                            await asyncio.to_thread(device.click, dx, dy)
+                            await asyncio.sleep(0.5)
+                            cached_clipboard = await asyncio.to_thread(
+                                lambda: device.clipboard or ""
+                            )
+                            if cached_clipboard.strip():
+                                vlm_clipboard = cached_clipboard.strip()
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm copy-button "
+                                    "default_coords hit: coords=(%d,%d) chars=%d",
+                                    sample.id,
+                                    idx,
+                                    dx,
+                                    dy,
+                                    len(vlm_clipboard),
+                                )
+                            else:
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm copy-button "
+                                    "default_coords miss: coords=(%d,%d), "
+                                    "falling through to VLM",
+                                    sample.id,
+                                    idx,
+                                    dx,
+                                    dy,
+                                )
                         for vlm_attempt in range(_VLM_MAX_ATTEMPTS):
+                            if vlm_clipboard is not None:
+                                break
                             vlm_shot = await asyncio.to_thread(
                                 capture_screenshot_bytes, device
                             )
@@ -309,6 +351,16 @@ class AndroidExecutor(Executor):
                             if vlm_res.coords is None:
                                 vlm_last_error = vlm_res.error or "no_coords"
                             else:
+                                # Clear again per attempt — a previous tap on
+                                # the wrong element (e.g. share) might have
+                                # written a URL that would falsely pass the
+                                # "non-empty clipboard" check below.
+                                try:
+                                    await asyncio.to_thread(
+                                        lambda: setattr(device, "clipboard", "")
+                                    )
+                                except Exception:
+                                    pass
                                 await asyncio.to_thread(
                                     device.click,
                                     vlm_res.coords[0],
