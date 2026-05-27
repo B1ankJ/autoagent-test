@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { Alert, Button, Modal, Space, Tag } from 'antd'
 
-import { postDeviceInput, useDeviceStream } from '../api/deviceStream'
+import { postDeviceInput, useDeviceScreenshot } from '../api/deviceStream'
 import type { DeviceInputKey } from '../types/api'
 
 interface Props {
@@ -18,15 +18,17 @@ const KEY_BUTTONS: Array<{ label: string; keycode: DeviceInputKey['keycode'] }> 
 ]
 
 export function DeviceStreamModal({ serial, onClose }: Props) {
-  const { canvasRef, state, latencyMs, reconnect } = useDeviceStream(serial)
+  const { imgRef, src, state, reconnect } = useDeviceScreenshot(serial)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragRef = useRef<{ x: number; y: number; t: number } | null>(null)
 
+  // Translate browser-element coordinates to device-pixel coordinates using the
+  // <img>'s natural size (the real device resolution).
   const toDeviceCoords = useCallback(
-    (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect()
-      const scaleX = canvas.width / rect.width
-      const scaleY = canvas.height / rect.height
+    (img: HTMLImageElement, clientX: number, clientY: number) => {
+      const rect = img.getBoundingClientRect()
+      const scaleX = (img.naturalWidth || rect.width) / rect.width
+      const scaleY = (img.naturalHeight || rect.height) / rect.height
       return {
         x: Math.round((clientX - rect.left) * scaleX),
         y: Math.round((clientY - rect.top) * scaleY),
@@ -35,16 +37,16 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
     [],
   )
 
-  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleImgMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
     e.preventDefault()
     dragRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
   }, [])
 
-  const handleCanvasMouseUp = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleImgMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLImageElement>) => {
       e.preventDefault()
-      if (!serial || !canvasRef.current || !dragRef.current) return
-      const canvas = canvasRef.current
+      if (!serial || !imgRef.current || !dragRef.current) return
+      const img = imgRef.current
       const start = dragRef.current
       dragRef.current = null
 
@@ -54,8 +56,8 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
       const durationMs = Math.max(100, Math.min(1000, Date.now() - start.t))
 
       if (dist > 8) {
-        const p1 = toDeviceCoords(canvas, start.x, start.y)
-        const p2 = toDeviceCoords(canvas, e.clientX, e.clientY)
+        const p1 = toDeviceCoords(img, start.x, start.y)
+        const p2 = toDeviceCoords(img, e.clientX, e.clientY)
         postDeviceInput(serial, {
           type: 'swipe',
           x1: p1.x,
@@ -65,11 +67,11 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
           duration_ms: durationMs,
         }).catch(console.error)
       } else {
-        const p = toDeviceCoords(canvas, e.clientX, e.clientY)
+        const p = toDeviceCoords(img, e.clientX, e.clientY)
         postDeviceInput(serial, { type: 'tap', x: p.x, y: p.y }).catch(console.error)
       }
     },
-    [serial, canvasRef, toDeviceCoords],
+    [serial, imgRef, toDeviceCoords],
   )
 
   const handleKeyButton = useCallback(
@@ -104,19 +106,18 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
       title={
         <Space>
           <span>{serial}</span>
-          {state === 'live' && (
-            <Tag color="green">直播中{latencyMs != null ? ` ~${latencyMs}ms` : ''}</Tag>
-          )}
+          {state === 'live' && <Tag color="green">截图轮询中</Tag>}
           {state === 'connecting' && <Tag color="blue">连接中</Tag>}
           {state === 'error' && <Tag color="red">连接失败</Tag>}
         </Space>
       }
       destroyOnClose
     >
-      {state === 'unsupported' && (
+      {state === 'error' && (
         <Alert
           type="error"
-          message="浏览器不支持 WebCodecs，请使用 Chrome 94+ 或 Firefox 130+"
+          message="无法获取设备截图，请检查 adb 是否连接到该设备。"
+          style={{ marginBottom: 8 }}
         />
       )}
 
@@ -124,8 +125,11 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
         <div
           style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
         >
-          <canvas
-            ref={canvasRef}
+          <img
+            ref={imgRef}
+            src={src ?? undefined}
+            alt="device screen"
+            draggable={false}
             style={{
               width: '100%',
               background: '#000',
@@ -133,9 +137,10 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
               cursor: 'crosshair',
               userSelect: 'none',
               minHeight: 300,
+              objectFit: 'contain',
             }}
-            onMouseDown={handleCanvasMouseDown}
-            onMouseUp={handleCanvasMouseUp}
+            onMouseDown={handleImgMouseDown}
+            onMouseUp={handleImgMouseUp}
             onDragStart={(e) => e.preventDefault()}
           />
           <Space>
@@ -169,18 +174,14 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
             <div style={{ fontSize: 10, color: '#bbb' }}>Enter 发送 · Shift+Enter 换行</div>
           </div>
 
-          {canvasRef.current && (
+          {imgRef.current && imgRef.current.naturalWidth > 0 && (
             <div style={{ fontSize: 11, color: '#888' }}>
               <div>分辨率</div>
               <div style={{ color: '#ccc' }}>
-                {canvasRef.current.width} × {canvasRef.current.height}
+                {imgRef.current.naturalWidth} × {imgRef.current.naturalHeight}
               </div>
-              {latencyMs != null && (
-                <>
-                  <div style={{ marginTop: 6 }}>延迟</div>
-                  <div style={{ color: latencyMs < 200 ? '#4caf50' : '#ff9800' }}>{latencyMs}ms</div>
-                </>
-              )}
+              <div style={{ marginTop: 6 }}>刷新</div>
+              <div style={{ color: '#ccc' }}>~2 FPS</div>
             </div>
           )}
         </div>

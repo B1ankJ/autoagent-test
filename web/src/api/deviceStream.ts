@@ -242,3 +242,79 @@ function parseAndDecodeNALUs(
 export async function postDeviceInput(serial: string, cmd: DeviceInputRequest): Promise<void> {
   await client.post(`/devices/${serial}/input`, cmd)
 }
+
+// Screenshot polling — works through any HTTP-only reverse proxy.
+// Use when WebSocket H264 streaming is blocked by the network path.
+
+export interface DeviceScreenshotHandle {
+  imgRef: React.RefObject<HTMLImageElement>
+  src: string | null
+  state: StreamState
+  reconnect: () => void
+}
+
+const SCREENSHOT_INTERVAL_MS = 500
+
+export function useDeviceScreenshot(serial: string | null): DeviceScreenshotHandle {
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [src, setSrc] = useState<string | null>(null)
+  const [state, setState] = useState<StreamState>('closed')
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const failuresRef = useRef(0)
+
+  const tick = useCallback(() => {
+    if (!serial) return
+    const token = getToken()
+    setSrc(
+      `/api/v1/devices/${encodeURIComponent(serial)}/screenshot.png?token=${token}&ts=${Date.now()}`,
+    )
+  }, [serial])
+
+  const start = useCallback(() => {
+    if (!serial) return
+    setState('connecting')
+    failuresRef.current = 0
+    tick()
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(tick, SCREENSHOT_INTERVAL_MS)
+  }, [serial, tick])
+
+  useEffect(() => {
+    if (!serial) {
+      setSrc(null)
+      setState('closed')
+      return
+    }
+    start()
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [serial, start])
+
+  const onLoad = useCallback(() => {
+    failuresRef.current = 0
+    setState('live')
+  }, [])
+
+  const onError = useCallback(() => {
+    failuresRef.current += 1
+    if (failuresRef.current >= 5) setState('error')
+  }, [])
+
+  // Attach load/error listeners by mutating the ref's current element each tick.
+  useEffect(() => {
+    const img = imgRef.current
+    if (!img) return
+    img.addEventListener('load', onLoad)
+    img.addEventListener('error', onError)
+    return () => {
+      img.removeEventListener('load', onLoad)
+      img.removeEventListener('error', onError)
+    }
+  }, [onLoad, onError])
+
+  return { imgRef, src, state, reconnect: start }
+}

@@ -5,9 +5,10 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from autoagent.auth.bearer import BearerAuthError, resolve_bearer_subject
 from autoagent.auth.deps import require_user
 from autoagent.devices.adb import AdbCommandError, get_screen_resolution, run_input_command
 
@@ -55,6 +56,52 @@ class DeviceInputRequest(BaseModel):
         if self.type == "key":
             return {"type": "key", "keycode": self.keycode or ""}
         raise HTTPException(status_code=422, detail=f"Unknown input type: {self.type!r}")
+
+
+def _require_query_token(token: str | None) -> None:
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        resolve_bearer_subject(token)
+    except BearerAuthError as e:
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from e
+
+
+@router.get("/{serial}/screenshot.png")
+async def device_screenshot(serial: str, token: str | None = None) -> Response:
+    """One-shot PNG via `adb exec-out screencap -p`.
+
+    Auth is via `?token=` so the URL can be used directly as an <img src>,
+    which can't carry an Authorization header.
+    """
+    _require_query_token(token)
+    _validate_serial(serial)
+    proc = await asyncio.create_subprocess_exec(
+        "adb",
+        "-s",
+        serial,
+        "exec-out",
+        "screencap",
+        "-p",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=8.0)
+    except asyncio.TimeoutError as e:
+        proc.kill()
+        raise HTTPException(status_code=504, detail="screencap timeout") from e
+    if proc.returncode != 0 or not stdout:
+        raise HTTPException(
+            status_code=502,
+            detail=f"screencap failed rc={proc.returncode} err={stderr[:200]!r}",
+        )
+    # Strict no-store so the <img>?ts= polling actually re-fetches.
+    return Response(
+        content=stdout,
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post("/{serial}/input", status_code=204, dependencies=[Depends(require_user)])
