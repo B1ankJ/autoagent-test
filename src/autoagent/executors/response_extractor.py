@@ -125,6 +125,49 @@ def _is_latest_bubble_candidate(node: ET.Element) -> bool:
     return not _looks_like_ui_chrome(node.attrib.get("text", ""))
 
 
+def _bubble_root(
+    node: ET.Element,
+    container: ET.Element,
+    parents: dict[ET.Element, ET.Element],
+) -> ET.Element | None:
+    """Walk up from `node` to the ancestor that is a direct child of `container`.
+
+    For a chat ListView, each direct child is exactly one message row, so this
+    gives a hard structural boundary between bubbles. Spatial heuristics (gap
+    ≤ 90/150 px) can't separate rounds when jailbreak prompts + identical
+    refusals stack tightly together; structure can.
+    """
+    current = node
+    while current in parents:
+        parent = parents[current]
+        if parent is container:
+            return current
+        current = parent
+    return None
+
+
+def _bubble_bottom_y(nodes: list[ET.Element]) -> int:
+    max_y = -1
+    for node in nodes:
+        bounds = _node_bounds(node)
+        if bounds is not None and bounds[3] > max_y:
+            max_y = bounds[3]
+    return max_y
+
+
+def _collect_bubble_text(bubble_root: ET.Element, locator: Locator) -> str:
+    """Concatenate text from all locator-matching descendants in document order."""
+    parts: list[str] = []
+    for node in bubble_root.iter("node"):
+        if not _matches_locator(node, locator):
+            continue
+        text = (node.attrib.get("text") or "").strip()
+        if not text or _is_suspect(text) or _looks_like_ui_chrome(text):
+            continue
+        parts.append(text)
+    return " ".join(parts)
+
+
 def _group_candidate_blocks(
     nodes: list[ET.Element],
     parents: dict[ET.Element, ET.Element],
@@ -310,8 +353,8 @@ class UiTreeExtractor:
     ) -> ExtractionResult:
         root = ET.fromstring(xml)
         parents = {child: parent for parent in root.iter() for child in parent}
-        containers = _find_all_matches(root, response_container_locator)
-        if not containers:
+        matched_containers = _find_all_matches(root, response_container_locator)
+        if not matched_containers:
             if _requires_strict_container_match(response_container_locator):
                 return ExtractionResult(
                     text="",
@@ -321,6 +364,10 @@ class UiTreeExtractor:
                     matched_locator_count=0,
                 )
             containers = [root]
+            structural = False
+        else:
+            containers = matched_containers
+            structural = True
 
         best_text = ""
         best_container_found = False
@@ -335,6 +382,53 @@ class UiTreeExtractor:
                 if _is_latest_bubble_candidate(node)
                 and not _is_suspect(node.attrib.get("text", ""))
             ]
+            if structural and candidate_nodes:
+                # One bubble = one direct child of the container. The latest
+                # bubble (largest bottom-y, doc-order tie-break) is the
+                # freshest assistant reply.
+                bubble_groups: dict[ET.Element, list[ET.Element]] = {}
+                for node in candidate_nodes:
+                    br = _bubble_root(node, container, parents)
+                    if br is None:
+                        continue
+                    bubble_groups.setdefault(br, []).append(node)
+                # Demote chip-shaped bubbles only when another bubble carries
+                # substantial text — protects multi-paragraph short-line replies.
+                has_substantial = any(
+                    any(
+                        len((n.attrib.get("text") or "").strip()) >= 40 for n in nodes
+                    )
+                    for nodes in bubble_groups.values()
+                )
+                if has_substantial:
+                    non_chip = {
+                        br: nodes
+                        for br, nodes in bubble_groups.items()
+                        if not _looks_like_suggestion_chip_block(nodes)
+                    }
+                    if non_chip:
+                        bubble_groups = non_chip
+                if bubble_groups:
+                    child_index = {child: i for i, child in enumerate(list(container))}
+                    winner_root, winner_nodes = max(
+                        bubble_groups.items(),
+                        key=lambda kv: (
+                            _bubble_bottom_y(kv[1]),
+                            child_index.get(kv[0], 0),
+                        ),
+                    )
+                    winner_text = _collect_bubble_text(winner_root, latest_bubble_locator)
+                    offscreen_text = _collect_offscreen_text(container, latest_bubble_locator)
+                    if offscreen_text and offscreen_text not in winner_text:
+                        winner_text = offscreen_text + " " + winner_text
+                    bottom_y = _bubble_bottom_y(winner_nodes)
+                    winner_score = (1, bottom_y, len(winner_text))
+                    if best_score is None or winner_score > best_score:
+                        best_score = winner_score
+                        best_text = winner_text
+                        best_container_found = True
+                        best_count = len(matches)
+                    continue
             blocks = _group_candidate_blocks(candidate_nodes, parents)
             if not blocks:
                 continue
