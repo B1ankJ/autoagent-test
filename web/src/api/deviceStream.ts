@@ -243,6 +243,123 @@ export async function postDeviceInput(serial: string, cmd: DeviceInputRequest): 
   await client.post(`/devices/${serial}/input`, cmd)
 }
 
+// H.264 over HTTP chunked — same capture pipeline as the WebSocket
+// streamer, but the transport is plain HTTP so it works through L7
+// reverse proxies that strip WebSocket Upgrade headers. Browser uses
+// WebCodecs VideoDecoder via the existing NAL parser.
+
+export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [state, setState] = useState<StreamState>('closed')
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
+  const retryCount = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
+  const decoderRef = useRef<VideoDecoder | null>(null)
+  const bufferRef = useRef<Uint8Array>(new Uint8Array(0))
+  const spsRef = useRef<Uint8Array | null>(null)
+  const ppsRef = useRef<Uint8Array | null>(null)
+  const frameCountRef = useRef(0)
+  const frameTimestampRef = useRef(0)
+
+  const connect = useCallback(() => {
+    if (!serial) return
+    if (typeof VideoDecoder === 'undefined') {
+      setState('unsupported')
+      return
+    }
+
+    setState('connecting')
+    bufferRef.current = new Uint8Array(0)
+    spsRef.current = null
+    ppsRef.current = null
+    frameCountRef.current = 0
+    frameTimestampRef.current = 0
+
+    const decoder = new VideoDecoder({
+      output: (frame) => {
+        const canvas = canvasRef.current
+        if (canvas) {
+          canvas.width = frame.displayWidth
+          canvas.height = frame.displayHeight
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(frame, 0, 0)
+        }
+        frame.close()
+      },
+      error: (e) => console.error('VideoDecoder error', e),
+    })
+    decoderRef.current = decoder
+
+    const token = getToken()
+    const url = `/api/v1/devices/${encodeURIComponent(serial)}/stream.h264?token=${token}`
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+
+    ;(async () => {
+      try {
+        const resp = await fetch(url, { signal: ctrl.signal })
+        if (!resp.ok || !resp.body) {
+          setState('error')
+          return
+        }
+        retryCount.current = 0
+        setState('live')
+        const reader = resp.body.getReader()
+        for (;;) {
+          const { value, done } = await reader.read()
+          if (done) break
+          if (!value || value.length === 0) continue
+          const combined = new Uint8Array(bufferRef.current.length + value.length)
+          combined.set(bufferRef.current)
+          combined.set(value, bufferRef.current.length)
+          bufferRef.current = parseAndDecodeNALUs(
+            combined,
+            decoder,
+            spsRef,
+            ppsRef,
+            frameCountRef,
+            frameTimestampRef,
+            setLatencyMs,
+          )
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        console.warn('[http-stream] read failed', err)
+      } finally {
+        try {
+          decoder.close()
+        } catch {
+          // ignore
+        }
+        if (retryCount.current < MAX_RETRIES) {
+          retryCount.current++
+          setTimeout(connect, RETRY_DELAY_MS)
+        } else {
+          setState('error')
+        }
+      }
+    })()
+  }, [serial])
+
+  const reconnect = useCallback(() => {
+    retryCount.current = 0
+    abortRef.current?.abort()
+    connect()
+  }, [connect])
+
+  useEffect(() => {
+    if (!serial) return
+    connect()
+    return () => {
+      retryCount.current = MAX_RETRIES
+      abortRef.current?.abort()
+      decoderRef.current?.close()
+    }
+  }, [serial, connect])
+
+  return { canvasRef, state, latencyMs, reconnect }
+}
+
 // Screenshot polling — works through any HTTP-only reverse proxy.
 // Use when WebSocket H264 streaming is blocked by the network path.
 

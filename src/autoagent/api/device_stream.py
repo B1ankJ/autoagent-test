@@ -6,6 +6,7 @@ import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from autoagent.auth.bearer import BearerAuthError, resolve_bearer_subject
@@ -101,6 +102,97 @@ async def device_screenshot(serial: str, token: str | None = None) -> Response:
         content=stdout,
         media_type="image/png",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+async def _spawn_screenrecord(serial: str) -> tuple[asyncio.subprocess.Process, int, int]:
+    """Start `screenrecord` on the device and return (proc, width, height).
+
+    Replaces any prior stream for the same serial to avoid two screenrecord
+    processes fighting for the encoder.
+    """
+    w, h = await asyncio.to_thread(get_screen_resolution, serial, 720)
+    old = _active_streams.pop(serial, None)
+    if old is not None:
+        await _kill_proc(old)
+    proc = await asyncio.create_subprocess_exec(
+        "adb",
+        "-s",
+        serial,
+        "exec-out",
+        "sh",
+        "-c",
+        f"screenrecord --output-format=h264 --size={w}x{h} -"
+        " 2>/tmp/sr_err.txt; cat /tmp/sr_err.txt >&2",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _active_streams[serial] = proc
+    return proc, w, h
+
+
+@router.get("/{serial}/stream.h264")
+async def device_stream_http(serial: str, token: str | None = None) -> StreamingResponse:
+    """H.264 Annex-B byte stream over plain HTTP chunked transfer.
+
+    Same capture pipeline as the WebSocket endpoint, but works through L7
+    reverse proxies (e.g. openresty) that strip the WebSocket `Upgrade`
+    header. The browser consumes this with `fetch().body.getReader()` and
+    feeds chunks to WebCodecs `VideoDecoder`.
+
+    `X-Accel-Buffering: no` asks nginx/openresty not to buffer the
+    response, which is required for sub-second latency.
+    """
+    _require_query_token(token)
+    _validate_serial(serial)
+    try:
+        proc, w, h = await _spawn_screenrecord(serial)
+    except AdbCommandError as e:
+        raise HTTPException(status_code=502, detail=f"device not reachable: {e}") from e
+    log.info("device_stream_http %s started pid=%s size=%sx%s", serial, proc.pid, w, h)
+
+    async def gen() -> asyncio.AsyncIterator[bytes]:
+        first = True
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(65536), timeout=8.0)
+                except asyncio.TimeoutError:
+                    try:
+                        stderr_data = await asyncio.wait_for(
+                            proc.stderr.read(4096), timeout=1.0
+                        )
+                    except asyncio.TimeoutError:
+                        stderr_data = b""
+                    log.warning(
+                        "device_stream_http %s no data in 8s, stderr=%r",
+                        serial,
+                        stderr_data.decode(errors="replace"),
+                    )
+                    return
+                if not chunk:
+                    return
+                if first:
+                    log.info(
+                        "device_stream_http %s first chunk: %d bytes magic=%s",
+                        serial,
+                        len(chunk),
+                        chunk[:8].hex(),
+                    )
+                    first = False
+                yield chunk
+        finally:
+            _active_streams.pop(serial, None)
+            await _kill_proc(proc)
+            log.info("device_stream_http %s stopped", serial)
+
+    return StreamingResponse(
+        gen(),
+        media_type="video/h264",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",  # tell nginx/openresty not to buffer
+        },
     )
 
 
