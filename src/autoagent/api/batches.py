@@ -160,22 +160,24 @@ async def create_batch_file(
 
 
 @router.get("/stats")
-async def batch_stats() -> dict[str, int]:
+async def batch_stats(q: str | None = None) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
     Returns {"total": N, "queued": .., "running": .., "done": .., "failed": ..,
     "cancelled": ..}. Statuses with zero rows are filled in to keep the
-    frontend shape stable.
+    frontend shape stable. When `q` is given, totals reflect the filtered set.
     """
-    counts = await count_batches_by_status()
+    counts = await count_batches_by_status(q=q or None)
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
     return counts
 
 
 @router.get("", response_model=list[BatchSummary])
-async def list_all(limit: int = 50, offset: int = 0) -> list[BatchSummary]:
-    rows = await list_batches(limit=limit, offset=offset)
+async def list_all(
+    limit: int = 50, offset: int = 0, q: str | None = None
+) -> list[BatchSummary]:
+    rows = await list_batches(limit=limit, offset=offset, q=q or None)
     return [
         BatchSummary(
             batch_id=r.id,

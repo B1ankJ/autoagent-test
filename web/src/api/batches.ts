@@ -10,15 +10,16 @@ import {
 import { client } from './client'
 export { useBatchStream } from '../hooks/useBatchStream'
 
-export function useBatches(params?: { limit?: number; offset?: number }) {
+export function useBatches(params?: { limit?: number; offset?: number; q?: string }) {
   const limit = params?.limit ?? 50
   const offset = params?.offset ?? 0
+  const q = params?.q?.trim() || undefined
   return useQuery({
-    queryKey: ['batches', limit, offset],
+    queryKey: ['batches', limit, offset, q ?? null],
     queryFn: async () =>
       (
         await client.get<BatchSummary[]>('/batches', {
-          params: { limit, offset },
+          params: { limit, offset, ...(q ? { q } : {}) },
         })
       ).data,
     placeholderData: (prev) => prev,
@@ -34,11 +35,18 @@ export interface BatchStats {
   cancelled: number
 }
 
-export function useBatchStats() {
+export function useBatchStats(params?: { q?: string }) {
+  const q = params?.q?.trim() || undefined
   return useQuery({
-    queryKey: ['batches', 'stats'],
-    queryFn: async () => (await client.get<BatchStats>('/batches/stats')).data,
+    queryKey: ['batches', 'stats', q ?? null],
+    queryFn: async () =>
+      (
+        await client.get<BatchStats>('/batches/stats', {
+          params: q ? { q } : {},
+        })
+      ).data,
     refetchInterval: 5000,
+    placeholderData: (prev) => prev,
   })
 }
 

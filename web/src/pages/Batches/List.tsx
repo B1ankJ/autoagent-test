@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
-import { Button, Empty, Select, Space, Table, Typography } from 'antd'
+import { Button, Empty, Input, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBatches, useBatchStats } from '../../api/batches'
 import { ModeTag } from '../../components/ModeTag'
@@ -12,11 +12,24 @@ export function BatchList() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
+
+  // Debounce search input so each keystroke doesn't fire a query.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedQ(searchInput.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [searchInput])
+
   const { data, isLoading } = useBatches({
     limit: pageSize,
     offset: (page - 1) * pageSize,
+    q: debouncedQ,
   })
-  const { data: stats } = useBatchStats()
+  const { data: stats } = useBatchStats({ q: debouncedQ })
   const [statusFilter, setStatusFilter] = useState<BatchStatus | undefined>()
   const [modeFilter, setModeFilter] = useState<ExecutionMode | undefined>()
 
@@ -69,7 +82,14 @@ export function BatchList() {
           新建批次
         </Button>
       </Space>
-      <Space>
+      <Space wrap>
+        <Input.Search
+          placeholder="搜索批次名/ID/Prompt 内容"
+          allowClear
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          style={{ width: 320 }}
+        />
         <Select
           allowClear
           placeholder="Status"

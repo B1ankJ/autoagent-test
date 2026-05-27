@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
-from autoagent.models.db import Batch
+from autoagent.models.db import Batch, Sample
 from autoagent.storage.database import get_sessionmaker
+
+
+def _like_term(q: str) -> str:
+    # Escape LIKE metacharacters so a user typing "%foo" doesn't match everything.
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 async def create_batch(
@@ -40,22 +46,56 @@ async def get_batch(batch_id: str) -> Batch | None:
         return await s.get(Batch, batch_id)
 
 
-async def list_batches(limit: int = 50, offset: int = 0) -> list[Batch]:
+async def list_batches(
+    limit: int = 50, offset: int = 0, q: str | None = None
+) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
+        stmt = select(Batch)
+        if q:
+            # Match batch name OR any of its samples' prompt JSON. The JSON is
+            # stored as a Text column so LIKE substring search works fine for
+            # ad-hoc lookups. Distinct keeps multi-match samples from inflating
+            # the result. Slow on huge tables but adequate for the scale here.
+            term = _like_term(q)
+            stmt = (
+                stmt.outerjoin(Sample, Sample.batch_id == Batch.id)
+                .where(
+                    or_(
+                        Batch.name.like(term, escape="\\"),
+                        Batch.id.like(term, escape="\\"),
+                        Sample.prompts_sent_json.like(term, escape="\\"),
+                    )
+                )
+                .distinct()
+            )
         result = await s.execute(
-            select(Batch).order_by(desc(Batch.created_at)).limit(limit).offset(offset)
+            stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset)
         )
         return list(result.scalars().all())
 
 
-async def count_batches_by_status() -> dict[str, int]:
-    """Return {status: count} across all batches, plus a 'total' aggregate."""
+async def count_batches_by_status(q: str | None = None) -> dict[str, int]:
+    """Return {status: count}, plus a 'total' aggregate.
+
+    When `q` is given, counts only batches whose name/id or any sample's
+    prompt JSON contains the substring. Status breakdown reflects the
+    filtered set so the dashboard cards stay consistent with the list.
+    """
     sm = get_sessionmaker()
     async with sm() as s:
-        result = await s.execute(
-            select(Batch.status, func.count(Batch.id)).group_by(Batch.status)
-        )
+        stmt = select(Batch.status, func.count(func.distinct(Batch.id)))
+        if q:
+            term = _like_term(q)
+            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+                or_(
+                    Batch.name.like(term, escape="\\"),
+                    Batch.id.like(term, escape="\\"),
+                    Sample.prompts_sent_json.like(term, escape="\\"),
+                )
+            )
+        stmt = stmt.group_by(Batch.status)
+        result = await s.execute(stmt)
         out: dict[str, int] = {}
         for status, count in result.all():
             out[str(status)] = int(count)
