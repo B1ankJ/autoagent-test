@@ -115,15 +115,19 @@ async def _spawn_screenrecord(serial: str) -> tuple[asyncio.subprocess.Process, 
     old = _active_streams.pop(serial, None)
     if old is not None:
         await _kill_proc(old)
+    # Use exec-out directly; the prior shell wrapper that staged stderr through
+    # /tmp/sr_err.txt failed on devices where /tmp is not writable (busybox
+    # would emit "sh: can't create ..." to stdout and contaminate the H264
+    # stream). adb's exec-out already keeps stdout/stderr cleanly separated.
     proc = await asyncio.create_subprocess_exec(
         "adb",
         "-s",
         serial,
         "exec-out",
-        "sh",
-        "-c",
-        f"screenrecord --output-format=h264 --size={w}x{h} -"
-        " 2>/tmp/sr_err.txt; cat /tmp/sr_err.txt >&2",
+        "screenrecord",
+        "--output-format=h264",
+        f"--size={w}x{h}",
+        "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -179,6 +183,26 @@ async def device_stream_http(serial: str, token: str | None = None) -> Streaming
                         len(chunk),
                         chunk[:8].hex(),
                     )
+                    # Valid H264 starts with an Annex-B NAL start code. Anything
+                    # else (typically shell error text) means the device can't
+                    # produce a stream — drain stderr and bail with the real
+                    # message instead of letting the browser decoder choke.
+                    if not chunk.startswith(b"\x00\x00\x00\x01") and not chunk.startswith(
+                        b"\x00\x00\x01"
+                    ):
+                        try:
+                            err_data = await asyncio.wait_for(
+                                proc.stderr.read(4096), timeout=0.5
+                            )
+                        except asyncio.TimeoutError:
+                            err_data = b""
+                        log.warning(
+                            "device_stream_http %s non-H264 first chunk, stdout=%r stderr=%r",
+                            serial,
+                            chunk[:200].decode(errors="replace"),
+                            err_data.decode(errors="replace"),
+                        )
+                        return
                     first = False
                 yield chunk
         finally:
@@ -229,15 +253,19 @@ async def _stream_h264(ws: WebSocket, serial: str) -> None:
     if old is not None:
         await _kill_proc(old)
 
+    # Use exec-out directly; the prior shell wrapper that staged stderr through
+    # /tmp/sr_err.txt failed on devices where /tmp is not writable (busybox
+    # would emit "sh: can't create ..." to stdout and contaminate the H264
+    # stream). adb's exec-out already keeps stdout/stderr cleanly separated.
     proc = await asyncio.create_subprocess_exec(
         "adb",
         "-s",
         serial,
         "exec-out",
-        "sh",
-        "-c",
-        f"screenrecord --output-format=h264 --size={w}x{h} -"
-        " 2>/tmp/sr_err.txt; cat /tmp/sr_err.txt >&2",
+        "screenrecord",
+        "--output-format=h264",
+        f"--size={w}x{h}",
+        "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
