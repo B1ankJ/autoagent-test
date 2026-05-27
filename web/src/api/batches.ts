@@ -10,10 +10,18 @@ import {
 import { client } from './client'
 export { useBatchStream } from '../hooks/useBatchStream'
 
-export function useBatches() {
+export function useBatches(params?: { limit?: number; offset?: number }) {
+  const limit = params?.limit ?? 50
+  const offset = params?.offset ?? 0
   return useQuery({
-    queryKey: ['batches'],
-    queryFn: async () => (await client.get<BatchSummary[]>('/batches')).data,
+    queryKey: ['batches', limit, offset],
+    queryFn: async () =>
+      (
+        await client.get<BatchSummary[]>('/batches', {
+          params: { limit, offset },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
   })
 }
 

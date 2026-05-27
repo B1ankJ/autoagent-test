@@ -7,7 +7,7 @@ import { BatchStatus, BatchSummary } from '../types/api'
 
 export function Dashboard() {
   const navigate = useNavigate()
-  const { data } = useBatches()
+  const { data } = useBatches({ limit: 10 })
   const { data: stats } = useBatchStats()
   const batches = data ?? []
   const byStatus = {

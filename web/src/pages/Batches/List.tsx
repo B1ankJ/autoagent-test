@@ -3,22 +3,32 @@ import { Button, Empty, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useBatches } from '../../api/batches'
+import { useBatches, useBatchStats } from '../../api/batches'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
 import { BatchStatus, BatchSummary, ExecutionMode } from '../../types/api'
 
 export function BatchList() {
   const navigate = useNavigate()
-  const { data, isLoading } = useBatches()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const { data, isLoading } = useBatches({
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  })
+  const { data: stats } = useBatchStats()
   const [statusFilter, setStatusFilter] = useState<BatchStatus | undefined>()
   const [modeFilter, setModeFilter] = useState<ExecutionMode | undefined>()
 
+  // Filters run on the current page only — the backend doesn't filter yet.
+  // The total reflects the unfiltered server-side count so pagination stays
+  // honest; if the user filters, partial pages are an accepted trade-off.
   const rows = (data ?? []).filter(
     (batch) =>
       (!statusFilter || batch.status === statusFilter) &&
       (!modeFilter || batch.mode === modeFilter),
   )
+  const total = stats?.total ?? 0
 
   const columns: ColumnsType<BatchSummary> = [
     {
@@ -100,7 +110,18 @@ export function BatchList() {
           loading={isLoading}
           dataSource={rows}
           columns={columns}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['20', '50', '100', '200'],
+            showTotal: (n) => `共 ${n} 条`,
+            onChange: (p, ps) => {
+              setPage(p)
+              setPageSize(ps)
+            },
+          }}
         />
       )}
     </Space>
