@@ -1,25 +1,23 @@
 import { Card, Col, Row, Space, Statistic, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
-import { useBatches } from '../api/batches'
+import { useBatches, useBatchStats } from '../api/batches'
 import { StatusTag } from '../components/StatusTag'
 import { BatchStatus, BatchSummary } from '../types/api'
 
 export function Dashboard() {
   const navigate = useNavigate()
   const { data } = useBatches()
+  const { data: stats } = useBatchStats()
   const batches = data ?? []
-  const byStatus: Record<BatchStatus, number> = {
-    queued: 0,
-    running: 0,
-    done: 0,
-    failed: 0,
-    cancelled: 0,
+  const byStatus = {
+    queued: stats?.queued ?? 0,
+    running: stats?.running ?? 0,
+    done: stats?.done ?? 0,
+    failed: stats?.failed ?? 0,
+    cancelled: stats?.cancelled ?? 0,
   }
-
-  for (const batch of batches) {
-    byStatus[batch.status] += 1
-  }
+  const total = stats?.total ?? batches.length
 
   const recent = [...batches].slice(0, 10)
   const columns: ColumnsType<BatchSummary> = [
@@ -47,7 +45,7 @@ export function Dashboard() {
       <Row gutter={16}>
         <Col span={4}>
           <Card>
-            <Statistic title="Total" value={batches.length} />
+            <Statistic title="Total" value={total} />
           </Card>
         </Col>
         <Col span={4}>

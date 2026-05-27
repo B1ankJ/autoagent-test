@@ -17,6 +17,23 @@ export function useBatches() {
   })
 }
 
+export interface BatchStats {
+  total: number
+  queued: number
+  running: number
+  done: number
+  failed: number
+  cancelled: number
+}
+
+export function useBatchStats() {
+  return useQuery({
+    queryKey: ['batches', 'stats'],
+    queryFn: async () => (await client.get<BatchStats>('/batches/stats')).data,
+    refetchInterval: 5000,
+  })
+}
+
 export function useBatch(id: string | undefined) {
   return useQuery({
     queryKey: ['batch', id],

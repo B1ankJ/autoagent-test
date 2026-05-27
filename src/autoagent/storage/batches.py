@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 
 from autoagent.models.db import Batch
 from autoagent.storage.database import get_sessionmaker
@@ -47,6 +47,20 @@ async def list_batches(limit: int = 50, offset: int = 0) -> list[Batch]:
             select(Batch).order_by(desc(Batch.created_at)).limit(limit).offset(offset)
         )
         return list(result.scalars().all())
+
+
+async def count_batches_by_status() -> dict[str, int]:
+    """Return {status: count} across all batches, plus a 'total' aggregate."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        result = await s.execute(
+            select(Batch.status, func.count(Batch.id)).group_by(Batch.status)
+        )
+        out: dict[str, int] = {}
+        for status, count in result.all():
+            out[str(status)] = int(count)
+        out["total"] = sum(out.values())
+        return out
 
 
 async def update_batch_status(batch_id: str, status: str) -> None:

@@ -25,7 +25,7 @@ from autoagent.models.api import (
     Mode,
     ScreenshotInfo,
 )
-from autoagent.storage.batches import get_batch, list_batches
+from autoagent.storage.batches import count_batches_by_status, get_batch, list_batches
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
@@ -157,6 +157,20 @@ async def create_batch_file(
         target_profile_default=target_profile_default,
     )
     return BatchCreatedResponse(batch_id=batch_id)
+
+
+@router.get("/stats")
+async def batch_stats() -> dict[str, int]:
+    """Aggregate counts across all batches, independent of list pagination.
+
+    Returns {"total": N, "queued": .., "running": .., "done": .., "failed": ..,
+    "cancelled": ..}. Statuses with zero rows are filled in to keep the
+    frontend shape stable.
+    """
+    counts = await count_batches_by_status()
+    for status in ("queued", "running", "done", "failed", "cancelled"):
+        counts.setdefault(status, 0)
+    return counts
 
 
 @router.get("", response_model=list[BatchSummary])
