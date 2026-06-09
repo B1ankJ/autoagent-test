@@ -14,6 +14,7 @@ import {
 import { useState } from 'react'
 import { client } from '../../api/client'
 import { ResponseComparison } from '../../components/ResponseComparison'
+import { PageHeader } from '../../components/states/PageHeader'
 import { useProfiles } from '../../api/profiles'
 import { useAsyncResult, useRunAsync } from '../../api/tests'
 import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
@@ -98,9 +99,14 @@ export function TestsQuick() {
   const llmEnabled = hasLLMExtractionData(currentResult?.llm_responses, currentResult?.llm_errors)
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Typography.Title level={3}>单次测试</Typography.Title>
-      <Card>
+    <div>
+      <PageHeader
+        eyebrow="任务"
+        title="单次测试 Quick Test"
+        subtitle="试一条 prompt,验证 profile 是否生效;同步立等结果,异步走 task_id 轮询。"
+      />
+      <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 880 }}>
+      <Card size="small">
         <Form<FormValues>
           form={form}
           layout="vertical"
@@ -140,13 +146,14 @@ export function TestsQuick() {
       </Card>
 
       {asyncTaskId && !currentResult ? (
-        <Card>
-          <Spin /> 异步任务运行中... (task_id: {asyncTaskId})
+        <Card size="small">
+          <Spin /> 异步任务运行中...{' '}
+          <span className="aa-mono aa-muted">task_id: {asyncTaskId}</span>
         </Card>
       ) : null}
 
       {currentResult ? (
-        <Card title={`结果 · ${currentResult.status}`}>
+        <Card size="small" title={`结果 · ${currentResult.status}`}>
           <Typography.Paragraph>
             duration: {currentResult.duration_ms ?? '-'} ms
           </Typography.Paragraph>
@@ -171,6 +178,7 @@ export function TestsQuick() {
           />
         </Card>
       ) : null}
-    </Space>
+      </Space>
+    </div>
   )
 }
