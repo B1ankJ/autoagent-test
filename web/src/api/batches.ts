@@ -115,6 +115,22 @@ export function useCancelBatch() {
   })
 }
 
+export function useRerunBatch() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (args: { id: string; status?: 'failed' | 'all' }) => {
+      const response = await client.post<BatchCreatedResponse>(
+        `/batches/${args.id}/rerun`,
+        null,
+        { params: { status: args.status ?? 'failed' } },
+      )
+      return response.data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['batches'] }),
+  })
+}
+
 export function statusIsTerminal(status: BatchStatus): boolean {
   return status === 'done' || status === 'failed' || status === 'cancelled'
 }

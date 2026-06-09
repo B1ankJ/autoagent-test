@@ -23,6 +23,7 @@ from autoagent.models.api import (
     BatchDetail,
     BatchSummary,
     Mode,
+    Sample,
     ScreenshotInfo,
 )
 from autoagent.storage.batches import count_batches_by_status, get_batch, list_batches
@@ -230,6 +231,50 @@ async def download_results(batch_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="results file not found")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{batch_id}.jsonl")
+
+
+@router.post("/{batch_id}/rerun", response_model=BatchCreatedResponse, status_code=201)
+async def rerun(batch_id: str, status: str = "failed") -> BatchCreatedResponse:
+    """Submit a new batch reusing samples from `batch_id` with the given status.
+
+    Default `status=failed` covers the common "re-run only failures" case;
+    `status=all` re-runs every sample regardless of outcome. Sample metadata
+    that wasn't persisted (retry/timeout_sec/new_session/callback_url) falls
+    back to defaults — users who need finer control should rebuild the batch.
+    """
+    if status not in {"failed", "all", "timeout", "extraction_failed", "cancelled"}:
+        raise HTTPException(status_code=400, detail=f"unsupported status filter: {status!r}")
+
+    original = await get_batch(batch_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail="batch not found")
+
+    results = await list_samples_for_batch(batch_id)
+    if status == "all":
+        chosen = results
+    else:
+        chosen = [r for r in results if r.status == status]
+    if not chosen:
+        raise HTTPException(status_code=400, detail=f"no samples with status={status}")
+
+    samples = [
+        Sample(
+            id=r.id,
+            prompts=r.prompts_sent or [""],
+            mode=r.mode,
+            target_profile=r.target_profile,
+        )
+        for r in chosen
+    ]
+    sch = get_scheduler()
+    new_id = await sch.submit(
+        name=f"{original.name} (rerun {status})",
+        mode=original.mode,  # type: ignore[arg-type]
+        concurrency=original.concurrency,
+        samples=samples,
+        target_profile_default=original.target_profile_default,
+    )
+    return BatchCreatedResponse(batch_id=new_id)
 
 
 @router.post("/{batch_id}/cancel", status_code=202)

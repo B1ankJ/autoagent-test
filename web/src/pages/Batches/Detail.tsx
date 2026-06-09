@@ -1,9 +1,10 @@
-import { ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, ExperimentOutlined, RedoOutlined } from '@ant-design/icons'
 import {
   App,
   Button,
   Card,
   Descriptions,
+  Dropdown,
   Input,
   Popconfirm,
   Progress,
@@ -15,7 +16,12 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { statusIsTerminal, useBatchStream, useCancelBatch } from '../../api/batches'
+import {
+  statusIsTerminal,
+  useBatchStream,
+  useCancelBatch,
+  useRerunBatch,
+} from '../../api/batches'
 import { DownloadButton } from '../../components/DownloadButton'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -30,6 +36,7 @@ export function BatchDetail() {
   const navigate = useNavigate()
   const { data, isLoading } = useBatchStream(id)
   const cancel = useCancelBatch()
+  const rerun = useRerunBatch()
   const { message } = App.useApp()
   const [filter, setFilter] = useState<SampleFilter>('all')
   const [search, setSearch] = useState('')
@@ -74,6 +81,16 @@ export function BatchDetail() {
     try {
       await cancel.mutateAsync(data.batch_id)
       message.success('已请求取消')
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const onRerun = async (which: 'failed' | 'all') => {
+    try {
+      const result = await rerun.mutateAsync({ id: data.batch_id, status: which })
+      message.success('已创建重跑批次')
+      navigate(`/batches/${result.batch_id}`)
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -144,14 +161,39 @@ export function BatchDetail() {
         }
         extra={
           <>
+            {statusIsTerminal(data.status) ? (
+              <Dropdown.Button
+                loading={rerun.isPending}
+                icon={<RedoOutlined />}
+                onClick={() => onRerun('failed')}
+                disabled={data.failed === 0}
+                menu={{
+                  items: [
+                    {
+                      key: 'failed',
+                      label: `重跑失败 (${data.failed})`,
+                      disabled: data.failed === 0,
+                      onClick: () => onRerun('failed'),
+                    },
+                    {
+                      key: 'all',
+                      label: `重跑全部 (${data.total})`,
+                      onClick: () => onRerun('all'),
+                    },
+                  ],
+                }}
+              >
+                重跑失败 {data.failed > 0 ? `(${data.failed})` : ''}
+              </Dropdown.Button>
+            ) : null}
             <Popconfirm
               title="取消此批次?"
               description="取消后未完成 sample 将中止,已完成结果保留。"
               onConfirm={onCancel}
               disabled={!canCancel}
             >
-              <Button danger disabled={!canCancel}>
-                取消
+              <Button danger disabled={!canCancel} loading={cancel.isPending}>
+                {cancel.isPending ? '取消中…' : '取消'}
               </Button>
             </Popconfirm>
             <DownloadButton batchId={data.batch_id} />
