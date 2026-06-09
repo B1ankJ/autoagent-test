@@ -30,7 +30,7 @@ import {
   useWebBuilderSession,
 } from '../../api/webProfileBuilder'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 type PickField = 'input' | 'send' | 'response' | 'ready_check' | 'new_session'
 
@@ -160,12 +160,11 @@ export default function WebBuilder() {
   // ── Start screen ────────────────────────────────────────────────────────────
   if (!sessionId) {
     return (
-      <div style={{ maxWidth: 600, margin: '40px auto' }}>
-        <Title level={4}>Web Profile Builder</Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-          填写目标网址，启动浏览器后在截图上点击各元素完成配置，无需手动写 YAML。
+      <div style={{ maxWidth: 600, margin: '24px auto 0' }}>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+          填写目标网址,启动浏览器后在截图上点击各元素完成配置,无需手动写 YAML。
         </Text>
-        <Card>
+        <Card size="small">
           <Form form={startForm} layout="vertical" onFinish={handleStart}>
             <Form.Item
               label="目标 URL"

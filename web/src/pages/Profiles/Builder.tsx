@@ -925,11 +925,9 @@ export default function Builder() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Typography.Title level={3} style={{ margin: 0 }}>
-        Build Profile
-      </Typography.Title>
-
-      <Card title="Session Setup">
+      {/* Title is provided by the outer BuilderHub PageHeader + Tab label,
+          so this page starts straight at Session Setup. */}
+      <Card size="small" title="Session Setup">
         <Form layout="vertical">
           <Form.Item label="Android Device">
             <Select
@@ -976,7 +974,7 @@ export default function Builder() {
         </Form>
       </Card>
 
-      <Card title="Capture Steps">
+      <Card size="small" title="Capture Steps">
         <Steps
           direction="vertical"
           items={CAPTURE_STEPS.map((step) => ({
@@ -1068,7 +1066,7 @@ export default function Builder() {
         </div>
       </Card>
 
-      <Card title="New Session Action" style={{ marginTop: 16 }}>
+      <Card size="small" title="New Session Action" style={{ marginTop: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Radio.Group
             value={newSessionStrategy}
@@ -1251,7 +1249,7 @@ export default function Builder() {
       </Card>
 
       {session ? (
-        <Card title="Session State">
+        <Card size="small" title="Session State">
           <Descriptions column={1} size="small">
             <Descriptions.Item label="Session ID">{session.id}</Descriptions.Item>
             <Descriptions.Item label="Status">{session.status}</Descriptions.Item>
@@ -1263,7 +1261,7 @@ export default function Builder() {
       {session ? (
         <Row gutter={16} align="top">
           <Col xs={24} lg={14}>
-            <Card title="Runtime Status" loading={runtime.isLoading && !runtimeData}>
+            <Card size="small" title="Runtime Status" loading={runtime.isLoading && !runtimeData}>
               {runtimeData ? (
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
                   <Alert
@@ -1350,7 +1348,7 @@ export default function Builder() {
                 <Empty description="启动 session 后自动显示运行状态" />
               )}
             </Card>
-            <Card title="Review Items" style={{ marginTop: 16 }}>
+            <Card size="small" title="Review Items" style={{ marginTop: 16 }}>
               {!draft?.review_items.length ? (
                 <Empty description="先完成 capture 并生成 draft" />
               ) : (
@@ -1554,7 +1552,7 @@ export default function Builder() {
                 </Space>
               )}
             </Card>
-            <Card title="Connectivity Result" style={{ marginTop: 16 }}>
+            <Card size="small" title="Connectivity Result" style={{ marginTop: 16 }}>
               {connectivityResult ? (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   <Alert

@@ -319,7 +319,10 @@ describe('Builder', () => {
   it('renders guided builder steps', async () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
-    expect(await screen.findByText('Build Profile')).toBeInTheDocument()
+    // Page title now lives in the outer BuilderHub PageHeader; assert the
+    // first session card instead so the page-internal structure is still
+    // verified.
+    expect(await screen.findByText('Session Setup')).toBeInTheDocument()
     expect(screen.getByText('Capture Idle State')).toBeInTheDocument()
     expect(screen.getByText('Capture Editing State')).toBeInTheDocument()
     expect(
