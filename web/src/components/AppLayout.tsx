@@ -1,38 +1,140 @@
 import {
+  AppstoreOutlined,
+  CompassOutlined,
+  ControlOutlined,
   DashboardOutlined,
-  MobileOutlined,
   ExperimentOutlined,
   FileTextOutlined,
   LogoutOutlined,
+  MobileOutlined,
   SettingOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { Button, Layout, Menu, Space, Typography } from 'antd'
+import type { MenuProps } from 'antd'
+import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logoutApi } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
+import { CommandPalette } from './CommandPalette'
+import { ThemeToggle } from './ThemeToggle'
 
 const { Header, Sider, Content } = Layout
 
-const menuItems = [
-  { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-  { key: '/devices', icon: <MobileOutlined />, label: 'Devices' },
-  { key: '/profiles', icon: <FileTextOutlined />, label: 'Profiles' },
-  { key: '/profiles/web-builder', icon: <FileTextOutlined />, label: 'Web Builder' },
-  { key: '/tests/quick', icon: <ThunderboltOutlined />, label: '单次测试' },
-  { key: '/batches', icon: <ExperimentOutlined />, label: 'Batches' },
-  { key: '/config', icon: <SettingOutlined />, label: 'Config' },
+interface NavItem {
+  key: string
+  label: string
+  icon: React.ReactNode
+  match?: (path: string) => boolean
+}
+
+interface NavGroup {
+  key: string
+  label: string
+  items: NavItem[]
+}
+
+const NAV: NavGroup[] = [
+  {
+    key: 'home',
+    label: '首页',
+    items: [
+      {
+        key: '/',
+        label: 'Dashboard',
+        icon: <DashboardOutlined />,
+        match: (p) => p === '/',
+      },
+    ],
+  },
+  {
+    key: 'work',
+    label: '任务',
+    items: [
+      {
+        key: '/tests/quick',
+        label: '单次测试',
+        icon: <ThunderboltOutlined />,
+      },
+      {
+        key: '/batches',
+        label: '批次 Batches',
+        icon: <ExperimentOutlined />,
+      },
+    ],
+  },
+  {
+    key: 'resources',
+    label: '资源',
+    items: [
+      {
+        key: '/devices',
+        label: '设备 Devices',
+        icon: <MobileOutlined />,
+      },
+      {
+        key: '/profiles',
+        label: '配置档 Profiles',
+        icon: <FileTextOutlined />,
+        // Profiles edit/new live under /profiles/* but builder routes are siblings.
+        match: (p) =>
+          p === '/profiles' ||
+          (p.startsWith('/profiles/') &&
+            !p.startsWith('/profiles/builder') &&
+            !p.startsWith('/profiles/web-builder')),
+      },
+      {
+        key: '/profiles/builder',
+        label: '配置档构建器',
+        icon: <CompassOutlined />,
+        match: (p) =>
+          p.startsWith('/profiles/builder') || p.startsWith('/profiles/web-builder'),
+      },
+    ],
+  },
+  {
+    key: 'system',
+    label: '系统',
+    items: [
+      {
+        key: '/config',
+        label: '设置 Config',
+        icon: <SettingOutlined />,
+      },
+    ],
+  },
 ]
+
+function buildMenuItems(): MenuProps['items'] {
+  return NAV.map((group) => ({
+    key: group.key,
+    type: 'group',
+    label: group.label,
+    children: group.items.map((item) => ({
+      key: item.key,
+      icon: item.icon,
+      label: item.label,
+    })),
+  }))
+}
+
+function findActiveKey(path: string): string {
+  for (const group of NAV) {
+    for (const item of group.items) {
+      const matched = item.match ? item.match(path) : path.startsWith(item.key)
+      if (matched) return item.key
+    }
+  }
+  return '/'
+}
 
 export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
 
-  const selected = menuItems
-    .map((item) => item.key)
-    .filter((key) => (key === '/' ? location.pathname === '/' : location.pathname.startsWith(key)))
-    .slice(-1)
+  const items = useMemo(() => buildMenuItems(), [])
+  const selected = useMemo(() => [findActiveKey(location.pathname)], [location.pathname])
 
   const onLogout = async () => {
     await logoutApi()
@@ -42,36 +144,96 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={220}>
-        <div style={{ color: 'white', padding: 16, fontWeight: 600 }}>AutoAgent Test</div>
+      <Sider width={232} style={{ borderRight: '1px solid var(--aa-border)' }}>
+        <div
+          style={{
+            padding: '18px 18px 12px',
+            color: 'rgba(255,255,255,0.92)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              background:
+                'linear-gradient(135deg, var(--aa-cobalt) 0%, #6486FF 100%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(37,71,208,0.45)',
+            }}
+          >
+            <AppstoreOutlined style={{ color: '#fff', fontSize: 14 }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
+              AutoAgent Test
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'rgba(255,255,255,0.42)',
+                fontFamily: 'var(--aa-mono)',
+              }}
+            >
+              v0.4
+            </span>
+          </div>
+        </div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={selected}
-          items={menuItems}
+          items={items}
           onClick={({ key }) => navigate(key)}
+          style={{ borderInlineEnd: 0, marginTop: 4 }}
         />
       </Sider>
       <Layout>
         <Header
           style={{
-            background: '#fff',
-            paddingInline: 24,
+            background: 'var(--aa-surface)',
+            paddingInline: 20,
             display: 'flex',
-            justifyContent: 'flex-end',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid var(--aa-border)',
           }}
         >
-          <Space>
-            <Typography.Text>admin</Typography.Text>
-            <Button icon={<LogoutOutlined />} onClick={onLogout}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: 'var(--aa-text-muted)',
+              fontSize: 12,
+            }}
+          >
+            <ControlOutlined />
+            <span>按 </span>
+            <span className="aa-kbd">⌘</span>
+            <span className="aa-kbd">K</span>
+            <span> 打开命令面板</span>
+          </div>
+          <Space size={10}>
+            <ThemeToggle />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              admin
+            </Typography.Text>
+            <Button size="small" icon={<LogoutOutlined />} onClick={onLogout}>
               登出
             </Button>
           </Space>
         </Header>
-        <Content style={{ padding: 24 }}>
+        <Content style={{ padding: '20px 24px' }}>
           <Outlet />
         </Content>
       </Layout>
+      <CommandPalette />
     </Layout>
   )
 }

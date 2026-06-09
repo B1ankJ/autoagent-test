@@ -1,9 +1,18 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { App, Button, Empty, Popconfirm, Space, Table, Tabs, Typography } from 'antd'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
+import { App, Button, Popconfirm, Space, Table, Tabs } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import { useDeleteProfile, useProfiles } from '../../api/profiles'
 import { ModeTag } from '../../components/ModeTag'
+import { EmptyState } from '../../components/states/EmptyState'
+import { PageHeader } from '../../components/states/PageHeader'
+import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { ProfileSummary } from '../../types/api'
 
 export function ProfileList() {
@@ -22,18 +31,21 @@ export function ProfileList() {
   for (const profile of data ?? []) {
     groups[profile.platform]?.push(profile)
   }
+  const total = (data ?? []).length
 
   const columns: ColumnsType<ProfileSummary> = [
-    { title: 'Name', dataIndex: 'name' },
+    { title: '名称', dataIndex: 'name' },
     {
-      title: 'Platform',
+      title: '平台',
       dataIndex: 'platform',
+      width: 140,
       render: (platform: ProfileSummary['platform']) => <ModeTag mode={platform} />,
     },
     {
       title: '操作',
+      width: 200,
       render: (_value, row) => (
-        <Space>
+        <Space size={4}>
           <Button
             size="small"
             icon={<EditOutlined />}
@@ -63,47 +75,73 @@ export function ProfileList() {
 
   const renderTab = (rows: ProfileSummary[]) =>
     rows.length === 0 ? (
-      <Empty description="暂无" />
+      <EmptyState
+        compact
+        icon={<FileTextOutlined />}
+        title="还没有配置档"
+        description="新建一个 YAML,或用构建器从实机录制生成。"
+        action={
+          <Space size={6}>
+            <Button size="small" type="primary" onClick={() => navigate('/profiles/new')}>
+              新建
+            </Button>
+            <Button size="small" onClick={() => navigate('/profiles/builder')}>
+              打开构建器
+            </Button>
+          </Space>
+        }
+      />
     ) : (
-      <Table rowKey="name" dataSource={rows} columns={columns} pagination={false} />
+      <Table rowKey="name" size="small" dataSource={rows} columns={columns} pagination={false} />
     )
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          Profiles
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/profiles/new')}>
-          新建
-        </Button>
-        <Button icon={<ThunderboltOutlined />} onClick={() => navigate('/profiles/builder')}>
-          Build Profile
-        </Button>
-      </Space>
-      <Tabs
-        defaultActiveKey="api"
-        items={[
-          { key: 'api', label: `API (${groups.api.length})`, children: renderTab(groups.api) },
-          { key: 'web', label: `Web (${groups.web.length})`, children: renderTab(groups.web) },
-          {
-            key: 'android',
-            label: `Android (${groups.android.length})`,
-            children: renderTab(groups.android),
-          },
-          {
-            key: 'agent_pc',
-            label: `Agent PC (${groups.agent_pc.length})`,
-            children: renderTab(groups.agent_pc),
-          },
-          {
-            key: 'agent_android',
-            label: `Agent Android (${groups.agent_android.length})`,
-            children: renderTab(groups.agent_android),
-          },
-        ]}
+    <div>
+      <PageHeader
+        eyebrow="资源"
+        title="配置档 Profiles"
+        subtitle={`共 ${total} 个 profile,按平台分组`}
+        extra={
+          <Space size={6}>
+            <Button icon={<ThunderboltOutlined />} onClick={() => navigate('/profiles/builder')}>
+              构建器
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/profiles/new')}
+            >
+              新建
+            </Button>
+          </Space>
+        }
       />
-      {isLoading ? <div>加载中...</div> : null}
-    </Space>
+      {isLoading ? (
+        <PageSkeleton table rows={3} />
+      ) : (
+        <Tabs
+          defaultActiveKey="api"
+          items={[
+            { key: 'api', label: `API (${groups.api.length})`, children: renderTab(groups.api) },
+            { key: 'web', label: `Web (${groups.web.length})`, children: renderTab(groups.web) },
+            {
+              key: 'android',
+              label: `Android (${groups.android.length})`,
+              children: renderTab(groups.android),
+            },
+            {
+              key: 'agent_pc',
+              label: `Agent PC (${groups.agent_pc.length})`,
+              children: renderTab(groups.agent_pc),
+            },
+            {
+              key: 'agent_android',
+              label: `Agent Android (${groups.agent_android.length})`,
+              children: renderTab(groups.agent_android),
+            },
+          ]}
+        />
+      )}
+    </div>
   )
 }
