@@ -1,4 +1,10 @@
-import { InboxOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  ExperimentOutlined,
+  InboxOutlined,
+  MinusCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons'
 import {
   App,
   Button,
@@ -17,6 +23,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateBatchJson, useUploadBatch } from '../../api/batches'
 import { useProfiles } from '../../api/profiles'
+import { EmptyState } from '../../components/states/EmptyState'
+import { PageHeader } from '../../components/states/PageHeader'
 import { ExecutionMode } from '../../types/api'
 
 interface JsonFormValues {
@@ -115,27 +123,47 @@ export function BatchNew() {
     }
   }
 
+  const breadcrumb = (
+    <Space size={6}>
+      <a onClick={() => navigate('/batches')} style={{ color: 'var(--aa-text-muted)' }}>
+        <ArrowLeftOutlined /> 批次
+      </a>
+      <span>/ 新建</span>
+    </Space>
+  )
+
   if (profiles.data !== undefined && availableProfiles.length === 0) {
     return (
-      <Card>
-        <Typography.Paragraph>至少创建一个可用 Profile 才能跑批次。</Typography.Paragraph>
-        <Button type="primary" onClick={() => navigate('/profiles/new')}>
-          去新建 Profile
-        </Button>
-      </Card>
+      <div>
+        <PageHeader eyebrow={breadcrumb} title="新建批次" />
+        <EmptyState
+          icon={<ExperimentOutlined />}
+          title="还没有可用的 Profile"
+          description="批次需要绑定一个 profile 才能跑;先去创建一个,再回来。"
+          action={
+            <Button type="primary" onClick={() => navigate('/profiles/new')}>
+              去新建 Profile
+            </Button>
+          }
+        />
+      </div>
     )
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Typography.Title level={3}>新建批次</Typography.Title>
+    <div>
+      <PageHeader
+        eyebrow={breadcrumb}
+        title="新建批次"
+        subtitle="手动填表或上传 JSONL/JSON/CSV 文件,两种方式互斥。"
+      />
       <Tabs
         items={[
           {
             key: 'json',
             label: 'JSON 表单',
             children: (
-              <Card>
+              <Card size="small">
                 <Form<JsonFormValues>
                   form={jsonForm}
                   layout="vertical"
@@ -228,7 +256,7 @@ export function BatchNew() {
             key: 'upload',
             label: '文件上传',
             children: (
-              <Card>
+              <Card size="small">
                 <Form<UploadFormValues>
                   form={uploadForm}
                   layout="vertical"
@@ -283,6 +311,6 @@ export function BatchNew() {
           },
         ]}
       />
-    </Space>
+    </div>
   )
 }
