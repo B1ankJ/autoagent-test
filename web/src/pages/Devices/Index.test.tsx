@@ -8,15 +8,24 @@ import { DevicesPage } from './Index'
 
 const mutateAsync = vi.fn()
 
-vi.mock('../../api/deviceStream', () => ({
-  useDeviceStream: () => ({
+vi.mock('../../api/deviceStream', () => {
+  const stubHandle = {
     canvasRef: { current: null },
-    state: 'closed',
+    state: 'closed' as const,
     latencyMs: null,
     reconnect: vi.fn(),
-  }),
-  postDeviceInput: vi.fn(),
-}))
+  }
+  return {
+    useDeviceStream: () => stubHandle,
+    useDeviceHttpStream: () => stubHandle,
+    useDeviceScreenshot: () => ({
+      imgRef: { current: null },
+      state: 'closed' as const,
+      reconnect: vi.fn(),
+    }),
+    postDeviceInput: vi.fn(),
+  }
+})
 
 vi.mock('../../api/devices', () => ({
   useDevices: () => ({
