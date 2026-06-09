@@ -1,7 +1,9 @@
-import { App, Button, Card, Input, Modal, Skeleton, Space, Typography } from 'antd'
+import { ArrowLeftOutlined } from '@ant-design/icons'
+import { App, Button, Card, Input, Modal, Skeleton, Space } from 'antd'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useProfile, useSaveProfile, useValidateProfile } from '../../api/profiles'
+import { PageHeader } from '../../components/states/PageHeader'
 import { ConnectivityTestModal } from './ConnectivityTestModal'
 
 // Monaco is ~3 MB. Defer the import so it doesn't land in the initial chunk;
@@ -65,13 +67,39 @@ export function ProfileEdit() {
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Typography.Title level={3}>{isNew ? '新建 Profile' : `编辑 ${routeName}`}</Typography.Title>
-      <Card>
+    <div>
+      <PageHeader
+        eyebrow={
+          <Space size={6}>
+            <a onClick={() => navigate('/profiles')} style={{ color: 'var(--aa-text-muted)' }}>
+              <ArrowLeftOutlined /> 配置档
+            </a>
+            <span>/ {isNew ? '新建' : '编辑'}</span>
+          </Space>
+        }
+        title={isNew ? '新建 Profile' : routeName!}
+        subtitle={
+          isNew ? '填写 YAML 内容,保存后即可用于批次和单次测试。' : '修改后点保存,可在此页直接做连通性测试。'
+        }
+        extra={
+          <>
+            <Button onClick={onValidate} loading={validate.isPending}>
+              校验
+            </Button>
+            <Button disabled={isNew || !profileMode} onClick={() => setTestOpen(true)}>
+              连通性测试
+            </Button>
+            <Button type="primary" onClick={onSave} loading={save.isPending}>
+              保存
+            </Button>
+          </>
+        }
+      />
+      <Card size="small">
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           {isNew ? (
             <Input
-              placeholder="profile 名称"
+              placeholder="profile 名称(用于文件名,不含空格/中文)"
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
@@ -79,18 +107,6 @@ export function ProfileEdit() {
           <Suspense fallback={<Skeleton.Input active style={{ width: '100%', height: 400 }} />}>
             <YamlEditor value={yaml} onChange={setYaml} />
           </Suspense>
-          <Space>
-            <Button onClick={onValidate} loading={validate.isPending}>
-              校验
-            </Button>
-            <Button type="primary" onClick={onSave} loading={save.isPending}>
-              保存
-            </Button>
-            <Button disabled={isNew || !profileMode} onClick={() => setTestOpen(true)}>
-              连通性测试
-            </Button>
-            <Button onClick={() => navigate('/profiles')}>返回</Button>
-          </Space>
         </Space>
       </Card>
       <ConnectivityTestModal
@@ -99,6 +115,6 @@ export function ProfileEdit() {
         mode={profileMode ?? 'api'}
         onClose={() => setTestOpen(false)}
       />
-    </Space>
+    </div>
   )
 }
