@@ -1,3 +1,4 @@
+import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import { downloadSampleActions } from '../../api/batches'
@@ -5,6 +6,9 @@ import { useBatchStream } from '../../hooks/useBatchStream'
 import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
+import { EmptyState } from '../../components/states/EmptyState'
+import { PageHeader } from '../../components/states/PageHeader'
+import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
 function formatLocator(locator: unknown): string {
@@ -66,58 +70,104 @@ export function SampleDetail() {
   const summary = metadataSummary(sample?.metadata)
   const llmEnabled = hasLLMExtractionData(sample?.llm_responses, sample?.llm_errors)
 
+  const breadcrumb = (
+    <Space size={6}>
+      <a onClick={() => navigate(`/batches/${id}`)} style={{ color: 'var(--aa-text-muted)' }}>
+        <ArrowLeftOutlined /> 批次
+      </a>
+      <span>/ Sample</span>
+    </Space>
+  )
+
   if (!data) {
-    return <div>加载中...</div>
+    return (
+      <div>
+        <PageHeader eyebrow={breadcrumb} title="加载中…" />
+        <PageSkeleton rows={6} />
+      </div>
+    )
   }
 
   if (!sample) {
     return (
       <div>
-        Sample 不存在 <Button onClick={() => navigate(`/batches/${id}`)}>返回批次</Button>
+        <PageHeader eyebrow={breadcrumb} title="Sample 未找到" />
+        <EmptyState
+          title="Sample 不存在"
+          description="可能已被清理,或 sample ID 拼写错了。"
+          action={<Button onClick={() => navigate(`/batches/${id}`)}>返回批次</Button>}
+        />
       </div>
     )
   }
 
+  const replayAvailable = !!sample.metadata?.action_replay_available
+
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Space>
-        <Button onClick={() => navigate(`/batches/${id}`)}>← 返回批次</Button>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          Sample {sample.id}
-        </Typography.Title>
-      </Space>
-      <Card>
-        <Descriptions column={2} bordered size="small">
-          <Descriptions.Item label="Status">
-            {sample.status ? <StatusTag status={sample.status} /> : '-'}
+    <div>
+      <PageHeader
+        eyebrow={breadcrumb}
+        title={<span className="aa-mono">{sample.id}</span>}
+        subtitle={
+          <Space size={10}>
+            {sample.status ? <StatusTag status={sample.status} /> : null}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {sample.target_profile}
+            </Typography.Text>
+          </Space>
+        }
+        extra={
+          replayAvailable ? (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => downloadSampleActions(data.batch_id, sample.id)}
+            >
+              下载回放 JSONL
+            </Button>
+          ) : null
+        }
+      />
+
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Descriptions column={2} size="small" colon={false} labelStyle={{ color: 'var(--aa-text-muted)' }}>
+          <Descriptions.Item label="耗时 (ms)">
+            <span className="aa-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {sample.duration_ms ?? '-'}
+            </span>
           </Descriptions.Item>
-          <Descriptions.Item label="Profile">{sample.target_profile}</Descriptions.Item>
-          <Descriptions.Item label="Duration (ms)">{sample.duration_ms ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="New session">
             {String(sample.new_session ?? false)}
           </Descriptions.Item>
           <Descriptions.Item label="运行设备">
-            {sample.device_serial ?? (sample.metadata?.device_serial as string | undefined) ?? '-'}
+            <span className="aa-mono">
+              {sample.device_serial ?? (sample.metadata?.device_serial as string | undefined) ?? '-'}
+            </span>
           </Descriptions.Item>
           <Descriptions.Item label="等待设备">
             {String(sample.waiting_for_device ?? false)}
           </Descriptions.Item>
           {sample.started_at ? (
-            <Descriptions.Item label="Started">{sample.started_at}</Descriptions.Item>
+            <Descriptions.Item label="开始">
+              <span className="aa-mono">{sample.started_at}</span>
+            </Descriptions.Item>
           ) : null}
           {sample.ended_at ? (
-            <Descriptions.Item label="Finished">{sample.ended_at}</Descriptions.Item>
+            <Descriptions.Item label="结束">
+              <span className="aa-mono">{sample.ended_at}</span>
+            </Descriptions.Item>
           ) : null}
         </Descriptions>
       </Card>
 
       {sample.error ? (
-        <Card title="Error">
-          <Typography.Paragraph type="danger">{sample.error}</Typography.Paragraph>
+        <Card size="small" title="Error" style={{ marginBottom: 16 }}>
+          <Typography.Paragraph type="danger" style={{ margin: 0 }}>
+            {sample.error}
+          </Typography.Paragraph>
         </Card>
       ) : null}
 
-      <Card title="Prompts + Responses">
+      <Card size="small" title="Prompts + Responses" style={{ marginBottom: 16 }}>
         <Collapse
           defaultActiveKey={promptRounds.map((_, index) => String(index))}
           items={promptRounds.map((prompt, index) => ({
@@ -144,18 +194,12 @@ export function SampleDetail() {
         />
       </Card>
 
-      <Card title="截图">
+      <Card size="small" title="截图" style={{ marginBottom: 16 }}>
         <ScreenshotStrip batchId={data.batch_id} sampleId={sample.id} />
       </Card>
 
-      {sample.metadata?.action_replay_available ? (
-        <Button onClick={() => downloadSampleActions(data.batch_id, sample.id)}>
-          下载回放 JSONL
-        </Button>
-      ) : null}
-
       {Array.isArray(sample.metadata?.action_log) && sample.metadata.action_log.length ? (
-        <Card title="动作日志">
+        <Card size="small" title="动作日志" style={{ marginBottom: 16 }}>
           <Table
             size="small"
             rowKey={(record) =>
@@ -189,16 +233,38 @@ export function SampleDetail() {
       ) : null}
 
       {sample.metadata ? (
-        <Card title="Metadata">
-          <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="设备序列号">{summary.deviceSerial}</Descriptions.Item>
+        <Card size="small" title="Metadata">
+          <Descriptions
+            column={2}
+            size="small"
+            colon={false}
+            labelStyle={{ color: 'var(--aa-text-muted)' }}
+            style={{ marginBottom: 12 }}
+          >
+            <Descriptions.Item label="设备序列号">
+              <span className="aa-mono">{summary.deviceSerial}</span>
+            </Descriptions.Item>
             <Descriptions.Item label="截图数量">{summary.screenshots}</Descriptions.Item>
             <Descriptions.Item label="动作数">{summary.actionLog}</Descriptions.Item>
             <Descriptions.Item label="可下载回放">{summary.replay}</Descriptions.Item>
           </Descriptions>
-          <pre>{JSON.stringify(sample.metadata, null, 2)}</pre>
+          <pre
+            className="aa-mono"
+            style={{
+              margin: 0,
+              padding: 12,
+              background: 'var(--aa-surface-alt)',
+              border: '1px solid var(--aa-border)',
+              borderRadius: 6,
+              fontSize: 11,
+              maxHeight: 320,
+              overflow: 'auto',
+            }}
+          >
+            {JSON.stringify(sample.metadata, null, 2)}
+          </pre>
         </Card>
       ) : null}
-    </Space>
+    </div>
   )
 }
