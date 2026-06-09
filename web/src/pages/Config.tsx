@@ -1,6 +1,7 @@
-import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch, Typography } from 'antd'
+import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch } from 'antd'
 import { useEffect, useState } from 'react'
 import { LLMCheckResult, useDefaults, useSaveDefaults, useSaveVLM, useTestLLM, useVLM } from '../api/config'
+import { PageHeader } from '../components/states/PageHeader'
 import { GlobalDefaults, VLMConfig } from '../types/api'
 
 const STAGE_TEXT: Record<LLMCheckResult['stage'], string> = {
@@ -64,10 +65,15 @@ export function ConfigPage() {
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Typography.Title level={3}>Config</Typography.Title>
+    <div>
+      <PageHeader
+        eyebrow="系统"
+        title="设置 Config"
+        subtitle="VLM 凭据与运行时全局默认值"
+      />
+      <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 720 }}>
 
-      <Card title="VLM">
+      <Card title="VLM" size="small">
         <Form
           form={vlmForm}
           layout="vertical"
@@ -108,7 +114,7 @@ export function ConfigPage() {
         </Form>
       </Card>
 
-      <Card title="Global Defaults">
+      <Card title="Global Defaults" size="small">
         <Form
           form={defaultsForm}
           layout="vertical"
@@ -141,6 +147,7 @@ export function ConfigPage() {
           </Button>
         </Form>
       </Card>
-    </Space>
+      </Space>
+    </div>
   )
 }
