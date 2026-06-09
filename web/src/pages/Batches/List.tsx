@@ -2,7 +2,7 @@ import { PlusOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { Button, Input, Select, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useBatches, useBatchStats } from '../../api/batches'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
@@ -11,19 +11,60 @@ import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { BatchStatus, BatchSummary, ExecutionMode } from '../../types/api'
 
+// Filter state is mirrored to the URL query so refresh / share / back-button
+// all retain the user's view. Keys are intentionally short to keep URLs scannable.
+const QP_Q = 'q'
+const QP_STATUS = 'status'
+const QP_MODE = 'mode'
+const QP_PAGE = 'page'
+const QP_SIZE = 'size'
+
 export function BatchList() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedQ, setDebouncedQ] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
+  const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
+  const debouncedQ = searchParams.get(QP_Q) ?? ''
+  const statusFilter = (searchParams.get(QP_STATUS) as BatchStatus | null) || undefined
+  const modeFilter = (searchParams.get(QP_MODE) as ExecutionMode | null) || undefined
+
+  // Local-only input mirror so typing doesn't trigger a URL/query write on
+  // every keystroke; commit to URL after a 300ms debounce.
+  const [searchInput, setSearchInput] = useState(debouncedQ)
+
+  const setParam = (key: string, value: string | undefined) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (value === undefined || value === '') next.delete(key)
+        else next.set(key, value)
+        return next
+      },
+      { replace: true },
+    )
+  }
+  const setStatusFilter = (v: BatchStatus | undefined) => {
+    setParam(QP_STATUS, v)
+    setParam(QP_PAGE, undefined)
+  }
+  const setModeFilter = (v: ExecutionMode | undefined) => {
+    setParam(QP_MODE, v)
+    setParam(QP_PAGE, undefined)
+  }
+  const setPage = (v: number) => setParam(QP_PAGE, v === 1 ? undefined : String(v))
+  const setPageSize = (v: number) => setParam(QP_SIZE, v === 20 ? undefined : String(v))
 
   useEffect(() => {
     const handle = setTimeout(() => {
-      setDebouncedQ(searchInput.trim())
-      setPage(1)
+      const trimmed = searchInput.trim()
+      if (trimmed !== debouncedQ) {
+        setParam(QP_Q, trimmed || undefined)
+        setParam(QP_PAGE, undefined)
+      }
     }, 300)
     return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
   const { data, isLoading, isError, error, refetch } = useBatches({
@@ -32,8 +73,6 @@ export function BatchList() {
     q: debouncedQ,
   })
   const { data: stats } = useBatchStats({ q: debouncedQ })
-  const [statusFilter, setStatusFilter] = useState<BatchStatus | undefined>()
-  const [modeFilter, setModeFilter] = useState<ExecutionMode | undefined>()
 
   const rows = useMemo(
     () =>
