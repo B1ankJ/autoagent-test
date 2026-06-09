@@ -1,9 +1,14 @@
-import { App, Button, Card, Input, Modal, Space, Typography } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { App, Button, Card, Input, Modal, Skeleton, Space, Typography } from 'antd'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useProfile, useSaveProfile, useValidateProfile } from '../../api/profiles'
-import { YamlEditor } from '../../components/YamlEditor'
 import { ConnectivityTestModal } from './ConnectivityTestModal'
+
+// Monaco is ~3 MB. Defer the import so it doesn't land in the initial chunk;
+// users on Dashboard/Batches never need it.
+const YamlEditor = lazy(() =>
+  import('../../components/YamlEditor').then((m) => ({ default: m.YamlEditor })),
+)
 
 export function ProfileEdit() {
   const { name: routeName } = useParams()
@@ -71,7 +76,9 @@ export function ProfileEdit() {
               onChange={(event) => setName(event.target.value)}
             />
           ) : null}
-          <YamlEditor value={yaml} onChange={setYaml} />
+          <Suspense fallback={<Skeleton.Input active style={{ width: '100%', height: 400 }} />}>
+            <YamlEditor value={yaml} onChange={setYaml} />
+          </Suspense>
           <Space>
             <Button onClick={onValidate} loading={validate.isPending}>
               校验

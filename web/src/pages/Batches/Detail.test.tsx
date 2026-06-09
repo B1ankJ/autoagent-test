@@ -54,6 +54,7 @@ describe('BatchDetail', () => {
     })
     expect(useBatchStream).toHaveBeenCalledWith('b1')
     expect(screen.getByText('done')).toBeInTheDocument()
-    expect(screen.getByText(/3 \/ 3 完成/)).toBeInTheDocument()
+    expect(screen.getByText('3 / 3')).toBeInTheDocument()
+    expect(screen.getByText(/done 3 · failed 0/)).toBeInTheDocument()
   })
 })

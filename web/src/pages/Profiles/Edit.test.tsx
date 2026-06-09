@@ -27,7 +27,8 @@ describe('ProfileEdit', () => {
 
     renderWithProviders(<ProfileEdit />, { initialPath: '/profiles/new' })
 
-    await userEvent.type(screen.getByTestId('yaml'), 'platform: api\nname: x\n')
+    // YamlEditor is lazy-loaded; wait for the Suspense boundary to resolve.
+    await userEvent.type(await screen.findByTestId('yaml'), 'platform: api\nname: x\n')
     await userEvent.click(screen.getByRole('button', { name: /校\s*验/ }))
 
     await waitFor(() => {
