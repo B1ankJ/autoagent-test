@@ -11,22 +11,32 @@ interface FormValues {
 
 export function Login() {
   const navigate = useNavigate()
-  const location = useLocation() as { state?: { from?: { pathname: string } } }
+  // RequireAuth stores the full target path as a string in state.from; older
+  // bookmarks / direct visits may have no state at all, so fall back to /.
+  const location = useLocation() as { state?: { from?: string | { pathname?: string } } }
   const { isAuthenticated, login } = useAuth()
   const mutation = useLogin()
   const { message } = App.useApp()
 
+  const redirectTarget =
+    typeof location.state?.from === 'string'
+      ? location.state.from
+      : (location.state?.from?.pathname ?? '/')
+  // Guard against /login bouncing back to /login if the captured target is
+  // itself the login page.
+  const safeTarget = redirectTarget.startsWith('/login') ? '/' : redirectTarget
+
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(location.state?.from?.pathname ?? '/', { replace: true })
+      navigate(safeTarget, { replace: true })
     }
-  }, [isAuthenticated, location.state, navigate])
+  }, [isAuthenticated, navigate, safeTarget])
 
   const onFinish = async (values: FormValues) => {
     try {
       const response = await mutation.mutateAsync(values)
       login(response.token)
-      navigate(location.state?.from?.pathname ?? '/', { replace: true })
+      navigate(safeTarget, { replace: true })
     } catch (error) {
       message.error((error as Error).message)
     }

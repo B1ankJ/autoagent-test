@@ -7,7 +7,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    // Serialize the full target (path + query + hash) so query-bearing pages
+    // like /batches?q=foo&page=2 survive the round trip through /login.
+    const from = `${location.pathname}${location.search}${location.hash}`
+    return <Navigate to="/login" state={{ from }} replace />
   }
 
   return <>{children}</>
