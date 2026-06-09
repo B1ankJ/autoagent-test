@@ -31,6 +31,16 @@ import { Sample } from '../../types/api'
 
 type SampleFilter = 'all' | 'running' | 'done' | 'failed' | 'cancelled' | 'queued'
 
+function formatEta(ms: number): string {
+  const sec = Math.max(1, Math.round(ms / 1000))
+  if (sec < 60) return `${sec} 秒`
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min} 分钟`
+  const hr = Math.floor(min / 60)
+  const remMin = min % 60
+  return remMin > 0 ? `${hr} 小时 ${remMin} 分钟` : `${hr} 小时`
+}
+
 export function BatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -76,6 +86,18 @@ export function BatchDetail() {
   const completed = data.done + data.failed
   const canCancel = data.status === 'running' || data.status === 'queued'
   const percent = total ? Math.round((completed / total) * 100) : 0
+  // Naive ETA: remaining samples / concurrency × average per-sample duration.
+  // The avg only stabilizes after a few samples finish, so suppress the
+  // estimate while it's missing or while the batch is queued.
+  const eta = (() => {
+    if (statusIsTerminal(data.status)) return null
+    const remaining = total - completed
+    if (remaining <= 0) return null
+    const avg = data.avg_duration_ms
+    if (!avg || avg <= 0) return null
+    const concurrency = Math.max(1, data.concurrency || 1)
+    return Math.round((remaining / concurrency) * avg)
+  })()
 
   const onCancel = async () => {
     try {
@@ -225,9 +247,16 @@ export function BatchDetail() {
           status={statusIsTerminal(data.status) ? 'normal' : 'active'}
           style={{ marginTop: 12 }}
         />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          done {data.done} · failed {data.failed}
-        </Typography.Text>
+        <Space size={10}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            done {data.done} · failed {data.failed}
+          </Typography.Text>
+          {eta !== null ? (
+            <Typography.Text style={{ fontSize: 12, color: 'var(--aa-cobalt)' }}>
+              · 预计还需 {formatEta(eta)}
+            </Typography.Text>
+          ) : null}
+        </Space>
       </Card>
 
       {allSamples.length === 0 ? (
