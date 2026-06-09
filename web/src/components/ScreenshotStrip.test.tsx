@@ -31,7 +31,9 @@ describe('ScreenshotStrip', () => {
         'src',
         'blob:ready',
       )
-      expect(screen.getByText('步骤 1')).toBeInTheDocument()
+      // Step number now rendered as a zero-padded badge overlay (`01`)
+      // instead of "步骤 1"; pretty label + raw label still shown.
+      expect(screen.getByText('01')).toBeInTheDocument()
       expect(screen.getByText('输入前 1')).toBeInTheDocument()
       expect(screen.getByText('before_input_1')).toBeInTheDocument()
     })

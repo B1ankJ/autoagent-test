@@ -1,6 +1,7 @@
+import { EyeInvisibleOutlined, PictureOutlined } from '@ant-design/icons'
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { Image, Skeleton, Typography } from 'antd'
 import { useEffect } from 'react'
-import { Image, Space, Spin, Typography } from 'antd'
 import { fetchScreenshotBlobUrl, listScreenshots } from '../api/screenshots'
 
 interface Props {
@@ -24,6 +25,9 @@ function formatScreenshotLabel(label: string): string {
   }
   return label
 }
+
+const THUMB_W = 168
+const THUMB_H = 240
 
 export function ScreenshotStrip({ batchId, sampleId }: Props) {
   const screenshots = useQuery({
@@ -55,54 +59,152 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
   }, [screenshotUrls])
 
   if (screenshots.isLoading) {
-    return <Spin />
+    return (
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {[0, 1, 2].map((i) => (
+          <Skeleton.Image active key={i} style={{ width: THUMB_W, height: THUMB_H }} />
+        ))}
+      </div>
+    )
   }
 
   if (!screenshots.data?.length) {
-    return <Typography.Text type="secondary">暂无截图</Typography.Text>
+    return (
+      <div
+        style={{
+          padding: '20px 0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          color: 'var(--aa-text-muted)',
+          fontSize: 13,
+        }}
+      >
+        <PictureOutlined />
+        暂无截图
+      </div>
+    )
   }
 
   return (
     <Image.PreviewGroup>
-      <Space wrap>
-        {screenshots.data.map((shot, index) =>
-          shot.is_sensitive ? (
-            <div
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+        {screenshots.data.map((shot, index) => {
+          const stepNo = String(index + 1).padStart(2, '0')
+          if (shot.is_sensitive) {
+            return (
+              <div
+                key={shot.name}
+                style={{
+                  width: THUMB_W,
+                  height: THUMB_H,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  border: '1px dashed var(--aa-border-strong)',
+                  borderRadius: 8,
+                  background: 'var(--aa-surface-alt)',
+                  color: 'var(--aa-text-muted)',
+                  fontSize: 12,
+                }}
+              >
+                <EyeInvisibleOutlined style={{ fontSize: 20 }} />
+                敏感截图已隐藏
+              </div>
+            )
+          }
+
+          const url = screenshotUrls[index]?.data
+          const pretty = formatScreenshotLabel(shot.label)
+
+          return (
+            <figure
               key={shot.name}
               style={{
-                width: 160,
-                height: 96,
+                margin: 0,
+                width: THUMB_W,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px dashed #d9d9d9',
-                borderRadius: 8,
+                flexDirection: 'column',
+                gap: 6,
               }}
             >
-              <Typography.Text type="secondary">敏感截图已隐藏</Typography.Text>
-            </div>
-          ) : (
-            <Space
-              key={shot.name}
-              direction="vertical"
-              size={4}
-              style={{ alignItems: 'center', width: 160 }}
-            >
-              <Typography.Text strong>{`步骤 ${index + 1}`}</Typography.Text>
-              <Image width={160} src={screenshotUrls[index]?.data} alt={shot.label} />
-              <Typography.Text
-                style={{ width: '100%', textAlign: 'center' }}
-                ellipsis={{ tooltip: `${formatScreenshotLabel(shot.label)} (${shot.label})` }}
+              <div
+                style={{
+                  position: 'relative',
+                  width: THUMB_W,
+                  height: THUMB_H,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  background: 'var(--aa-surface-alt)',
+                  border: '1px solid var(--aa-border)',
+                  cursor: url ? 'zoom-in' : 'default',
+                  transition: 'border-color 120ms ease, transform 120ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--aa-cobalt)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--aa-border)'
+                }}
               >
-                {formatScreenshotLabel(shot.label)}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {shot.label}
-              </Typography.Text>
-            </Space>
-          ),
-        )}
-      </Space>
+                {url ? (
+                  <Image
+                    src={url}
+                    alt={shot.label}
+                    width={THUMB_W}
+                    height={THUMB_H}
+                    style={{ objectFit: 'cover' }}
+                    preview={{
+                      mask: (
+                        <span style={{ fontSize: 12 }}>
+                          步骤 {stepNo} · {pretty}
+                        </span>
+                      ),
+                    }}
+                  />
+                ) : (
+                  <Skeleton.Image active style={{ width: THUMB_W, height: THUMB_H }} />
+                )}
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    left: 6,
+                    padding: '1px 6px',
+                    fontFamily: 'var(--aa-mono)',
+                    fontSize: 10,
+                    color: '#fff',
+                    background: 'rgba(11,13,18,0.7)',
+                    borderRadius: 4,
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  {stepNo}
+                </span>
+              </div>
+              <figcaption
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 1 }}
+              >
+                <Typography.Text
+                  style={{ fontSize: 12, color: 'var(--aa-text)' }}
+                  ellipsis={{ tooltip: `${pretty} (${shot.label})` }}
+                >
+                  {pretty}
+                </Typography.Text>
+                <Typography.Text
+                  className="aa-mono"
+                  style={{ fontSize: 10.5, color: 'var(--aa-text-muted)' }}
+                  ellipsis={{ tooltip: shot.label }}
+                >
+                  {shot.label}
+                </Typography.Text>
+              </figcaption>
+            </figure>
+          )
+        })}
+      </div>
     </Image.PreviewGroup>
   )
 }
