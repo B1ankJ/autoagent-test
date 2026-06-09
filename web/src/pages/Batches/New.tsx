@@ -6,6 +6,7 @@ import {
   PlusOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -19,7 +20,7 @@ import {
   Upload,
 } from 'antd'
 import type { UploadFile } from 'antd'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateBatchJson, useUploadBatch } from '../../api/batches'
 import { useProfiles } from '../../api/profiles'
@@ -48,6 +49,54 @@ interface UploadFormValues {
   target_profile_default?: string
 }
 
+const DRAFT_KEY = 'autoagent_batch_new_draft'
+// Don't pester users with stale drafts older than this (covers "I left
+// this tab open for a week"). 7 days is enough to recover crash/refresh
+// without surfacing things they've moved on from.
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+interface Draft {
+  ts: number
+  values: Partial<JsonFormValues>
+}
+
+function readDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Draft
+    if (!parsed?.values || typeof parsed.ts !== 'number') return null
+    if (Date.now() - parsed.ts > DRAFT_MAX_AGE_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeDraft(values: Partial<JsonFormValues>) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ts: Date.now(), values }))
+  } catch {
+    /* localStorage full / disabled */
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function isDraftMeaningful(values: Partial<JsonFormValues>): boolean {
+  if (values.name && values.name.trim()) return true
+  if (values.target_profile_default) return true
+  if (values.webhook_url && values.webhook_url.trim()) return true
+  const samples = values.samples ?? []
+  return samples.some((s) => (s?.prompts ?? '').trim() || (s?.id ?? '').trim())
+}
+
 export function BatchNew() {
   const navigate = useNavigate()
   const { message } = App.useApp()
@@ -57,6 +106,8 @@ export function BatchNew() {
   const [uploaded, setUploaded] = useState<UploadFile | null>(null)
   const [jsonForm] = Form.useForm<JsonFormValues>()
   const [uploadForm] = Form.useForm<UploadFormValues>()
+  const [pendingDraft, setPendingDraft] = useState<Draft | null>(() => readDraft())
+  const draftSaveTimer = useRef<number | null>(null)
 
   const availableProfiles = profiles.data ?? []
   const jsonMode = Form.useWatch('mode', jsonForm) ?? 'api'
@@ -79,6 +130,32 @@ export function BatchNew() {
     .filter((profile) => profile.platform === uploadPlatform)
     .map((profile) => ({ value: profile.name, label: profile.name }))
 
+  // Persist the JSON-form draft 1.5s after the last edit. Throttling here
+  // avoids hammering localStorage during fast typing.
+  const onJsonValuesChange = (_changed: unknown, all: JsonFormValues) => {
+    if (draftSaveTimer.current) window.clearTimeout(draftSaveTimer.current)
+    draftSaveTimer.current = window.setTimeout(() => {
+      if (isDraftMeaningful(all)) writeDraft(all)
+      else clearDraft()
+    }, 1500)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimer.current) window.clearTimeout(draftSaveTimer.current)
+    }
+  }, [])
+
+  const restoreDraft = () => {
+    if (!pendingDraft) return
+    jsonForm.setFieldsValue(pendingDraft.values)
+    setPendingDraft(null)
+  }
+  const dismissDraft = () => {
+    clearDraft()
+    setPendingDraft(null)
+  }
+
   const onJsonSubmit = async (values: JsonFormValues) => {
     try {
       const result = await createJson.mutateAsync({
@@ -95,6 +172,7 @@ export function BatchNew() {
           new_session: sample.new_session,
         })),
       })
+      clearDraft()
       message.success('已创建')
       navigate(`/batches/${result.batch_id}`)
     } catch (error) {
@@ -164,6 +242,31 @@ export function BatchNew() {
             label: 'JSON 表单',
             children: (
               <Card size="small">
+                {pendingDraft && isDraftMeaningful(pendingDraft.values) ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message={
+                      <Space size={10}>
+                        <span>检测到上次未提交的草稿</span>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {new Date(pendingDraft.ts).toLocaleString()}
+                        </Typography.Text>
+                      </Space>
+                    }
+                    action={
+                      <Space size={6}>
+                        <Button size="small" type="primary" onClick={restoreDraft}>
+                          恢复
+                        </Button>
+                        <Button size="small" onClick={dismissDraft}>
+                          丢弃
+                        </Button>
+                      </Space>
+                    }
+                  />
+                ) : null}
                 <Form<JsonFormValues>
                   form={jsonForm}
                   layout="vertical"
@@ -172,6 +275,7 @@ export function BatchNew() {
                     concurrency: 1,
                     samples: [{ id: 's1', prompts: '' }],
                   }}
+                  onValuesChange={onJsonValuesChange}
                   onFinish={onJsonSubmit}
                 >
                   <Form.Item name="name" label="名称" rules={[{ required: true }]}>
