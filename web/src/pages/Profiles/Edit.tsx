@@ -1,10 +1,10 @@
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import { App, Button, Card, Input, Modal, Skeleton, Space } from 'antd'
+import { ArrowLeftOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
+import { Alert, App, Button, Card, Input, Modal, Skeleton, Space, Typography } from 'antd'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useProfile, useSaveProfile, useValidateProfile } from '../../api/profiles'
 import { PageHeader } from '../../components/states/PageHeader'
-import { ConnectivityTestModal } from './ConnectivityTestModal'
+import { ConnectivityTestModal, type ConnectivitySummary } from './ConnectivityTestModal'
 
 // Monaco is ~3 MB. Defer the import so it doesn't land in the initial chunk;
 // users on Dashboard/Batches never need it.
@@ -21,6 +21,10 @@ export function ProfileEdit() {
   const [name, setName] = useState(routeName ?? '')
   const [yaml, setYaml] = useState('')
   const [testOpen, setTestOpen] = useState(false)
+  const [lastConn, setLastConn] = useState<ConnectivitySummary | null>(null)
+  // Track YAML snapshot when the connectivity test was run; the result is
+  // only meaningful while the YAML is unchanged.
+  const [connYamlSnapshot, setConnYamlSnapshot] = useState<string | null>(null)
 
   const { data } = useProfile(routeName)
   const save = useSaveProfile()
@@ -95,6 +99,41 @@ export function ProfileEdit() {
           </>
         }
       />
+      {lastConn ? (
+        <Alert
+          style={{ marginBottom: 12 }}
+          showIcon
+          icon={lastConn.ok ? <CheckCircleFilled /> : <CloseCircleFilled />}
+          type={lastConn.ok ? 'success' : 'error'}
+          closable
+          onClose={() => {
+            setLastConn(null)
+            setConnYamlSnapshot(null)
+          }}
+          message={
+            <Space size={10}>
+              <span>{lastConn.ok ? '连通正常' : '连通失败'}</span>
+              {connYamlSnapshot !== null && connYamlSnapshot !== yaml ? (
+                <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                  YAML 已修改,需重测
+                </Typography.Text>
+              ) : null}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {new Date(lastConn.ts).toLocaleTimeString()}
+                {lastConn.durationMs != null ? ` · ${lastConn.durationMs} ms` : ''}
+                {' · prompt='}
+                <span className="aa-mono">{lastConn.prompt}</span>
+              </Typography.Text>
+            </Space>
+          }
+          description={lastConn.ok ? undefined : lastConn.error || undefined}
+          action={
+            <Button size="small" onClick={() => setTestOpen(true)}>
+              重测
+            </Button>
+          }
+        />
+      ) : null}
       <Card size="small">
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           {isNew ? (
@@ -114,6 +153,10 @@ export function ProfileEdit() {
         profileName={routeName ?? ''}
         mode={profileMode ?? 'api'}
         onClose={() => setTestOpen(false)}
+        onResult={(summary) => {
+          setLastConn(summary)
+          setConnYamlSnapshot(yaml)
+        }}
       />
     </div>
   )

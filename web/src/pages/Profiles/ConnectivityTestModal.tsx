@@ -5,30 +5,57 @@ import { ResponseComparison } from '../../components/ResponseComparison'
 import { ExecutionMode } from '../../types/api'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
 
+export interface ConnectivitySummary {
+  ok: boolean
+  prompt: string
+  durationMs: number | null
+  error?: string | null
+  ts: number
+}
+
 interface Props {
   open: boolean
   profileName: string
   mode: ExecutionMode
   onClose: () => void
+  /** Reported every time a run resolves (success or failure). */
+  onResult?: (summary: ConnectivitySummary) => void
 }
 
-export function ConnectivityTestModal({ open, profileName, mode, onClose }: Props) {
+export function ConnectivityTestModal({ open, profileName, mode, onClose, onResult }: Props) {
   const [prompt, setPrompt] = useState('hello')
   const run = useRunSync()
   const timeoutSec = mode === 'api' ? 60 : 180
   const requestTimeoutMs = mode === 'api' ? 65_000 : 215_000
 
   const onSend = async () => {
-    await run.mutateAsync({
-      sample: {
-        id: `conn-${Date.now()}`,
-        prompts: [prompt],
-        mode,
-        target_profile: profileName,
-        timeout_sec: timeoutSec,
-      },
-      timeoutMs: requestTimeoutMs,
-    })
+    try {
+      const result = await run.mutateAsync({
+        sample: {
+          id: `conn-${Date.now()}`,
+          prompts: [prompt],
+          mode,
+          target_profile: profileName,
+          timeout_sec: timeoutSec,
+        },
+        timeoutMs: requestTimeoutMs,
+      })
+      onResult?.({
+        ok: result.status === 'done',
+        prompt,
+        durationMs: result.duration_ms ?? null,
+        error: result.status === 'done' ? null : (result.error ?? '未知错误'),
+        ts: Date.now(),
+      })
+    } catch (error) {
+      onResult?.({
+        ok: false,
+        prompt,
+        durationMs: null,
+        error: (error as Error).message,
+        ts: Date.now(),
+      })
+    }
   }
   const llmEnabled = hasLLMExtractionData(run.data?.llm_responses, run.data?.llm_errors)
 
