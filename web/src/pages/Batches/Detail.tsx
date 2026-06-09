@@ -1,4 +1,10 @@
-import { ArrowLeftOutlined, ExperimentOutlined, RedoOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  BellFilled,
+  BellOutlined,
+  ExperimentOutlined,
+  RedoOutlined,
+} from '@ant-design/icons'
 import {
   App,
   Button,
@@ -23,6 +29,12 @@ import {
   useRerunBatch,
 } from '../../api/batches'
 import { DownloadButton } from '../../components/DownloadButton'
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  useBatchDoneNotification,
+  type NotificationPermissionState,
+} from '../../hooks/useBatchDoneNotification'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
@@ -50,6 +62,17 @@ export function BatchDetail() {
   const { message } = App.useApp()
   const [filter, setFilter] = useState<SampleFilter>('all')
   const [search, setSearch] = useState('')
+  const [notifyPerm, setNotifyPerm] = useState<NotificationPermissionState>(
+    () => getNotificationPermission(),
+  )
+
+  useBatchDoneNotification({
+    batchId: data?.batch_id,
+    name: data?.name,
+    status: data?.status,
+    done: data?.done ?? 0,
+    failed: data?.failed ?? 0,
+  })
 
   const allSamples = useMemo(() => data?.samples ?? [], [data?.samples])
   // Per-status counts for the segmented filter labels — computed off the full
@@ -118,6 +141,32 @@ export function BatchDetail() {
     }
   }
 
+  const onToggleNotify = async () => {
+    if (notifyPerm === 'unsupported') {
+      message.warning('当前浏览器不支持通知')
+      return
+    }
+    if (notifyPerm === 'denied') {
+      message.warning('通知权限已被拒绝,请到浏览器设置开启')
+      return
+    }
+    const result = await requestNotificationPermission()
+    setNotifyPerm(result)
+    if (result === 'granted') {
+      message.success('已开启通知,批次完成时会提醒')
+    } else if (result === 'denied') {
+      message.warning('已拒绝通知权限')
+    }
+  }
+  const notifyTitle =
+    notifyPerm === 'granted'
+      ? '通知已启用,批次完成时会提醒'
+      : notifyPerm === 'denied'
+        ? '通知权限已被拒绝'
+        : notifyPerm === 'unsupported'
+          ? '当前浏览器不支持通知'
+          : '开启批次完成通知'
+
   const sampleColumns: ColumnsType<Sample> = [
     {
       title: 'ID',
@@ -183,6 +232,16 @@ export function BatchDetail() {
         }
         extra={
           <>
+            {!statusIsTerminal(data.status) ? (
+              <Button
+                title={notifyTitle}
+                icon={notifyPerm === 'granted' ? <BellFilled /> : <BellOutlined />}
+                type={notifyPerm === 'granted' ? 'primary' : 'default'}
+                onClick={onToggleNotify}
+              >
+                {notifyPerm === 'granted' ? '通知已开' : '通知'}
+              </Button>
+            ) : null}
             {statusIsTerminal(data.status) ? (
               <Dropdown.Button
                 loading={rerun.isPending}
