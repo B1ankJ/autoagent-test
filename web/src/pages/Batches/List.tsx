@@ -33,34 +33,40 @@ export function BatchList() {
   // every keystroke; commit to URL after a 300ms debounce.
   const [searchInput, setSearchInput] = useState(debouncedQ)
 
-  const setParam = (key: string, value: string | undefined) => {
+  // Apply multiple param changes in ONE navigate. Back-to-back
+  // setSearchParams() calls race because each reads the URL fresh, so the
+  // second navigate silently overwrites the first — losing fields.
+  const updateParams = (changes: Record<string, string | undefined>) => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (value === undefined || value === '') next.delete(key)
-        else next.set(key, value)
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === undefined || value === '') next.delete(key)
+          else next.set(key, value)
+        }
         return next
       },
       { replace: true },
     )
   }
   const setStatusFilter = (v: BatchStatus | undefined) => {
-    setParam(QP_STATUS, v)
-    setParam(QP_PAGE, undefined)
+    updateParams({ [QP_STATUS]: v, [QP_PAGE]: undefined })
   }
   const setModeFilter = (v: ExecutionMode | undefined) => {
-    setParam(QP_MODE, v)
-    setParam(QP_PAGE, undefined)
+    updateParams({ [QP_MODE]: v, [QP_PAGE]: undefined })
   }
-  const setPage = (v: number) => setParam(QP_PAGE, v === 1 ? undefined : String(v))
-  const setPageSize = (v: number) => setParam(QP_SIZE, v === 20 ? undefined : String(v))
+  const setPagination = (p: number, ps: number) => {
+    updateParams({
+      [QP_PAGE]: p === 1 ? undefined : String(p),
+      [QP_SIZE]: ps === 20 ? undefined : String(ps),
+    })
+  }
 
   useEffect(() => {
     const handle = setTimeout(() => {
       const trimmed = searchInput.trim()
       if (trimmed !== debouncedQ) {
-        setParam(QP_Q, trimmed || undefined)
-        setParam(QP_PAGE, undefined)
+        updateParams({ [QP_Q]: trimmed || undefined, [QP_PAGE]: undefined })
       }
     }, 300)
     return () => clearTimeout(handle)
@@ -208,10 +214,7 @@ export function BatchList() {
             showSizeChanger: true,
             pageSizeOptions: ['20', '50', '100', '200'],
             showTotal: (n) => `共 ${n} 条`,
-            onChange: (p, ps) => {
-              setPage(p)
-              setPageSize(ps)
-            },
+            onChange: setPagination,
           }}
         />
       )}
