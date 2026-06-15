@@ -233,7 +233,15 @@ class AndroidExecutor(Executor):
                     )
                     await asyncio.sleep(profile.post_send_wait_sec)
                     xml: str | None = None
-                    if profile.complete_detection.type == "pixel_stable":
+                    if profile.complete_detection.type == "fixed_delay":
+                        sample_log.info(
+                            "android sample %s prompt %s wait fixed_delay sec=%.1f",
+                            sample.id,
+                            idx,
+                            profile.complete_detection.wait_sec,
+                        )
+                        await asyncio.sleep(profile.complete_detection.wait_sec)
+                    elif profile.complete_detection.type == "pixel_stable":
                         sample_log.info(
                             "android sample %s prompt %s wait pixel_stable", sample.id, idx
                         )

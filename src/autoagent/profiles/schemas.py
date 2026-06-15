@@ -38,10 +38,27 @@ class SendButtonReenable(BaseModel):
     type: Literal["send_button_reenable"]
 
 
+class FixedDelay(BaseModel):
+    """Just sleep `wait_sec` after sending; no completion polling.
+
+    Use when the target has bounded response time and any stability heuristic
+    would either flap on animations (typing cursor, status-bar clock) or cost
+    more than it saves. `max_wait_sec` is kept so callers that consult it for
+    fallback dumps / outer timeouts have a value to read.
+    """
+
+    type: Literal["fixed_delay"]
+    wait_sec: float = 8.0
+    max_wait_sec: float = 60.0
+
+
 CompleteDetection = Annotated[
-    DomStable | UiTreeStable | PixelStable | SendButtonReenable,
+    DomStable | UiTreeStable | PixelStable | SendButtonReenable | FixedDelay,
     Field(discriminator="type"),
 ]
+
+
+_DEFAULT_FIXED_DELAY = FixedDelay(type="fixed_delay")
 
 
 # ---- API profile ----
@@ -179,7 +196,10 @@ class AndroidProfile(BaseModel):
     # Use for fixed taps that reveal the full reply (e.g. a "scroll to bottom"
     # arrow). Empty (default) ⇒ no-op, downstream behaviour unchanged.
     pre_extract_action: list[ActionStep] = Field(default_factory=list)
-    complete_detection: CompleteDetection
+    # Optional. Omitted ⇒ FixedDelay(wait_sec=8) — sleeps a fixed window after
+    # send and starts extraction; suitable when the target has bounded latency
+    # and stability heuristics would flap on animations.
+    complete_detection: CompleteDetection = Field(default_factory=lambda: _DEFAULT_FIXED_DELAY)
     new_session_wait_sec: float = 3.0
     post_send_wait_sec: float = 10.0
 

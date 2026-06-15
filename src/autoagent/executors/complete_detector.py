@@ -8,7 +8,12 @@ import subprocess
 import time
 from typing import Any
 
-from autoagent.profiles.schemas import CompleteDetection, DomStable, SendButtonReenable
+from autoagent.profiles.schemas import (
+    CompleteDetection,
+    DomStable,
+    FixedDelay,
+    SendButtonReenable,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -24,6 +29,9 @@ async def wait_for_complete(
 ) -> str | None:
     """Block until the chosen strategy reports completion. Raises TimeoutError on timeout."""
 
+    if isinstance(strategy, FixedDelay):
+        await asyncio.sleep(float(strategy.wait_sec))
+        return None
     if isinstance(strategy, DomStable):
         return await _dom_stable(
             page,
