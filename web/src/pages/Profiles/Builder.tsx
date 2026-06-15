@@ -93,7 +93,9 @@ function screenLabelFromPath(path: string): string {
 }
 
 function deviceLabel(device: Device) {
-  return device.label || device.model || device.serial
+  // Always include serial so two devices of the same model can be told apart.
+  const prefix = device.label || device.model
+  return prefix ? `${prefix} (${device.serial})` : device.serial
 }
 
 function runtimeStepStatus(

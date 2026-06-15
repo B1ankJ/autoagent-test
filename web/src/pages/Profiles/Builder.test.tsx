@@ -172,7 +172,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(await screen.findByLabelText('规则 Draft（需人工确认 Review）'))
     await userEvent.click(await screen.findByLabelText('生成时注入 LLM 响应抽取配置'))
@@ -224,7 +224,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await waitFor(() => {
@@ -299,7 +299,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(await screen.findByLabelText('智能 Draft（LLM 自动选择 Review）'))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
@@ -490,7 +490,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
@@ -646,7 +646,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
@@ -798,7 +798,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getAllByRole('button', { name: /Generate Draft/ })[0])
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
@@ -932,7 +932,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
@@ -1066,7 +1066,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
     await userEvent.click(captureButtons[0])
@@ -1208,7 +1208,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
     await userEvent.click(captureButtons[0])
@@ -1305,7 +1305,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -1399,7 +1399,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -1507,7 +1507,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -1584,7 +1584,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -1599,7 +1599,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     expect(confirmSpy).toHaveBeenCalled()
@@ -1697,7 +1697,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -1746,7 +1746,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     expect(await screen.findByText('Runtime Status')).toBeInTheDocument()
@@ -1792,7 +1792,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1821,7 +1821,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1860,7 +1860,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1892,7 +1892,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1924,7 +1924,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1956,7 +1956,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -1995,7 +1995,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -2028,7 +2028,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -2064,7 +2064,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -2109,7 +2109,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -2154,7 +2154,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -2203,7 +2203,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
@@ -2275,7 +2275,7 @@ describe('Builder', () => {
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: '编辑 YAML' }))
@@ -2327,7 +2327,7 @@ describe('Builder', () => {
 
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByText('Pixel 8'))
+    await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
