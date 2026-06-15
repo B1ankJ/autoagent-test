@@ -301,35 +301,55 @@ class AndroidExecutor(Executor):
                             pass
                         vlm_clipboard: str | None = None
                         vlm_last_error: str | None = None
-                        # Optional fast path: if a stable button coord is
-                        # configured, tap it once before paying for a VLM call.
-                        if vlm_cfg.default_coords is not None:
-                            dx, dy = vlm_cfg.default_coords
-                            await asyncio.to_thread(device.click, dx, dy)
-                            await asyncio.sleep(0.5)
-                            cached_clipboard = await asyncio.to_thread(
-                                lambda: device.clipboard or ""
-                            )
-                            if cached_clipboard.strip():
-                                vlm_clipboard = cached_clipboard.strip()
+                        # Optional fast path: try each cached coord before paying
+                        # for a VLM call. Clipboard is cleared per candidate so
+                        # a wrong tap that wrote a URL / share text into the
+                        # clipboard can't masquerade as a hit on the next try.
+                        if vlm_cfg.default_coords:
+                            for cand_idx, (dx, dy) in enumerate(vlm_cfg.default_coords):
+                                try:
+                                    await asyncio.to_thread(
+                                        lambda: setattr(device, "clipboard", "")
+                                    )
+                                except Exception:
+                                    pass
+                                await asyncio.to_thread(device.click, dx, dy)
+                                await asyncio.sleep(0.5)
+                                cached_clipboard = await asyncio.to_thread(
+                                    lambda: device.clipboard or ""
+                                )
+                                if cached_clipboard.strip():
+                                    vlm_clipboard = cached_clipboard.strip()
+                                    sample_log.info(
+                                        "android sample %s prompt %s vlm copy-button "
+                                        "default_coords hit #%d/%d: coords=(%d,%d) chars=%d",
+                                        sample.id,
+                                        idx,
+                                        cand_idx + 1,
+                                        len(vlm_cfg.default_coords),
+                                        dx,
+                                        dy,
+                                        len(vlm_clipboard),
+                                    )
+                                    break
                                 sample_log.info(
                                     "android sample %s prompt %s vlm copy-button "
-                                    "default_coords hit: coords=(%d,%d) chars=%d",
+                                    "default_coords miss #%d/%d: coords=(%d,%d)",
                                     sample.id,
                                     idx,
+                                    cand_idx + 1,
+                                    len(vlm_cfg.default_coords),
                                     dx,
                                     dy,
-                                    len(vlm_clipboard),
                                 )
-                            else:
+                            if vlm_clipboard is None:
                                 sample_log.info(
                                     "android sample %s prompt %s vlm copy-button "
-                                    "default_coords miss: coords=(%d,%d), "
+                                    "all %d default_coords candidates missed, "
                                     "falling through to VLM",
                                     sample.id,
                                     idx,
-                                    dx,
-                                    dy,
+                                    len(vlm_cfg.default_coords),
                                 )
                         for vlm_attempt in range(_VLM_MAX_ATTEMPTS):
                             if vlm_clipboard is not None:

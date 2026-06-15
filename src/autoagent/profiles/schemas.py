@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 # ---- shared fragments ----
 
@@ -131,11 +131,21 @@ class CopyButtonVLMConfig(BaseModel):
     api_key: str
     prompt: str | None = None
     timeout_sec: float = 60.0
-    # Optional cached coordinate to try before invoking the VLM. Most pages
-    # render the copy button at a stable position, so tapping it directly is
-    # zero-cost. If the tap doesn't yield clipboard content, fall through to
-    # the VLM. Format: [x, y] in screen pixels.
-    default_coords: tuple[int, int] | None = None
+    # Cached coordinates to try before invoking the VLM. Most pages render the
+    # copy button at a stable position, so tapping it directly is zero-cost.
+    # Accepts either a single [x, y] or a list of [x, y] candidates that are
+    # tried in order; the first whose tap yields non-empty clipboard wins.
+    # All candidates miss → fall through to the VLM loop.
+    default_coords: list[tuple[int, int]] | None = None
+
+    @field_validator("default_coords", mode="before")
+    @classmethod
+    def _normalize_default_coords(cls, value: object) -> object:
+        # Accept legacy `[x, y]` single-coord YAMLs by wrapping into a list.
+        if isinstance(value, (list, tuple)) and len(value) == 2 \
+                and all(isinstance(part, (int, float)) for part in value):
+            return [list(value)]
+        return value
 
 
 class AndroidResponseExtraction(BaseModel):
