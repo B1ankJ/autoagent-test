@@ -12,6 +12,26 @@ _log = logging.getLogger(__name__)
 _NAME_RE = re.compile(r"[A-Za-z0-9_\-]{1,64}")
 
 
+class _ProfileDumper(yaml.SafeDumper):
+    """SafeDumper that flows short scalar-only lists like `[57, 951]`.
+
+    PyYAML's default block style turns coordinate pairs into the very ugly
+    `- - 57\\n  - 951` shape. Flow style keeps them readable while leaving
+    nested object lists (actions, history) as block.
+    """
+
+
+def _list_representer(dumper: yaml.Dumper, data: list) -> yaml.SequenceNode:
+    all_scalar = all(
+        isinstance(item, (int, float, str)) and not isinstance(item, bool) for item in data
+    )
+    flow = all_scalar and len(data) <= 8
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow)
+
+
+_ProfileDumper.add_representer(list, _list_representer)
+
+
 def _dir() -> Path:
     d = get_settings().data_root / "profiles"
     d.mkdir(parents=True, exist_ok=True)
@@ -56,7 +76,8 @@ def save_profile_yaml(name: str, yaml_text: str) -> Profile:
     data["name"] = name
     profile = parse_profile(data)
     _path(name).write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        yaml.dump(data, Dumper=_ProfileDumper, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
     )
     return profile
 
