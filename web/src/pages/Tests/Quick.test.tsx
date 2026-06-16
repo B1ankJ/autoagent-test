@@ -74,8 +74,8 @@ describe('TestsQuick', () => {
     await userEvent.click(screen.getByRole('button', { name: /运\s*行/ }))
 
     expect(await screen.findByText(/结果 · done/)).toBeInTheDocument()
-    expect(await screen.findByText('规则提取')).toBeInTheDocument()
-    expect(screen.getByText('LLM 提取')).toBeInTheDocument()
+    expect(await screen.findByText(/主响应/)).toBeInTheDocument()
+    expect(screen.getByText(/LLM 复核/)).toBeInTheDocument()
     expect(screen.getByText('rule result')).toBeInTheDocument()
     expect(screen.getByText('llm result')).toBeInTheDocument()
   })

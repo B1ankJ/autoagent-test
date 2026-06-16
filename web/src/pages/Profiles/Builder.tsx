@@ -1562,7 +1562,7 @@ export default function Builder() {
                     message="Connectivity Test Result"
                     description={
                       connectivityResult.status === 'done'
-                        ? '已完成连通性验证，可直接对比规则提取与 LLM 提取结果。'
+                        ? '已完成连通性验证，可直接对比主响应与 LLM 复核结果。'
                         : connectivityResult.error ?? connectivityResult.status
                     }
                   />

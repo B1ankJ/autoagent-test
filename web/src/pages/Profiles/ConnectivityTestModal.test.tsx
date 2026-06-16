@@ -56,8 +56,8 @@ describe('ConnectivityTestModal', () => {
 
     await waitFor(() => {
       expect(mutateAsyncMock).toHaveBeenCalled()
-      expect(screen.getByText('规则提取')).toBeInTheDocument()
-      expect(screen.getByText('LLM 提取')).toBeInTheDocument()
+      expect(screen.getByText(/主响应/)).toBeInTheDocument()
+      expect(screen.getByText(/LLM 复核/)).toBeInTheDocument()
       expect(screen.getByText('规则结果')).toBeInTheDocument()
       expect(screen.getByText('LLM 结果')).toBeInTheDocument()
     })
