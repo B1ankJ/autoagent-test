@@ -34,9 +34,16 @@ class DevicePool:
         return count
 
     @asynccontextmanager
-    async def acquire(self, preferred: str | None, timeout_sec: float = 60):
+    async def acquire(
+        self,
+        preferred: str | None,
+        timeout_sec: float = 60,
+        cancel_event: asyncio.Event | None = None,
+    ):
         deadline = time.monotonic() + timeout_sec
         while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise DeviceBusy("cancelled while waiting for device")
             candidates = [
                 device for device in self._list_devices() if device.online and device.enabled
             ]

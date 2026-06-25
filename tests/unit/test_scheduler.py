@@ -77,7 +77,12 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
             return 1
 
         @asynccontextmanager
-        async def acquire(self, preferred: str | None, timeout_sec: float = 60):
+        async def acquire(
+            self,
+            preferred: str | None,
+            timeout_sec: float = 60,
+            cancel_event=None,
+        ):
             seen["preferred"] = preferred
             seen["timeout_sec"] = timeout_sec
             yield "emulator-5554"

@@ -209,7 +209,9 @@ class BatchScheduler:
                                 },
                             )
                             async with self._device_pool.acquire(
-                                getattr(profile, "serial", None), timeout_sec=60
+                                getattr(profile, "serial", None),
+                                timeout_sec=settings.device_acquire_timeout_sec,
+                                cancel_event=state.cancel_event,
                             ) as serial:
                                 ctx.device_serial = serial
                                 ctx.action_replay_path = (

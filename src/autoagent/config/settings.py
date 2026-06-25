@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     default_retry: int = 2
     default_concurrency: int = 1
     default_verbose_logs: bool = True
+    # How long an android sample waits for a free device before giving up.
+    # Defaults to ~2h so concurrently-submitted batches queue behind each
+    # other instead of failing fast after 60s.
+    device_acquire_timeout_sec: float = 7200.0
 
 
 @lru_cache(maxsize=1)
