@@ -1,6 +1,7 @@
 import {
   DeleteOutlined,
   ExperimentOutlined,
+  EyeOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -18,6 +19,7 @@ import {
 } from '../../api/batches'
 import { useDevices } from '../../api/devices'
 import { useProfiles } from '../../api/profiles'
+import { BatchPromptModal } from '../../components/BatchPromptModal'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -44,6 +46,7 @@ export function BatchList() {
   const cancelActive = useCancelActiveBatches()
   const deleteOne = useDeleteBatch()
   const deleteByStatus = useDeleteBatchesByStatus()
+  const [previewBatchId, setPreviewBatchId] = useState<string | null>(null)
 
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
@@ -192,20 +195,26 @@ export function BatchList() {
         <div>
           <a onClick={() => navigate(`/batches/${row.batch_id}`)}>{value}</a>
           {row.preview_prompt ? (
-            <div
+            <a
               className="aa-muted"
-              title={row.preview_prompt}
+              title="点击查看完整 prompt 与响应"
               style={{
+                display: 'block',
                 fontSize: 12,
                 marginTop: 2,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 maxWidth: 480,
+                color: 'inherit',
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setPreviewBatchId(row.batch_id)
               }}
             >
               {row.preview_prompt}
-            </div>
+            </a>
           ) : null}
         </div>
       ),
@@ -241,32 +250,44 @@ export function BatchList() {
     },
     {
       title: '操作',
-      width: 90,
+      width: 120,
       render: (_value, row) => {
         const isActive = row.status === 'queued' || row.status === 'running'
         return (
-          <Popconfirm
-            title="删除该批次"
-            description="将一并删除 DB 记录、JSONL 结果文件和 logs 目录。不可恢复。"
-            okText="删除"
-            okButtonProps={{ danger: true }}
-            cancelText="取消"
-            disabled={isActive}
-            onConfirm={(e) => {
-              e?.stopPropagation()
-              onDeleteOne(row.batch_id)
-            }}
-          >
+          <Space size={0}>
             <Button
               type="text"
               size="small"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={isActive}
-              title={isActive ? '请先取消批次再删除' : '删除批次'}
-              onClick={(e) => e.stopPropagation()}
+              icon={<EyeOutlined />}
+              title="查看完整 prompt 与响应"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPreviewBatchId(row.batch_id)
+              }}
             />
-          </Popconfirm>
+            <Popconfirm
+              title="删除该批次"
+              description="将一并删除 DB 记录、JSONL 结果文件和 logs 目录。不可恢复。"
+              okText="删除"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              disabled={isActive}
+              onConfirm={(e) => {
+                e?.stopPropagation()
+                onDeleteOne(row.batch_id)
+              }}
+            >
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                disabled={isActive}
+                title={isActive ? '请先取消批次再删除' : '删除批次'}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Popconfirm>
+          </Space>
         )
       },
     },
@@ -274,6 +295,10 @@ export function BatchList() {
 
   return (
     <div>
+      <BatchPromptModal
+        batchId={previewBatchId}
+        onClose={() => setPreviewBatchId(null)}
+      />
       <PageHeader
         eyebrow="任务"
         title="批次 Batches"
