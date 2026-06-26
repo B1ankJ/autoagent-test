@@ -121,6 +121,43 @@ interface CancelActiveResponse {
   total: number
 }
 
+interface DeleteByStatusResponse {
+  deleted: number
+  matched: number
+}
+
+export function useDeleteBatch() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await client.delete(`/batches/${id}`)
+    },
+    onSuccess: (_d, id) => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] })
+      queryClient.invalidateQueries({ queryKey: ['batch-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['batch', id] })
+    },
+  })
+}
+
+export function useDeleteBatchesByStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (status: 'done' | 'failed' | 'cancelled' | 'terminal') => {
+      const response = await client.post<DeleteByStatusResponse>(
+        '/batches/delete-by-status',
+        null,
+        { params: { status } },
+      )
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] })
+      queryClient.invalidateQueries({ queryKey: ['batch-stats'] })
+    },
+  })
+}
+
 export function useCancelActiveBatches() {
   const queryClient = useQueryClient()
 

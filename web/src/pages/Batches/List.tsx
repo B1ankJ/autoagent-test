@@ -1,9 +1,20 @@
-import { PlusOutlined, ExperimentOutlined, StopOutlined } from '@ant-design/icons'
-import { App, Button, Input, Popconfirm, Select, Space, Table } from 'antd'
+import {
+  DeleteOutlined,
+  ExperimentOutlined,
+  PlusOutlined,
+  StopOutlined,
+} from '@ant-design/icons'
+import { App, Button, Dropdown, Input, Popconfirm, Select, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useBatches, useBatchStats, useCancelActiveBatches } from '../../api/batches'
+import {
+  useBatches,
+  useBatchStats,
+  useCancelActiveBatches,
+  useDeleteBatch,
+  useDeleteBatchesByStatus,
+} from '../../api/batches'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -24,6 +35,8 @@ export function BatchList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { message } = App.useApp()
   const cancelActive = useCancelActiveBatches()
+  const deleteOne = useDeleteBatch()
+  const deleteByStatus = useDeleteBatchesByStatus()
 
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
@@ -106,6 +119,28 @@ export function BatchList() {
     }
   }
 
+  const onDeleteOne = async (id: string) => {
+    try {
+      await deleteOne.mutateAsync(id)
+      message.success('已删除')
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
+  const onBulkDelete = async (status: 'done' | 'failed' | 'cancelled' | 'terminal') => {
+    try {
+      const result = await deleteByStatus.mutateAsync(status)
+      message.success(
+        result.deleted > 0
+          ? `已删除 ${result.deleted} 个 ${status} 批次`
+          : `没有匹配 ${status} 的批次`,
+      )
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
   const columns: ColumnsType<BatchSummary> = [
     {
       title: '名称',
@@ -143,6 +178,37 @@ export function BatchList() {
         <span className="aa-mono aa-muted">{value ?? '-'}</span>
       ),
     },
+    {
+      title: '操作',
+      width: 90,
+      render: (_value, row) => {
+        const isActive = row.status === 'queued' || row.status === 'running'
+        return (
+          <Popconfirm
+            title="删除该批次"
+            description="将一并删除 DB 记录、JSONL 结果文件和 logs 目录。不可恢复。"
+            okText="删除"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            disabled={isActive}
+            onConfirm={(e) => {
+              e?.stopPropagation()
+              onDeleteOne(row.batch_id)
+            }}
+          >
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={isActive}
+              title={isActive ? '请先取消批次再删除' : '删除批次'}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Popconfirm>
+        )
+      },
+    },
   ]
 
   return (
@@ -157,6 +223,43 @@ export function BatchList() {
         }
         extra={
           <Space>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'failed',
+                    label: `删除全部 failed (${stats?.failed ?? 0})`,
+                    disabled: (stats?.failed ?? 0) === 0,
+                  },
+                  {
+                    key: 'cancelled',
+                    label: `删除全部 cancelled (${stats?.cancelled ?? 0})`,
+                    disabled: (stats?.cancelled ?? 0) === 0,
+                  },
+                  {
+                    key: 'done',
+                    label: `删除全部 done (${stats?.done ?? 0})`,
+                    disabled: (stats?.done ?? 0) === 0,
+                  },
+                  { type: 'divider' as const },
+                  {
+                    key: 'terminal',
+                    label: `删除全部已完成（done/failed/cancelled）`,
+                  },
+                ],
+                onClick: ({ key }) =>
+                  onBulkDelete(key as 'done' | 'failed' | 'cancelled' | 'terminal'),
+              }}
+              disabled={deleteByStatus.isPending}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={deleteByStatus.isPending}
+              >
+                批量删除
+              </Button>
+            </Dropdown>
             <Popconfirm
               title="取消所有进行中批次"
               description={

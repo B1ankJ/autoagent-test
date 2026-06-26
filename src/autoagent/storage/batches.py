@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import delete, desc, func, or_, select
 
 from autoagent.models.db import Batch, Sample
 from autoagent.storage.database import get_sessionmaker
@@ -101,6 +101,19 @@ async def count_batches_by_status(q: str | None = None) -> dict[str, int]:
             out[str(status)] = int(count)
         out["total"] = sum(out.values())
         return out
+
+
+async def delete_batch_rows(batch_id: str) -> bool:
+    """Delete the Batch row and all its Sample rows. Returns True if removed."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        b = await s.get(Batch, batch_id)
+        if b is None:
+            return False
+        await s.execute(delete(Sample).where(Sample.batch_id == batch_id))
+        await s.delete(b)
+        await s.commit()
+        return True
 
 
 async def update_batch_status(batch_id: str, status: str) -> None:

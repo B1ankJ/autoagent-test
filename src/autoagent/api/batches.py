@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from autoagent.models.api import (
 )
 from autoagent.storage.batches import (
     count_batches_by_status,
+    delete_batch_rows,
     get_batch,
     list_batches,
     update_batch_status,
@@ -289,6 +291,59 @@ async def cancel(batch_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="batch not found or already finished")
     return {"batch_id": batch_id, "status": "cancelling"}
+
+
+def _purge_batch_artifacts(batch_id: str) -> None:
+    """Best-effort filesystem cleanup for a batch: JSONL result + logs dir."""
+    settings = get_settings()
+    result_path = settings.data_root / "results" / f"{batch_id}.jsonl"
+    logs_dir = settings.logs_root / batch_id
+    try:
+        result_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    try:
+        shutil.rmtree(logs_dir, ignore_errors=True)
+    except OSError:
+        pass
+
+
+@router.delete("/{batch_id}", status_code=204)
+async def delete_batch_endpoint(batch_id: str) -> None:
+    batch = await get_batch(batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="batch not found")
+    if batch.status in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail="batch is active; cancel it first then delete",
+        )
+    await delete_batch_rows(batch_id)
+    _purge_batch_artifacts(batch_id)
+
+
+@router.post("/delete-by-status", status_code=200)
+async def delete_by_status(status: str) -> dict:
+    """Bulk delete all batches matching one of the terminal statuses.
+
+    Accepts: done | failed | cancelled | terminal (= done+failed+cancelled).
+    Refuses queued / running to keep callers from foot-gunning active work.
+    """
+    allowed = {"done", "failed", "cancelled", "terminal"}
+    if status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status must be one of {sorted(allowed)}",
+        )
+    targets = {"done", "failed", "cancelled"} if status == "terminal" else {status}
+    rows = await list_batches(limit=10000, offset=0, q=None)
+    matching = [r for r in rows if r.status in targets]
+    deleted = 0
+    for row in matching:
+        if await delete_batch_rows(row.id):
+            _purge_batch_artifacts(row.id)
+            deleted += 1
+    return {"deleted": deleted, "matched": len(matching)}
 
 
 @router.post("/cancel-active", status_code=202)
