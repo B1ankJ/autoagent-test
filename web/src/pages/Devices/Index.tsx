@@ -1,5 +1,5 @@
 import { MobileOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Space, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
 
 import {
@@ -8,6 +8,7 @@ import {
   useEnableIme,
   useInstallAdbKeyboard,
   useRefreshDevices,
+  useUpdateDeviceLabel,
 } from '../../api/devices'
 import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -20,7 +21,19 @@ export function DevicesPage() {
   const installAdbKeyboard = useInstallAdbKeyboard()
   const enableIme = useEnableIme()
   const disableIme = useDisableIme()
+  const updateLabel = useUpdateDeviceLabel()
+  const { message } = App.useApp()
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
+
+  const onLabelChange = async (serial: string, next: string) => {
+    const trimmed = next.trim()
+    try {
+      await updateLabel.mutateAsync({ serial, label: trimmed === '' ? null : trimmed })
+      message.success(trimmed ? '别名已更新' : '别名已清空')
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
 
   const rows = devices.data ?? []
   const onlineCount = rows.filter((d) => d.online).length
@@ -77,8 +90,21 @@ export function DevicesPage() {
             },
             {
               title: '别名',
-              render: (_, row) =>
-                row.label ?? <Typography.Text type="secondary">-</Typography.Text>,
+              render: (_, row) => (
+                <Typography.Text
+                  type={row.label ? undefined : 'secondary'}
+                  editable={{
+                    text: row.label ?? '',
+                    tooltip: '点击编辑别名',
+                    onChange: (next) => {
+                      if ((next ?? '') === (row.label ?? '')) return
+                      onLabelChange(row.serial, next ?? '')
+                    },
+                  }}
+                >
+                  {row.label ?? '点击设置'}
+                </Typography.Text>
+              ),
             },
             {
               title: '型号',

@@ -34,6 +34,24 @@ export function useInstallAdbKeyboard() {
   })
 }
 
+export function useUpdateDeviceLabel() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (args: { serial: string; label: string | null }) =>
+      (
+        await client.patch<Device>(`/devices/${args.serial}`, {
+          label: args.label,
+        })
+      ).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}
+
 export function useEnableIme() {
   const queryClient = useQueryClient()
 
