@@ -87,6 +87,11 @@ class _SampleLogger:
         log.info(rendered)
         self._write("INFO", rendered)
 
+    def warning(self, message: str, *args: object) -> None:
+        rendered = message % args if args else message
+        log.warning(rendered)
+        self._write("WARN", rendered)
+
     def exception(self, message: str, *args: object) -> None:
         rendered = message % args if args else message
         log.exception(rendered)
