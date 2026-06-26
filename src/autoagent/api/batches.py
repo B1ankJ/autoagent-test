@@ -178,14 +178,23 @@ async def create_batch_file(
 
 
 @router.get("/stats")
-async def batch_stats(q: str | None = None) -> dict[str, int]:
+async def batch_stats(
+    q: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
     Returns {"total": N, "queued": .., "running": .., "done": .., "failed": ..,
     "cancelled": ..}. Statuses with zero rows are filled in to keep the
-    frontend shape stable. When `q` is given, totals reflect the filtered set.
+    frontend shape stable. When `q` / `created_after` / `created_before` are
+    given, totals reflect the filtered set.
     """
-    counts = await count_batches_by_status(q=q or None)
+    counts = await count_batches_by_status(
+        q=q or None,
+        created_after=created_after,
+        created_before=created_before,
+    )
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
     return counts
@@ -212,9 +221,19 @@ async def _preview_prompt(batch_id: str) -> str | None:
 
 @router.get("", response_model=list[BatchSummary])
 async def list_all(
-    limit: int = 50, offset: int = 0, q: str | None = None
+    limit: int = 50,
+    offset: int = 0,
+    q: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
 ) -> list[BatchSummary]:
-    rows = await list_batches(limit=limit, offset=offset, q=q or None)
+    rows = await list_batches(
+        limit=limit,
+        offset=offset,
+        q=q or None,
+        created_after=created_after,
+        created_before=created_before,
+    )
     summaries: list[BatchSummary] = []
     for r in rows:
         preview = await _preview_prompt(r.id) if r.total == 1 else None

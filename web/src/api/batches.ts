@@ -10,16 +10,43 @@ import {
 import { client } from './client'
 export { useBatchStream } from '../hooks/useBatchStream'
 
-export function useBatches(params?: { limit?: number; offset?: number; q?: string }) {
+interface BatchQueryFilters {
+  limit?: number
+  offset?: number
+  q?: string
+  createdAfter?: string
+  createdBefore?: string
+}
+
+function buildBatchParams(p: BatchQueryFilters) {
+  const params: Record<string, string | number> = {}
+  if (p.limit !== undefined) params.limit = p.limit
+  if (p.offset !== undefined) params.offset = p.offset
+  const q = p.q?.trim()
+  if (q) params.q = q
+  if (p.createdAfter) params.created_after = p.createdAfter
+  if (p.createdBefore) params.created_before = p.createdBefore
+  return params
+}
+
+export function useBatches(params?: BatchQueryFilters) {
   const limit = params?.limit ?? 50
   const offset = params?.offset ?? 0
   const q = params?.q?.trim() || undefined
+  const ca = params?.createdAfter ?? null
+  const cb = params?.createdBefore ?? null
   return useQuery({
-    queryKey: ['batches', limit, offset, q ?? null],
+    queryKey: ['batches', limit, offset, q ?? null, ca, cb],
     queryFn: async () =>
       (
         await client.get<BatchSummary[]>('/batches', {
-          params: { limit, offset, ...(q ? { q } : {}) },
+          params: buildBatchParams({
+            limit,
+            offset,
+            q,
+            createdAfter: params?.createdAfter,
+            createdBefore: params?.createdBefore,
+          }),
         })
       ).data,
     placeholderData: (prev) => prev,
@@ -35,14 +62,20 @@ export interface BatchStats {
   cancelled: number
 }
 
-export function useBatchStats(params?: { q?: string }) {
+export function useBatchStats(params?: { q?: string; createdAfter?: string; createdBefore?: string }) {
   const q = params?.q?.trim() || undefined
+  const ca = params?.createdAfter ?? null
+  const cb = params?.createdBefore ?? null
   return useQuery({
-    queryKey: ['batches', 'stats', q ?? null],
+    queryKey: ['batches', 'stats', q ?? null, ca, cb],
     queryFn: async () =>
       (
         await client.get<BatchStats>('/batches/stats', {
-          params: q ? { q } : {},
+          params: buildBatchParams({
+            q,
+            createdAfter: params?.createdAfter,
+            createdBefore: params?.createdBefore,
+          }),
         })
       ).data,
     refetchInterval: 5000,

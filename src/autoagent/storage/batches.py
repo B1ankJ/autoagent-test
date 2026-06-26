@@ -47,7 +47,11 @@ async def get_batch(batch_id: str) -> Batch | None:
 
 
 async def list_batches(
-    limit: int = 50, offset: int = 0, q: str | None = None
+    limit: int = 50,
+    offset: int = 0,
+    q: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
 ) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
@@ -69,13 +73,21 @@ async def list_batches(
                 )
                 .distinct()
             )
+        if created_after is not None:
+            stmt = stmt.where(Batch.created_at >= created_after)
+        if created_before is not None:
+            stmt = stmt.where(Batch.created_at <= created_before)
         result = await s.execute(
             stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset)
         )
         return list(result.scalars().all())
 
 
-async def count_batches_by_status(q: str | None = None) -> dict[str, int]:
+async def count_batches_by_status(
+    q: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
 
     When `q` is given, counts only batches whose name/id or any sample's
@@ -94,6 +106,10 @@ async def count_batches_by_status(q: str | None = None) -> dict[str, int]:
                     Sample.prompts_sent_json.like(term, escape="\\"),
                 )
             )
+        if created_after is not None:
+            stmt = stmt.where(Batch.created_at >= created_after)
+        if created_before is not None:
+            stmt = stmt.where(Batch.created_at <= created_before)
         stmt = stmt.group_by(Batch.status)
         result = await s.execute(stmt)
         out: dict[str, int] = {}

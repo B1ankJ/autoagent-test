@@ -4,8 +4,9 @@ import {
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { App, Button, Dropdown, Input, Popconfirm, Select, Space, Table } from 'antd'
+import { App, Button, DatePicker, Dropdown, Input, Popconfirm, Select, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -29,6 +30,8 @@ const QP_STATUS = 'status'
 const QP_MODE = 'mode'
 const QP_PAGE = 'page'
 const QP_SIZE = 'size'
+const QP_FROM = 'from'   // ISO string, inclusive lower bound on Batch.created_at
+const QP_TO = 'to'       // ISO string, inclusive upper bound on Batch.created_at
 
 export function BatchList() {
   const navigate = useNavigate()
@@ -43,6 +46,12 @@ export function BatchList() {
   const debouncedQ = searchParams.get(QP_Q) ?? ''
   const statusFilter = (searchParams.get(QP_STATUS) as BatchStatus | null) || undefined
   const modeFilter = (searchParams.get(QP_MODE) as ExecutionMode | null) || undefined
+  const fromIso = searchParams.get(QP_FROM) || undefined
+  const toIso = searchParams.get(QP_TO) || undefined
+  const dateRange: [Dayjs | null, Dayjs | null] = [
+    fromIso ? dayjs(fromIso) : null,
+    toIso ? dayjs(toIso) : null,
+  ]
 
   // Local-only input mirror so typing doesn't trigger a URL/query write on
   // every keystroke; commit to URL after a 300ms debounce.
@@ -76,6 +85,15 @@ export function BatchList() {
       [QP_SIZE]: ps === 20 ? undefined : String(ps),
     })
   }
+  const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
+    const [from, to] = range ?? [null, null]
+    updateParams({
+      // Anchor to day boundaries so "today" picks up everything from 00:00:00.
+      [QP_FROM]: from ? from.startOf('day').toISOString() : undefined,
+      [QP_TO]: to ? to.endOf('day').toISOString() : undefined,
+      [QP_PAGE]: undefined,
+    })
+  }
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -92,8 +110,14 @@ export function BatchList() {
     limit: pageSize,
     offset: (page - 1) * pageSize,
     q: debouncedQ,
+    createdAfter: fromIso,
+    createdBefore: toIso,
   })
-  const { data: stats } = useBatchStats({ q: debouncedQ })
+  const { data: stats } = useBatchStats({
+    q: debouncedQ,
+    createdAfter: fromIso,
+    createdBefore: toIso,
+  })
 
   const rows = useMemo(
     () =>
@@ -336,6 +360,23 @@ export function BatchList() {
               label: mode,
             }),
           )}
+        />
+        <DatePicker.RangePicker
+          value={dateRange as [Dayjs, Dayjs] | null}
+          onChange={(range) => setDateRange(range as [Dayjs | null, Dayjs | null] | null)}
+          allowEmpty={[true, true]}
+          placeholder={['开始日期', '结束日期']}
+          presets={[
+            { label: '今天', value: [dayjs().startOf('day'), dayjs().endOf('day')] },
+            {
+              label: '最近 7 天',
+              value: [dayjs().subtract(6, 'day').startOf('day'), dayjs().endOf('day')],
+            },
+            {
+              label: '最近 30 天',
+              value: [dayjs().subtract(29, 'day').startOf('day'), dayjs().endOf('day')],
+            },
+          ]}
         />
       </Space>
       {isError ? (
