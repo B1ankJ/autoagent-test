@@ -143,6 +143,11 @@ class CopyButtonVLMConfig(BaseModel):
     read the clipboard. No XML dump is needed in this path.
     """
 
+    # Reject unknown keys so a misindented sibling (e.g. response_vlm nested
+    # under copy_button_vlm by mistake) fails loudly at save time instead of
+    # being silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
     base_url: str
     model: str
     api_key: str
@@ -185,6 +190,8 @@ class ResponseVLMConfig(BaseModel):
     clipboard copy but doesn't depend on locating any interactive element.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     base_url: str
     model: str
     api_key: str
@@ -204,6 +211,8 @@ class ResponseVLMConfig(BaseModel):
 
 
 class AndroidResponseExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     method: Literal["ui_tree_only", "ocr_only", "ui_tree_then_ocr"]
     response_container_locator: Locator
     scroll_container_locator: Locator
