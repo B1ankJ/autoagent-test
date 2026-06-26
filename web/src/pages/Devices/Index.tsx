@@ -1,5 +1,5 @@
-import { MobileOutlined, ReloadOutlined } from '@ant-design/icons'
-import { App, Button, Space, Table, Tag, Typography } from 'antd'
+import { AppstoreOutlined, MobileOutlined, ReloadOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { App, Button, Col, Row, Segmented, Space, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
 
 import {
@@ -10,10 +10,14 @@ import {
   useRefreshDevices,
   useUpdateDeviceLabel,
 } from '../../api/devices'
+import { DeviceStreamCard } from '../../components/DeviceStreamCard'
 import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { Device } from '../../types/api'
+
+type ViewMode = 'table' | 'cards'
+const VIEW_STORAGE_KEY = 'autoagent_devices_view'
 
 export function DevicesPage() {
   const devices = useDevices()
@@ -24,6 +28,18 @@ export function DevicesPage() {
   const updateLabel = useUpdateDeviceLabel()
   const { message } = App.useApp()
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(VIEW_STORAGE_KEY) : null
+    return stored === 'cards' ? 'cards' : 'table'
+  })
+  const setViewMode = (next: ViewMode) => {
+    setViewModeState(next)
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next)
+    } catch {
+      /* private mode etc; persistence is best-effort */
+    }
+  }
 
   const onLabelChange = async (serial: string, next: string) => {
     const trimmed = next.trim()
@@ -50,13 +66,23 @@ export function DevicesPage() {
             : 'ADB 可见的设备列表与 IME 状态'
         }
         extra={
-          <Button
-            icon={<ReloadOutlined />}
-            loading={refresh.isPending}
-            onClick={() => refresh.mutateAsync()}
-          >
-            刷新
-          </Button>
+          <Space>
+            <Segmented<ViewMode>
+              value={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              options={[
+                { label: '列表', value: 'table', icon: <UnorderedListOutlined /> },
+                { label: '画面', value: 'cards', icon: <AppstoreOutlined /> },
+              ]}
+            />
+            <Button
+              icon={<ReloadOutlined />}
+              loading={refresh.isPending}
+              onClick={() => refresh.mutateAsync()}
+            >
+              刷新
+            </Button>
+          </Space>
         }
       />
       {rows.length === 0 && !devices.isLoading ? (
@@ -75,6 +101,14 @@ export function DevicesPage() {
             </Button>
           }
         />
+      ) : viewMode === 'cards' ? (
+        <Row gutter={[12, 12]}>
+          {rows.map((row) => (
+            <Col xs={24} sm={12} md={12} lg={8} xl={6} key={row.serial}>
+              <DeviceStreamCard device={row} onOpenFullView={setStreamSerial} />
+            </Col>
+          ))}
+        </Row>
       ) : (
         <Table<Device>
           rowKey="serial"
