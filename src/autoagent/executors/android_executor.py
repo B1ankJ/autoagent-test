@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -11,6 +12,8 @@ from typing import Any
 
 import uiautomator2 as u2
 
+from autoagent.executors.agent_core.device import Screenshot
+from autoagent.executors.agent_screenshot_extractor import extract_response_from_screenshot
 from autoagent.executors.android_action_runner import AndroidActionRunner
 from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.base import Executor, ExecutorContext
@@ -473,6 +476,113 @@ class AndroidExecutor(Executor):
                                 idx,
                                 _VLM_MAX_ATTEMPTS,
                                 vlm_last_error,
+                            )
+                            responses.append("")
+                            continue
+
+                    # Direct VLM read of the screenshot — second choice when
+                    # copy_button_vlm exists and fell through, OR primary when
+                    # only response_vlm is configured. Asks the model to
+                    # transcribe the latest reply directly from the image, no
+                    # tap / clipboard / XML involved.
+                    if profile.response_extraction.response_vlm:
+                        rvlm_cfg = profile.response_extraction.response_vlm
+                        rvlm_text: str | None = None
+                        rvlm_last_error: str | None = None
+                        for rvlm_attempt in range(rvlm_cfg.max_attempts):
+                            rvlm_shot_bytes = await asyncio.to_thread(
+                                capture_screenshot_bytes, device
+                            )
+                            rvlm_screenshot = Screenshot(
+                                base64_data=base64.b64encode(rvlm_shot_bytes).decode("ascii"),
+                                width=0,
+                                height=0,
+                            )
+                            rvlm_res = await extract_response_from_screenshot(
+                                screenshot=rvlm_screenshot,
+                                response_hint=rvlm_cfg.response_hint,
+                                base_url=rvlm_cfg.base_url,
+                                model=rvlm_cfg.model,
+                                api_key=rvlm_cfg.api_key,
+                                timeout_sec=rvlm_cfg.timeout_sec,
+                            )
+                            sample_log.info(
+                                "android sample %s prompt %s response_vlm "
+                                "attempt %d/%d: chars=%d latency_ms=%s error=%s",
+                                sample.id,
+                                idx,
+                                rvlm_attempt + 1,
+                                rvlm_cfg.max_attempts,
+                                len(rvlm_res.text),
+                                rvlm_res.latency_ms,
+                                rvlm_res.error,
+                            )
+                            if rvlm_res.error is None and rvlm_res.text.strip():
+                                rvlm_text = rvlm_res.text
+                                break
+                            rvlm_last_error = rvlm_res.error or "empty_text"
+                            if rvlm_attempt < rvlm_cfg.max_attempts - 1:
+                                await asyncio.sleep(rvlm_cfg.retry_backoff_sec)
+                        # Always snapshot final state for diagnostics.
+                        rvlm_result_path = store.artifact_path(
+                            f"after_result_{idx}", "png"
+                        )
+                        if not rvlm_result_path.exists():
+                            rvlm_final_shot = await asyncio.to_thread(
+                                capture_screenshot_bytes, device
+                            )
+                            await asyncio.to_thread(
+                                rvlm_result_path.write_bytes, rvlm_final_shot
+                            )
+                            ctx.screenshot_index.append(
+                                ScreenshotResult(
+                                    path=rvlm_result_path,
+                                    label=f"after_result_{idx}",
+                                )
+                            )
+                        if rvlm_text is not None:
+                            sample_log.info(
+                                "android sample %s prompt %s response_vlm "
+                                "extraction: chars=%d",
+                                sample.id,
+                                idx,
+                                len(rvlm_text),
+                            )
+                            responses.append(rvlm_text)
+                            continue
+                        if rvlm_cfg.fallback_to_method:
+                            if rvlm_cfg.retry_wait_sec > 0:
+                                sample_log.info(
+                                    "android sample %s prompt %s response_vlm "
+                                    "failed (last_error=%s), sleeping %.1fs "
+                                    "before falling back to method=%s",
+                                    sample.id,
+                                    idx,
+                                    rvlm_last_error,
+                                    rvlm_cfg.retry_wait_sec,
+                                    profile.response_extraction.method,
+                                )
+                                await asyncio.sleep(rvlm_cfg.retry_wait_sec)
+                            else:
+                                sample_log.info(
+                                    "android sample %s prompt %s response_vlm "
+                                    "failed (last_error=%s), falling back to "
+                                    "method=%s",
+                                    sample.id,
+                                    idx,
+                                    rvlm_last_error,
+                                    profile.response_extraction.method,
+                                )
+                            # Fall through to copy_button_text / method.
+                        else:
+                            sample_log.warning(
+                                "android sample %s prompt %s response_vlm failed "
+                                "after %d attempts: last_error=%s; recording "
+                                "empty response (fallback_to_method disabled)",
+                                sample.id,
+                                idx,
+                                rvlm_cfg.max_attempts,
+                                rvlm_last_error,
                             )
                             responses.append("")
                             continue

@@ -175,6 +175,34 @@ class CopyButtonVLMConfig(BaseModel):
         return value
 
 
+class ResponseVLMConfig(BaseModel):
+    """Send the post-completion screenshot to a vision LLM and ask it to
+    transcribe the latest assistant reply.
+
+    Useful when the UI tree is empty / meaningless (WebView, canvas-drawn
+    chat UIs) AND `copy_button_vlm` can't find a working copy button — the
+    VLM just reads the bubble directly. Slower and less reliable than a
+    clipboard copy but doesn't depend on locating any interactive element.
+    """
+
+    base_url: str
+    model: str
+    api_key: str
+    # What to ask the VLM to locate. The default works for typical chat UIs;
+    # override for unusual layouts (sidebars, kanban, multi-pane).
+    response_hint: str = "屏幕中最新一条 AI 助手的回复气泡"
+    timeout_sec: float = 60.0
+    max_attempts: int = 2
+    retry_backoff_sec: float = 1.0
+    # On full failure, optionally descend further down the extraction chain
+    # (copy_button_text → method). Off by default so a bad VLM response
+    # doesn't get silently masked by unrelated UI-tree text.
+    fallback_to_method: bool = False
+    # Sleep this long after the VLM gives up and before the next step in
+    # the chain runs, so the page can settle.
+    retry_wait_sec: float = 0.0
+
+
 class AndroidResponseExtraction(BaseModel):
     method: Literal["ui_tree_only", "ocr_only", "ui_tree_then_ocr"]
     response_container_locator: Locator
@@ -182,6 +210,10 @@ class AndroidResponseExtraction(BaseModel):
     latest_bubble_match: Locator
     copy_button_text: str | None = None
     copy_button_vlm: CopyButtonVLMConfig | None = None
+    # VLM that reads the screenshot directly and returns the response text.
+    # Tried after copy_button_vlm in the priority chain:
+    #   copy_button_vlm → response_vlm → copy_button_text → method
+    response_vlm: ResponseVLMConfig | None = None
 
 
 class AndroidProfile(BaseModel):
