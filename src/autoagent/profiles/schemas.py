@@ -154,6 +154,16 @@ class CopyButtonVLMConfig(BaseModel):
     # tried in order; the first whose tap yields non-empty clipboard wins.
     # All candidates miss → fall through to the VLM loop.
     default_coords: list[tuple[int, int]] | None = None
+    # If the VLM loop also exhausts its retries, optionally fall through to
+    # the profile's `method` (ui_tree_only / ocr_only / ui_tree_then_ocr)
+    # instead of recording an empty response. Off by default because the
+    # typical copy_button_vlm target (H5 / WebView) has no useful UI tree
+    # for ui_tree extraction to read.
+    fallback_to_method: bool = False
+    # Sleep this long after the VLM gives up and before the fallback runs.
+    # Useful when the page is still settling after the failed taps and the
+    # immediate XML dump would catch a transient state.
+    retry_wait_sec: float = 0.0
 
     @field_validator("default_coords", mode="before")
     @classmethod

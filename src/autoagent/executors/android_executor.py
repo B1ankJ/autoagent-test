@@ -432,19 +432,45 @@ class AndroidExecutor(Executor):
                                 len(vlm_clipboard),
                             )
                             responses.append(vlm_clipboard)
+                            continue
+                        if vlm_cfg.fallback_to_method:
+                            if vlm_cfg.retry_wait_sec > 0:
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm failed "
+                                    "(last_error=%s), sleeping %.1fs before "
+                                    "falling back to method=%s",
+                                    sample.id,
+                                    idx,
+                                    vlm_last_error,
+                                    vlm_cfg.retry_wait_sec,
+                                    profile.response_extraction.method,
+                                )
+                                await asyncio.sleep(vlm_cfg.retry_wait_sec)
+                            else:
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm failed "
+                                    "(last_error=%s), falling back to method=%s",
+                                    sample.id,
+                                    idx,
+                                    vlm_last_error,
+                                    profile.response_extraction.method,
+                                )
+                            # Fall through to method block. XML may still be
+                            # None at this point — the ui_tree_only branch
+                            # below handles that with a fresh dump.
                         else:
                             sample_log.warning(
                                 "android sample %s prompt %s vlm copy-button "
                                 "failed after %d attempts: last_error=%s; "
-                                "recording empty response (no fallback for "
-                                "vlm-only configuration)",
+                                "recording empty response (fallback_to_method "
+                                "disabled)",
                                 sample.id,
                                 idx,
                                 _VLM_MAX_ATTEMPTS,
                                 vlm_last_error,
                             )
                             responses.append("")
-                        continue
+                            continue
 
                     # Copy-button clipboard extraction: if the profile specifies a
                     # copy_button_text, find it in the current XML at runtime and tap
