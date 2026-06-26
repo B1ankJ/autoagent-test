@@ -479,23 +479,52 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
     return out
 
 
-@router.get("/{batch_id}/samples/{sample_id}/actions.jsonl")
-async def download_actions(batch_id: str, sample_id: str) -> FileResponse:
+@router.get("/{batch_id}/samples/{sample_id}/logs.zip")
+async def download_sample_logs(
+    batch_id: str, sample_id: str, background_tasks: BackgroundTasks
+) -> FileResponse:
+    """Return a zip of every file in logs/<batch_id>/<sample_id>/.
+
+    Includes screenshots, XML dumps, action_log.jsonl / actions.jsonl,
+    executor.log, llm_extract_*.json — everything captured for that one
+    sample. Useful for sharing a single failing case without exporting
+    the whole batch.
+    """
     root = get_settings().logs_root.resolve()
     sample_dir = await _sample_logs_dir(batch_id, sample_id)
     if sample_dir is None:
         sample_dir = (root / batch_id / sample_id).resolve()
-    target = (sample_dir / "actions.jsonl").resolve()
+    if not sample_dir.is_dir():
+        raise HTTPException(status_code=404, detail="sample logs not found")
+    # Defence in depth against ../ smuggling through batch_id / sample_id.
     try:
-        target.relative_to(sample_dir)
+        sample_dir.relative_to(root)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="path traversal blocked") from e
-    if not target.is_file():
-        raise HTTPException(status_code=404, detail="actions replay not found")
+
+    tmp = tempfile.NamedTemporaryFile(
+        prefix=f"{batch_id}_{sample_id}_", suffix=".zip", delete=False
+    )
+    tmp.close()
+    try:
+        with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            wrote_any = False
+            for file_path in sorted(sample_dir.rglob("*")):
+                if file_path.is_file():
+                    zf.write(file_path, arcname=str(file_path.relative_to(sample_dir)))
+                    wrote_any = True
+            if not wrote_any:
+                Path(tmp.name).unlink(missing_ok=True)
+                raise HTTPException(status_code=404, detail="sample logs are empty")
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
+    background_tasks.add_task(Path(tmp.name).unlink, missing_ok=True)
     return FileResponse(
-        target,
-        media_type="application/x-ndjson",
-        filename=f"{sample_id}.actions.jsonl",
+        tmp.name,
+        media_type="application/zip",
+        filename=f"{sample_id}.zip",
     )
 
 

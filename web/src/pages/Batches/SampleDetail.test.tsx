@@ -8,7 +8,7 @@ import { SampleDetail } from './SampleDetail'
 const useBatchStream = vi.fn()
 const listScreenshots = vi.fn()
 const fetchScreenshotBlobUrl = vi.fn()
-const downloadSampleActions = vi.fn()
+const downloadSampleLogs = vi.fn()
 
 vi.mock('../../hooks/useBatchStream', () => ({
   useBatchStream: (...args: unknown[]) => useBatchStream(...args),
@@ -23,7 +23,7 @@ vi.mock('../../api/batches', async () => {
   const actual = await vi.importActual('../../api/batches')
   return {
     ...actual,
-    downloadSampleActions: (...args: unknown[]) => downloadSampleActions(...args),
+    downloadSampleLogs: (...args: unknown[]) => downloadSampleLogs(...args),
   }
 })
 
@@ -80,7 +80,7 @@ describe('SampleDetail', () => {
     })
     expect(screen.getByText('运行设备')).toBeInTheDocument()
     expect(screen.getByText('emulator-5554')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /下载回放/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /下载日志包/i })).toBeInTheDocument()
     await waitFor(() => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
       expect(fetchScreenshotBlobUrl).toHaveBeenCalledWith('b1', 's1', '001_ready.png')
@@ -90,8 +90,8 @@ describe('SampleDetail', () => {
       )
     })
 
-    await userEvent.click(screen.getByRole('button', { name: /下载回放/i }))
-    expect(downloadSampleActions).toHaveBeenCalledWith('b1', 's1')
+    await userEvent.click(screen.getByRole('button', { name: /下载日志包/i }))
+    expect(downloadSampleLogs).toHaveBeenCalledWith('b1', 's1')
   })
 
   it('renders tap targets and metadata summaries for android samples', async () => {

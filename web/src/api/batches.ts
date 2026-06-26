@@ -193,9 +193,9 @@ export function statusIsTerminal(status: BatchStatus): boolean {
   return status === 'done' || status === 'failed' || status === 'cancelled'
 }
 
-export function downloadSampleActions(batchId: string, sampleId: string) {
+export function downloadSampleLogs(batchId: string, sampleId: string) {
   window.open(
-    `/api/v1/batches/${batchId}/samples/${encodeURIComponent(sampleId)}/actions.jsonl`,
+    `/api/v1/batches/${batchId}/samples/${encodeURIComponent(sampleId)}/logs.zip`,
     '_blank',
     'noopener,noreferrer',
   )

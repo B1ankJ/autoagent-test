@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
-import { downloadSampleActions } from '../../api/batches'
+import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
 import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
@@ -120,9 +120,10 @@ export function SampleDetail() {
           replayAvailable ? (
             <Button
               icon={<DownloadOutlined />}
-              onClick={() => downloadSampleActions(data.batch_id, sample.id)}
+              onClick={() => downloadSampleLogs(data.batch_id, sample.id)}
+              title="zip 包含 actions.jsonl + 截图 + XML + executor.log 等全部产物"
             >
-              下载回放 JSONL
+              下载日志包
             </Button>
           ) : null
         }
