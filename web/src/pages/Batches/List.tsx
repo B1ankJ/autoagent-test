@@ -16,6 +16,8 @@ import {
   useDeleteBatch,
   useDeleteBatchesByStatus,
 } from '../../api/batches'
+import { useDevices } from '../../api/devices'
+import { useProfiles } from '../../api/profiles'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -32,6 +34,8 @@ const QP_PAGE = 'page'
 const QP_SIZE = 'size'
 const QP_FROM = 'from'   // ISO string, inclusive lower bound on Batch.created_at
 const QP_TO = 'to'       // ISO string, inclusive upper bound on Batch.created_at
+const QP_PROFILE = 'profile' // target_profile_default exact match
+const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 
 export function BatchList() {
   const navigate = useNavigate()
@@ -52,6 +56,11 @@ export function BatchList() {
     fromIso ? dayjs(fromIso) : null,
     toIso ? dayjs(toIso) : null,
   ]
+  const profileFilter = searchParams.get(QP_PROFILE) || undefined
+  const deviceFilter = searchParams.get(QP_DEVICE) || undefined
+
+  const profilesQ = useProfiles()
+  const devicesQ = useDevices()
 
   // Local-only input mirror so typing doesn't trigger a URL/query write on
   // every keystroke; commit to URL after a 300ms debounce.
@@ -85,6 +94,12 @@ export function BatchList() {
       [QP_SIZE]: ps === 20 ? undefined : String(ps),
     })
   }
+  const setProfileFilter = (v: string | undefined) => {
+    updateParams({ [QP_PROFILE]: v, [QP_PAGE]: undefined })
+  }
+  const setDeviceFilter = (v: string | undefined) => {
+    updateParams({ [QP_DEVICE]: v, [QP_PAGE]: undefined })
+  }
   const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
     const [from, to] = range ?? [null, null]
     updateParams({
@@ -112,11 +127,15 @@ export function BatchList() {
     q: debouncedQ,
     createdAfter: fromIso,
     createdBefore: toIso,
+    targetProfile: profileFilter,
+    deviceSerial: deviceFilter,
   })
   const { data: stats } = useBatchStats({
     q: debouncedQ,
     createdAfter: fromIso,
     createdBefore: toIso,
+    targetProfile: profileFilter,
+    deviceSerial: deviceFilter,
   })
 
   const rows = useMemo(
@@ -360,6 +379,38 @@ export function BatchList() {
               label: mode,
             }),
           )}
+        />
+        <Select
+          allowClear
+          showSearch
+          placeholder="Profile"
+          style={{ width: 200 }}
+          value={profileFilter}
+          onChange={setProfileFilter}
+          loading={profilesQ.isLoading}
+          options={(profilesQ.data ?? []).map((p) => ({
+            value: p.name,
+            label: `${p.name} (${p.platform})`,
+          }))}
+          filterOption={(input, option) =>
+            (option?.label as string).toLowerCase().includes(input.toLowerCase())
+          }
+        />
+        <Select
+          allowClear
+          showSearch
+          placeholder="设备"
+          style={{ width: 220 }}
+          value={deviceFilter}
+          onChange={setDeviceFilter}
+          loading={devicesQ.isLoading}
+          options={(devicesQ.data ?? []).map((d) => ({
+            value: d.serial,
+            label: d.label || d.model ? `${d.label || d.model} (${d.serial})` : d.serial,
+          }))}
+          filterOption={(input, option) =>
+            (option?.label as string).toLowerCase().includes(input.toLowerCase())
+          }
         />
         <DatePicker.RangePicker
           value={dateRange as [Dayjs, Dayjs] | null}

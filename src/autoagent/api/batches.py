@@ -182,18 +182,21 @@ async def batch_stats(
     q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
+    target_profile: str | None = None,
+    device_serial: str | None = None,
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
     Returns {"total": N, "queued": .., "running": .., "done": .., "failed": ..,
-    "cancelled": ..}. Statuses with zero rows are filled in to keep the
-    frontend shape stable. When `q` / `created_after` / `created_before` are
-    given, totals reflect the filtered set.
+    "cancelled": ..}. Filter args mirror /batches so the dashboard cards
+    stay consistent with the visible list.
     """
     counts = await count_batches_by_status(
         q=q or None,
         created_after=created_after,
         created_before=created_before,
+        target_profile=target_profile or None,
+        device_serial=device_serial or None,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
@@ -226,6 +229,8 @@ async def list_all(
     q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
+    target_profile: str | None = None,
+    device_serial: str | None = None,
 ) -> list[BatchSummary]:
     rows = await list_batches(
         limit=limit,
@@ -233,6 +238,8 @@ async def list_all(
         q=q or None,
         created_after=created_after,
         created_before=created_before,
+        target_profile=target_profile or None,
+        device_serial=device_serial or None,
     )
     summaries: list[BatchSummary] = []
     for r in rows:

@@ -46,37 +46,55 @@ async def get_batch(batch_id: str) -> Batch | None:
         return await s.get(Batch, batch_id)
 
 
+def _device_serial_like(serial: str) -> str:
+    # Match `"device_serial":"<serial>"` substring inside Sample.metadata_json.
+    # Fragile against JSON key reordering / whitespace, but the writer always
+    # emits compact JSON via json.dumps(), so this holds in practice.
+    return f'%"device_serial":"{serial}"%'
+
+
 async def list_batches(
     limit: int = 50,
     offset: int = 0,
     q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
+    target_profile: str | None = None,
+    device_serial: str | None = None,
 ) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
         stmt = select(Batch)
+        need_distinct = False
         if q:
             # Match batch name OR any of its samples' prompt JSON. The JSON is
             # stored as a Text column so LIKE substring search works fine for
             # ad-hoc lookups. Distinct keeps multi-match samples from inflating
             # the result. Slow on huge tables but adequate for the scale here.
             term = _like_term(q)
-            stmt = (
-                stmt.outerjoin(Sample, Sample.batch_id == Batch.id)
-                .where(
-                    or_(
-                        Batch.name.like(term, escape="\\"),
-                        Batch.id.like(term, escape="\\"),
-                        Sample.prompts_sent_json.like(term, escape="\\"),
-                    )
+            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+                or_(
+                    Batch.name.like(term, escape="\\"),
+                    Batch.id.like(term, escape="\\"),
+                    Sample.prompts_sent_json.like(term, escape="\\"),
                 )
-                .distinct()
             )
+            need_distinct = True
+        if device_serial:
+            # device_serial only exists per-sample inside metadata_json, so we
+            # have to JOIN samples and LIKE. Same caveats as the q join above.
+            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+                Sample.metadata_json.like(_device_serial_like(device_serial))
+            )
+            need_distinct = True
+        if target_profile:
+            stmt = stmt.where(Batch.target_profile_default == target_profile)
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
             stmt = stmt.where(Batch.created_at <= created_before)
+        if need_distinct:
+            stmt = stmt.distinct()
         result = await s.execute(
             stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset)
         )
@@ -87,12 +105,13 @@ async def count_batches_by_status(
     q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
+    target_profile: str | None = None,
+    device_serial: str | None = None,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
 
-    When `q` is given, counts only batches whose name/id or any sample's
-    prompt JSON contains the substring. Status breakdown reflects the
-    filtered set so the dashboard cards stay consistent with the list.
+    All filter args mirror list_batches so the dashboard cards stay
+    consistent with the visible list.
     """
     sm = get_sessionmaker()
     async with sm() as s:
@@ -106,6 +125,12 @@ async def count_batches_by_status(
                     Sample.prompts_sent_json.like(term, escape="\\"),
                 )
             )
+        if device_serial:
+            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+                Sample.metadata_json.like(_device_serial_like(device_serial))
+            )
+        if target_profile:
+            stmt = stmt.where(Batch.target_profile_default == target_profile)
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
