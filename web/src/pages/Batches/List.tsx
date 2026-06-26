@@ -1,9 +1,9 @@
-import { PlusOutlined, ExperimentOutlined } from '@ant-design/icons'
-import { Button, Input, Select, Space, Table } from 'antd'
+import { PlusOutlined, ExperimentOutlined, StopOutlined } from '@ant-design/icons'
+import { App, Button, Input, Popconfirm, Select, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useBatches, useBatchStats } from '../../api/batches'
+import { useBatches, useBatchStats, useCancelActiveBatches } from '../../api/batches'
 import { ModeTag } from '../../components/ModeTag'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -22,6 +22,8 @@ const QP_SIZE = 'size'
 export function BatchList() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { message } = App.useApp()
+  const cancelActive = useCancelActiveBatches()
 
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
@@ -90,6 +92,19 @@ export function BatchList() {
     [data, statusFilter, modeFilter],
   )
   const total = stats?.total ?? 0
+  const activeCount = (stats?.queued ?? 0) + (stats?.running ?? 0)
+
+  const onCancelActive = async () => {
+    try {
+      const result = await cancelActive.mutateAsync()
+      const parts: string[] = []
+      if (result.cancelled > 0) parts.push(`已取消 ${result.cancelled} 个进行中批次`)
+      if (result.orphaned > 0) parts.push(`已清理 ${result.orphaned} 个孤儿状态`)
+      message.success(parts.length ? parts.join('，') : '没有需要取消的批次')
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
 
   const columns: ColumnsType<BatchSummary> = [
     {
@@ -141,9 +156,32 @@ export function BatchList() {
             : undefined
         }
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/batches/new')}>
-            新建批次
-          </Button>
+          <Space>
+            <Popconfirm
+              title="取消所有进行中批次"
+              description={
+                activeCount > 0
+                  ? `当前有 ${activeCount} 个 queued/running 批次，全部停掉？`
+                  : '当前没有进行中的批次（仅清理可能的孤儿状态）。'
+              }
+              onConfirm={onCancelActive}
+              okText="取消全部"
+              cancelText="不"
+              disabled={cancelActive.isPending}
+            >
+              <Button
+                danger
+                icon={<StopOutlined />}
+                loading={cancelActive.isPending}
+                disabled={activeCount === 0 && !cancelActive.isPending}
+              >
+                取消全部 {activeCount > 0 ? `(${activeCount})` : ''}
+              </Button>
+            </Popconfirm>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/batches/new')}>
+              新建批次
+            </Button>
+          </Space>
         }
       />
       <Space wrap style={{ marginBottom: 14 }}>

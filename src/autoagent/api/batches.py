@@ -26,7 +26,12 @@ from autoagent.models.api import (
     Sample,
     ScreenshotInfo,
 )
-from autoagent.storage.batches import count_batches_by_status, get_batch, list_batches
+from autoagent.storage.batches import (
+    count_batches_by_status,
+    get_batch,
+    list_batches,
+    update_batch_status,
+)
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
@@ -284,6 +289,30 @@ async def cancel(batch_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="batch not found or already finished")
     return {"batch_id": batch_id, "status": "cancelling"}
+
+
+@router.post("/cancel-active", status_code=202)
+async def cancel_active() -> dict:
+    """Cancel every queued/running batch in one call.
+
+    Live batches are cancelled via the scheduler (drops the cancel_event so
+    in-flight samples exit cleanly). Orphaned rows — `status=running` in DB
+    but the scheduler has no in-memory state, typical after a uvicorn
+    restart mid-batch — are flipped to `cancelled` directly so the UI stops
+    showing them as alive.
+    """
+    sch = get_scheduler()
+    rows = await list_batches(limit=10000, offset=0, q=None)
+    active = [r for r in rows if r.status in ("queued", "running")]
+    cancelled = 0
+    orphaned = 0
+    for row in active:
+        if await sch.cancel(row.id):
+            cancelled += 1
+        else:
+            await update_batch_status(row.id, "cancelled")
+            orphaned += 1
+    return {"cancelled": cancelled, "orphaned": orphaned, "total": len(active)}
 
 
 @router.get("/{batch_id}/events")

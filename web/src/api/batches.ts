@@ -115,6 +115,27 @@ export function useCancelBatch() {
   })
 }
 
+interface CancelActiveResponse {
+  cancelled: number
+  orphaned: number
+  total: number
+}
+
+export function useCancelActiveBatches() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await client.post<CancelActiveResponse>('/batches/cancel-active')
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] })
+      queryClient.invalidateQueries({ queryKey: ['batch-stats'] })
+    },
+  })
+}
+
 export function useRerunBatch() {
   const queryClient = useQueryClient()
 
