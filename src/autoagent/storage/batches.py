@@ -47,10 +47,11 @@ async def get_batch(batch_id: str) -> Batch | None:
 
 
 def _device_serial_like(serial: str) -> str:
-    # Match `"device_serial":"<serial>"` substring inside Sample.metadata_json.
-    # Fragile against JSON key reordering / whitespace, but the writer always
-    # emits compact JSON via json.dumps(), so this holds in practice.
-    return f'%"device_serial":"{serial}"%'
+    # Match `"device_serial"` key (eventually) followed by the serial value.
+    # Loose enough to handle both compact (`"device_serial":"x"`) and
+    # pretty-printed (`"device_serial": "x"`) JSON — sample.metadata_json
+    # is written with json.dumps default separators (`, ` / `: `).
+    return f'%"device_serial"%"{serial}"%'
 
 
 async def list_batches(
@@ -65,35 +66,48 @@ async def list_batches(
     sm = get_sessionmaker()
     async with sm() as s:
         stmt = select(Batch)
-        need_distinct = False
+        joined_samples = False
+
+        def ensure_samples_join(stmt_):
+            nonlocal joined_samples
+            if not joined_samples:
+                stmt_ = stmt_.outerjoin(Sample, Sample.batch_id == Batch.id)
+                joined_samples = True
+            return stmt_
+
         if q:
-            # Match batch name OR any of its samples' prompt JSON. The JSON is
-            # stored as a Text column so LIKE substring search works fine for
-            # ad-hoc lookups. Distinct keeps multi-match samples from inflating
-            # the result. Slow on huge tables but adequate for the scale here.
+            # Match batch name OR any of its samples' prompt JSON. Slow on
+            # huge tables but adequate for the scale here.
             term = _like_term(q)
-            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+            stmt = ensure_samples_join(stmt).where(
                 or_(
                     Batch.name.like(term, escape="\\"),
                     Batch.id.like(term, escape="\\"),
                     Sample.prompts_sent_json.like(term, escape="\\"),
                 )
             )
-            need_distinct = True
         if device_serial:
             # device_serial only exists per-sample inside metadata_json, so we
-            # have to JOIN samples and LIKE. Same caveats as the q join above.
-            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+            # have to JOIN samples and LIKE.
+            stmt = ensure_samples_join(stmt).where(
                 Sample.metadata_json.like(_device_serial_like(device_serial))
             )
-            need_distinct = True
         if target_profile:
-            stmt = stmt.where(Batch.target_profile_default == target_profile)
+            # Match either Batch.target_profile_default (set only when the
+            # explicit JSON/upload endpoints supply one) OR any sample's
+            # target_profile (the column that's actually populated for
+            # OpenAI-compat / sync-test entry points).
+            stmt = ensure_samples_join(stmt).where(
+                or_(
+                    Batch.target_profile_default == target_profile,
+                    Sample.target_profile == target_profile,
+                )
+            )
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
             stmt = stmt.where(Batch.created_at <= created_before)
-        if need_distinct:
+        if joined_samples:
             stmt = stmt.distinct()
         result = await s.execute(
             stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset)
@@ -116,9 +130,18 @@ async def count_batches_by_status(
     sm = get_sessionmaker()
     async with sm() as s:
         stmt = select(Batch.status, func.count(func.distinct(Batch.id)))
+        joined_samples = False
+
+        def ensure_samples_join(stmt_):
+            nonlocal joined_samples
+            if not joined_samples:
+                stmt_ = stmt_.outerjoin(Sample, Sample.batch_id == Batch.id)
+                joined_samples = True
+            return stmt_
+
         if q:
             term = _like_term(q)
-            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+            stmt = ensure_samples_join(stmt).where(
                 or_(
                     Batch.name.like(term, escape="\\"),
                     Batch.id.like(term, escape="\\"),
@@ -126,11 +149,16 @@ async def count_batches_by_status(
                 )
             )
         if device_serial:
-            stmt = stmt.outerjoin(Sample, Sample.batch_id == Batch.id).where(
+            stmt = ensure_samples_join(stmt).where(
                 Sample.metadata_json.like(_device_serial_like(device_serial))
             )
         if target_profile:
-            stmt = stmt.where(Batch.target_profile_default == target_profile)
+            stmt = ensure_samples_join(stmt).where(
+                or_(
+                    Batch.target_profile_default == target_profile,
+                    Sample.target_profile == target_profile,
+                )
+            )
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
