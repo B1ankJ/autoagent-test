@@ -1,5 +1,7 @@
 import asyncio
+import io
 import json
+import zipfile
 
 import anyio
 import pytest
@@ -121,10 +123,12 @@ async def test_e2e_full_batch_via_http(client, httpx_mock: HTTPXMock):
     assert detail["failed"] == 0
     assert len(detail["samples"]) == 3
 
-    # 5. Download results JSONL
+    # 5. Download results zip (JSONL + logs)
     r = await client.get(f"/api/v1/batches/{batch_id}/results", headers=h)
     assert r.status_code == 200
-    lines = r.text.strip().splitlines()
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        jsonl_text = zf.read(f"{batch_id}.jsonl").decode("utf-8")
+    lines = jsonl_text.strip().splitlines()
     assert len(lines) == 3
     for line in lines:
         d = json.loads(line)

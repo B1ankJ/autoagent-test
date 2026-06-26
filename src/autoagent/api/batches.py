@@ -3,10 +3,20 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import OperationalError
 from sse_starlette.sse import EventSourceResponse
@@ -230,14 +240,52 @@ async def get_one(batch_id: str) -> BatchDetail:
 
 
 @router.get("/{batch_id}/results")
-async def download_results(batch_id: str) -> FileResponse:
+async def download_results(batch_id: str, background_tasks: BackgroundTasks) -> FileResponse:
+    """Return a zip containing the batch JSONL + the entire logs/<batch>/ tree.
+
+    Layout in the zip:
+      <batch_id>.jsonl                 ← per-sample results, one line each
+      logs/<sample_id>/...             ← screenshots, XML dumps, action logs
+
+    Either piece is included only if it exists on disk, so a still-running
+    batch downloads whatever artifacts have landed so far. A truly empty
+    batch (no JSONL, no logs dir) returns 404.
+    """
     b = await get_batch(batch_id)
     if b is None:
         raise HTTPException(status_code=404, detail="batch not found")
-    path = get_settings().data_root / "results" / f"{batch_id}.jsonl"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="results file not found")
-    return FileResponse(path, media_type="application/x-ndjson", filename=f"{batch_id}.jsonl")
+    settings = get_settings()
+    jsonl_path = settings.data_root / "results" / f"{batch_id}.jsonl"
+    logs_dir = settings.logs_root / batch_id
+
+    if not jsonl_path.exists() and not logs_dir.exists():
+        raise HTTPException(status_code=404, detail="no results or logs found")
+
+    tmp = tempfile.NamedTemporaryFile(prefix=f"{batch_id}_", suffix=".zip", delete=False)
+    tmp.close()
+    try:
+        # Screenshots dominate; PNG bytes don't compress further but action
+        # logs / XML do, so DEFLATE is still a net win at minimal CPU cost.
+        with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            if jsonl_path.exists():
+                zf.write(jsonl_path, arcname=f"{batch_id}.jsonl")
+            if logs_dir.exists():
+                for file_path in sorted(logs_dir.rglob("*")):
+                    if file_path.is_file():
+                        zf.write(
+                            file_path,
+                            arcname=f"logs/{file_path.relative_to(logs_dir)}",
+                        )
+    except Exception:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
+    background_tasks.add_task(Path(tmp.name).unlink, missing_ok=True)
+    return FileResponse(
+        tmp.name,
+        media_type="application/zip",
+        filename=f"{batch_id}.zip",
+    )
 
 
 @router.post("/{batch_id}/rerun", response_model=BatchCreatedResponse, status_code=201)

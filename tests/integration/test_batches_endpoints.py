@@ -1,4 +1,6 @@
 import asyncio
+import io
+import zipfile
 
 import pytest
 import yaml
@@ -81,7 +83,9 @@ async def test_json_batch_flow(client, httpx_mock: HTTPXMock):
 
     r = await client.get(f"/api/v1/batches/{batch_id}/results", headers=h)
     assert r.status_code == 200
-    lines = r.text.strip().splitlines()
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        jsonl_text = zf.read(f"{batch_id}.jsonl").decode("utf-8")
+    lines = jsonl_text.strip().splitlines()
     assert len(lines) == 2
 
 

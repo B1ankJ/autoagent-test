@@ -17,7 +17,7 @@ export function DownloadButton({ batchId }: Props) {
     try {
       const response = await client.get(`/batches/${batchId}/results`, { responseType: 'blob' })
       const filename =
-        parseContentDisposition(response.headers['content-disposition']) ?? `${batchId}.jsonl`
+        parseContentDisposition(response.headers['content-disposition']) ?? `${batchId}.zip`
       triggerDownload(response.data as Blob, filename)
     } catch (error) {
       message.error((error as Error).message)
@@ -27,7 +27,12 @@ export function DownloadButton({ batchId }: Props) {
   }
 
   return (
-    <Button icon={<DownloadOutlined />} loading={loading} onClick={onClick}>
+    <Button
+      icon={<DownloadOutlined />}
+      loading={loading}
+      onClick={onClick}
+      title="zip 包含 JSONL 结果 + logs 目录（截图 / XML / action_log）"
+    >
       下载结果
     </Button>
   )
