@@ -82,6 +82,11 @@ class BatchSummary(BaseModel):
     total_duration_ms: int | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    # First prompt of the sole sample when total == 1, truncated to ~160 chars
+    # so the Batches list can preview it without opening detail. Always None
+    # when total != 1 — for multi-sample batches the preview wouldn't be
+    # representative.
+    preview_prompt: str | None = None
 
 
 class BatchDetail(BatchSummary):

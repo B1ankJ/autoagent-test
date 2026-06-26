@@ -191,27 +191,50 @@ async def batch_stats(q: str | None = None) -> dict[str, int]:
     return counts
 
 
+_PREVIEW_PROMPT_MAX = 160
+
+
+async def _preview_prompt(batch_id: str) -> str | None:
+    """First prompt of a single-sample batch, truncated for the list view."""
+    samples = await list_samples_for_batch(batch_id)
+    if not samples:
+        return None
+    prompt = (samples[0].prompts_sent or [None])[0]
+    if not isinstance(prompt, str):
+        return None
+    clean = prompt.replace("\n", " ").strip()
+    if not clean:
+        return None
+    if len(clean) > _PREVIEW_PROMPT_MAX:
+        return clean[:_PREVIEW_PROMPT_MAX] + "…"
+    return clean
+
+
 @router.get("", response_model=list[BatchSummary])
 async def list_all(
     limit: int = 50, offset: int = 0, q: str | None = None
 ) -> list[BatchSummary]:
     rows = await list_batches(limit=limit, offset=offset, q=q or None)
-    return [
-        BatchSummary(
-            batch_id=r.id,
-            name=r.name,
-            mode=r.mode,
-            status=r.status,
-            total=r.total,
-            done=r.done,
-            failed=r.failed,
-            avg_duration_ms=r.avg_duration_ms,
-            total_duration_ms=r.total_duration_ms,
-            started_at=r.started_at,
-            ended_at=r.ended_at,
+    summaries: list[BatchSummary] = []
+    for r in rows:
+        preview = await _preview_prompt(r.id) if r.total == 1 else None
+        summaries.append(
+            BatchSummary(
+                batch_id=r.id,
+                name=r.name,
+                mode=r.mode,
+                status=r.status,
+                total=r.total,
+                done=r.done,
+                failed=r.failed,
+                avg_duration_ms=r.avg_duration_ms,
+                total_duration_ms=r.total_duration_ms,
+                started_at=r.started_at,
+                ended_at=r.ended_at,
+                preview_prompt=preview,
+            )
         )
-        for r in rows
-    ]
+    return summaries
 
 
 @router.get("/{batch_id}", response_model=BatchDetail)

@@ -146,7 +146,25 @@ export function BatchList() {
       title: '名称',
       dataIndex: 'name',
       render: (value: string, row) => (
-        <a onClick={() => navigate(`/batches/${row.batch_id}`)}>{value}</a>
+        <div>
+          <a onClick={() => navigate(`/batches/${row.batch_id}`)}>{value}</a>
+          {row.preview_prompt ? (
+            <div
+              className="aa-muted"
+              title={row.preview_prompt}
+              style={{
+                fontSize: 12,
+                marginTop: 2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 480,
+              }}
+            >
+              {row.preview_prompt}
+            </div>
+          ) : null}
+        </div>
       ),
     },
     {

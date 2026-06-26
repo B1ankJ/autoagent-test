@@ -57,6 +57,7 @@ export interface BatchSummary {
   total_duration_ms?: number
   started_at?: string
   ended_at?: string
+  preview_prompt?: string | null
 }
 
 export interface BatchDetail extends BatchSummary {
