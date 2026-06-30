@@ -47,3 +47,43 @@ export function useSaveDefaults() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'defaults'] }),
   })
 }
+
+export interface DingTalkConfig {
+  enabled: boolean
+  webhook_url: string
+  secret: string
+  empty_response_threshold: number
+  at_mobiles: string[]
+  at_all: boolean
+}
+
+export interface DingTalkSendResult {
+  ok: boolean
+  status_code: number | null
+  errcode: number | null
+  errmsg: string | null
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ['config', 'notifications'],
+    queryFn: async () => (await client.get<DingTalkConfig>('/config/notifications')).data,
+  })
+}
+
+export function useSaveNotifications() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: DingTalkConfig) =>
+      (await client.put<DingTalkConfig>('/config/notifications', body)).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['config', 'notifications'] }),
+  })
+}
+
+export function useTestNotifications() {
+  return useMutation({
+    mutationFn: async (body: DingTalkConfig) =>
+      (await client.post<DingTalkSendResult>('/config/notifications/test', body)).data,
+  })
+}

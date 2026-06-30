@@ -13,6 +13,7 @@ from autoagent.devices.pool import DevicePool
 from autoagent.events.bus import get_event_bus
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Mode, Sample, SampleResult
+from autoagent.notifications.rules import on_sample_result as _notify_on_sample
 from autoagent.results.writer import ResultWriter
 from autoagent.storage.batches import (
     create_batch,
@@ -246,6 +247,10 @@ class BatchScheduler:
                     await upsert_sample(batch_id, result)
                 except Exception:
                     log.exception("failed to persist sample %s", sample.id)
+                # Fire notification rules (DingTalk etc.). Best-effort; the
+                # rule layer swallows its own exceptions so a misconfigured
+                # webhook can't stall batch progress.
+                await _notify_on_sample(result, batch_id)
 
                 async with state.progress_lock:
                     state.results.append(result)

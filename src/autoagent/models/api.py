@@ -145,6 +145,21 @@ class DefaultsConfig(BaseModel):
     verbose_logs: bool = True
 
 
+class DingTalkNotificationConfig(BaseModel):
+    """DingTalk custom-robot config + active rule thresholds."""
+
+    enabled: bool = False
+    webhook_url: str = ""
+    # Optional HMAC secret. When set, requests are signed per DingTalk spec.
+    secret: str = ""
+    # Rule: alert when a single device produces N consecutive empty
+    # responses (status=done, responses[0] is empty/whitespace).
+    empty_response_threshold: int = 3
+    # Optional @-mentions on alert (mobile numbers / "all").
+    at_mobiles: list[str] = Field(default_factory=list)
+    at_all: bool = False
+
+
 class ProfileBuilderSessionCreate(BaseModel):
     platform: Literal["android"]
     device_serial: str

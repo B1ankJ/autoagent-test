@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
 from autoagent.executors.llm_checker import check_llm_api
-from autoagent.models.api import DefaultsConfig, VLMConfig
+from autoagent.models.api import DefaultsConfig, DingTalkNotificationConfig, VLMConfig
+from autoagent.notifications.dingtalk import send_markdown
 from autoagent.storage.configs import get_config, put_config
 
 router = APIRouter(prefix="/config", tags=["config"], dependencies=[Depends(require_user)])
@@ -56,3 +57,47 @@ async def get_defaults() -> DefaultsConfig:
 async def put_defaults(body: DefaultsConfig) -> DefaultsConfig:
     await put_config("defaults", body.model_dump())
     return body
+
+
+@router.get("/notifications", response_model=DingTalkNotificationConfig)
+async def get_notifications() -> DingTalkNotificationConfig:
+    v = await get_config("notifications")
+    return (
+        DingTalkNotificationConfig.model_validate(v) if v else DingTalkNotificationConfig()
+    )
+
+
+@router.put("/notifications", response_model=DingTalkNotificationConfig)
+async def put_notifications(body: DingTalkNotificationConfig) -> DingTalkNotificationConfig:
+    if body.enabled and not body.webhook_url.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="webhook_url is required when enabled=true",
+        )
+    if body.empty_response_threshold < 1:
+        raise HTTPException(
+            status_code=422,
+            detail="empty_response_threshold must be ≥ 1",
+        )
+    await put_config("notifications", body.model_dump())
+    return body
+
+
+@router.post("/notifications/test")
+async def test_notifications(body: DingTalkNotificationConfig) -> dict:
+    """Send a test DingTalk message using the supplied (unsaved) config."""
+    if not body.webhook_url.strip():
+        raise HTTPException(status_code=422, detail="webhook_url is required")
+    sr = await send_markdown(
+        webhook_url=body.webhook_url.strip(),
+        secret=body.secret.strip() or None,
+        title="[AutoAgent] 通知配置测试",
+        text=(
+            "### ✅ 测试通知\n\n"
+            "这条消息来自 AutoAgent 通知配置页面。如果你收到了它,说明 webhook "
+            "和签名都对了。"
+        ),
+        at_mobiles=list(body.at_mobiles),
+        at_all=body.at_all,
+    )
+    return asdict(sr)
