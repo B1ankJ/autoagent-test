@@ -82,9 +82,12 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
             preferred: str | None,
             timeout_sec: float = 60,
             cancel_event=None,
+            *,
+            allowed_serials: set[str] | None = None,
         ):
             seen["preferred"] = preferred
             seen["timeout_sec"] = timeout_sec
+            seen["allowed_serials"] = allowed_serials
             yield "emulator-5554"
 
     await init_db()

@@ -39,23 +39,48 @@ class DevicePool:
         preferred: str | None,
         timeout_sec: float = 60,
         cancel_event: asyncio.Event | None = None,
+        *,
+        allowed_serials: set[str] | None = None,
     ):
+        """Acquire one online+enabled device from the pool.
+
+        - `preferred` (legacy): if set, must match that exact serial.
+        - `allowed_serials`: if non-empty, the pool is restricted to those
+          serials. Combined with `preferred` if both are given.
+        - When the resulting pool is fully offline / disabled, raises
+          DeviceDisabled immediately. When the pool has online devices
+          but they're all locked by other samples, polls until one frees
+          up or the timeout / cancel fires.
+        """
+        # Merge legacy preferred + new allowed_serials into a single pool set.
+        allowed: set[str] | None
+        if preferred and allowed_serials:
+            allowed = set(allowed_serials) | {preferred}
+        elif preferred:
+            allowed = {preferred}
+        elif allowed_serials:
+            allowed = set(allowed_serials)
+        else:
+            allowed = None
+
         deadline = time.monotonic() + timeout_sec
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 raise DeviceBusy("cancelled while waiting for device")
-            candidates = [
-                device for device in self._list_devices() if device.online and device.enabled
-            ]
-            if preferred:
-                if any(
-                    device.serial == preferred and not device.enabled
-                    for device in self._list_devices()
-                ):
-                    raise DeviceDisabled(f"device {preferred} unavailable")
-                candidates = [device for device in candidates if device.serial == preferred]
-                if not candidates:
-                    raise DeviceDisabled(f"device {preferred} unavailable")
+            all_devices = list(self._list_devices())
+            if allowed is not None:
+                pool = [d for d in all_devices if d.serial in allowed]
+                if not pool:
+                    raise DeviceDisabled(
+                        f"no devices in pool: {sorted(allowed)}"
+                    )
+                if not any(d.online and d.enabled for d in pool):
+                    raise DeviceDisabled(
+                        f"all devices in pool offline/disabled: {sorted(allowed)}"
+                    )
+                candidates = [d for d in pool if d.online and d.enabled]
+            else:
+                candidates = [d for d in all_devices if d.online and d.enabled]
 
             for device in candidates:
                 lock = self._locks.setdefault(device.serial, asyncio.Lock())

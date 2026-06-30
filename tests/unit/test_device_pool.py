@@ -33,3 +33,48 @@ async def test_acquire_raises_when_device_disabled_mid_wait() -> None:
         devices[0] = _device("a", enabled=False)
         with pytest.raises(DeviceDisabled):
             await task
+
+
+@pytest.mark.asyncio
+async def test_acquire_pool_picks_first_free_in_set() -> None:
+    pool = DevicePool(lambda: [_device("a"), _device("b"), _device("c")])
+    # Lock a, then acquire from pool {a, b}: b should win immediately.
+    async with pool.acquire(preferred=None, timeout_sec=0.1, allowed_serials={"a"}):
+        async with pool.acquire(
+            preferred=None, timeout_sec=0.5, allowed_serials={"a", "b"}
+        ) as serial:
+            assert serial == "b"
+
+
+@pytest.mark.asyncio
+async def test_acquire_pool_raises_when_all_offline() -> None:
+    pool = DevicePool(
+        lambda: [_device("a", online=False), _device("b", online=False), _device("c")]
+    )
+    with pytest.raises(DeviceDisabled):
+        async with pool.acquire(
+            preferred=None, timeout_sec=0.1, allowed_serials={"a", "b"}
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_acquire_pool_raises_when_empty_intersection() -> None:
+    pool = DevicePool(lambda: [_device("a"), _device("b")])
+    with pytest.raises(DeviceDisabled):
+        async with pool.acquire(
+            preferred=None, timeout_sec=0.1, allowed_serials={"x", "y"}
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_acquire_preferred_and_pool_merge() -> None:
+    pool = DevicePool(lambda: [_device("a"), _device("b"), _device("c")])
+    # Lock b, then acquire preferred=c with pool={a}: c is in the merged set
+    # ({a, c}) and unlocked, so it wins.
+    async with pool.acquire(preferred="b", timeout_sec=0.1):
+        async with pool.acquire(
+            preferred="c", timeout_sec=0.1, allowed_serials={"a"}
+        ) as serial:
+            assert serial in {"a", "c"}

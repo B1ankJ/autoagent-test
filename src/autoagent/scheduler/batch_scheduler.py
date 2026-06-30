@@ -209,10 +209,19 @@ class BatchScheduler:
                                     "waiting_for_device": True,
                                 },
                             )
+                            # Multi-device pool support: a profile may name
+                            # a `serials` list to fan out across N phones.
+                            # `serial` (legacy single field) still works.
+                            profile_serial = getattr(profile, "serial", None)
+                            profile_serials = getattr(profile, "serials", None) or []
+                            pool_set: set[str] | None = (
+                                set(profile_serials) if profile_serials else None
+                            )
                             async with self._device_pool.acquire(
-                                getattr(profile, "serial", None),
+                                profile_serial,
                                 timeout_sec=settings.device_acquire_timeout_sec,
                                 cancel_event=state.cancel_event,
+                                allowed_serials=pool_set,
                             ) as serial:
                                 ctx.device_serial = serial
                                 ctx.action_replay_path = (

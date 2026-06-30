@@ -232,7 +232,14 @@ class AndroidProfile(BaseModel):
     platform: Literal["android"]
     package: str
     activity: str | None = None
+    # Legacy single-device binding. When set without `serials`, only this
+    # device is acceptable (preserves the old "one profile, one phone"
+    # behavior). Combined with `serials` if both are populated.
     serial: str | None = None
+    # Optional device pool. When non-empty, the scheduler may acquire any
+    # online device whose serial is in this list. Lets one profile fan out
+    # across N phones for higher throughput.
+    serials: list[str] = Field(default_factory=list)
     base_url: str | None = None
     model: str | None = None
     api_key: str | None = None
@@ -298,7 +305,9 @@ class AgentPcProfile(BaseModel):
 class AgentAndroidProfile(BaseModel):
     name: str
     platform: Literal["agent_android"]
+    # Legacy single-device binding (see AndroidProfile for semantics).
     serial: str | None = None
+    serials: list[str] = Field(default_factory=list)
     base_url: str
     model: str
     api_key: str
