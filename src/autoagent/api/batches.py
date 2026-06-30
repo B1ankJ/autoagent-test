@@ -206,20 +206,36 @@ async def batch_stats(
 _PREVIEW_PROMPT_MAX = 160
 
 
-async def _preview_prompt(batch_id: str) -> str | None:
-    """First prompt of a single-sample batch, truncated for the list view."""
-    samples = await list_samples_for_batch(batch_id)
-    if not samples:
-        return None
-    prompt = (samples[0].prompts_sent or [None])[0]
-    if not isinstance(prompt, str):
-        return None
-    clean = prompt.replace("\n", " ").strip()
-    if not clean:
-        return None
+def _truncate(text: str) -> str:
+    clean = text.replace("\n", " ").strip()
     if len(clean) > _PREVIEW_PROMPT_MAX:
         return clean[:_PREVIEW_PROMPT_MAX] + "…"
     return clean
+
+
+async def _single_sample_preview(batch_id: str) -> tuple[str | None, str | None]:
+    """Return (prompt, response) previews for a single-sample batch.
+
+    Each element is:
+      - None  → not applicable (no sample, or prompt absent)
+      - str   → truncated text (empty string means "ran but produced nothing"
+                — the frontend uses that to flag an anomaly)
+    """
+    samples = await list_samples_for_batch(batch_id)
+    if not samples:
+        return None, None
+    sample = samples[0]
+    prompt_raw = (sample.prompts_sent or [None])[0]
+    prompt = _truncate(prompt_raw) if isinstance(prompt_raw, str) and prompt_raw.strip() else None
+    if prompt is None:
+        # No usable prompt → don't bother surfacing the response either.
+        return None, None
+    response_raw = (sample.responses or [None])[0]
+    if isinstance(response_raw, str):
+        response = _truncate(response_raw)  # may be ""
+    else:
+        response = ""  # treat absent / non-string as empty for anomaly purposes
+    return prompt, response
 
 
 @router.get("", response_model=list[BatchSummary])
@@ -243,7 +259,10 @@ async def list_all(
     )
     summaries: list[BatchSummary] = []
     for r in rows:
-        preview = await _preview_prompt(r.id) if r.total == 1 else None
+        if r.total == 1:
+            preview, response = await _single_sample_preview(r.id)
+        else:
+            preview, response = None, None
         summaries.append(
             BatchSummary(
                 batch_id=r.id,
@@ -258,6 +277,7 @@ async def list_all(
                 started_at=r.started_at,
                 ended_at=r.ended_at,
                 preview_prompt=preview,
+                preview_response=response,
             )
         )
     return summaries

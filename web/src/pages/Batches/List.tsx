@@ -5,7 +5,7 @@ import {
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { App, Button, DatePicker, Dropdown, Input, Popconfirm, Select, Space, Table } from 'antd'
+import { App, Button, DatePicker, Dropdown, Input, Popconfirm, Select, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
@@ -191,33 +191,51 @@ export function BatchList() {
     {
       title: '名称',
       dataIndex: 'name',
-      render: (value: string, row) => (
-        <div>
-          <a onClick={() => navigate(`/batches/${row.batch_id}`)}>{value}</a>
-          {row.preview_prompt ? (
-            <a
-              className="aa-muted"
-              title="点击查看完整 prompt 与响应"
-              style={{
-                display: 'block',
-                fontSize: 12,
-                marginTop: 2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 480,
-                color: 'inherit',
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                setPreviewBatchId(row.batch_id)
-              }}
-            >
-              {row.preview_prompt}
-            </a>
-          ) : null}
-        </div>
-      ),
+      render: (value: string, row) => {
+        // Empty-response anomaly: single-sample batch that finished cleanly
+        // (status=done) but produced no text. The backend returns "" for
+        // preview_response only in this case; null means n/a.
+        const isEmptyResponse =
+          row.total === 1 &&
+          row.status === 'done' &&
+          row.preview_response !== null &&
+          row.preview_response !== undefined &&
+          row.preview_response === ''
+        return (
+          <div>
+            <Space size={6}>
+              <a onClick={() => navigate(`/batches/${row.batch_id}`)}>{value}</a>
+              {isEmptyResponse ? (
+                <Tag color="orange" title="批次完成但响应为空,可能抽取失败">
+                  响应为空
+                </Tag>
+              ) : null}
+            </Space>
+            {row.preview_prompt ? (
+              <a
+                className="aa-muted"
+                title="点击查看完整 prompt 与响应"
+                style={{
+                  display: 'block',
+                  fontSize: 12,
+                  marginTop: 2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 480,
+                  color: 'inherit',
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewBatchId(row.batch_id)
+                }}
+              >
+                {row.preview_prompt}
+              </a>
+            ) : null}
+          </div>
+        )
+      },
     },
     {
       title: '模式',

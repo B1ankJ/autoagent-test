@@ -87,6 +87,11 @@ class BatchSummary(BaseModel):
     # when total != 1 — for multi-sample batches the preview wouldn't be
     # representative.
     preview_prompt: str | None = None
+    # First response of the sole sample, same conditions as preview_prompt.
+    # Empty string is meaningful: it means the run finished but produced no
+    # text (typical when copy_button_vlm exhausts retries with no fallback).
+    # The frontend uses this to flag "响应为空" anomalies on the list.
+    preview_response: str | None = None
 
 
 class BatchDetail(BatchSummary):
