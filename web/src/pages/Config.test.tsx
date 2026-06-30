@@ -15,9 +15,11 @@ vi.mock('../api/config', () => ({
   useTestLLM: () => ({ isPending: false, mutateAsync: testLlmMock }),
   useDefaults: () => ({ data: { api_timeout_sec: 60, gui_timeout_sec: 180, retry: 2, concurrency: 1, verbose_logs: true } }),
   useSaveDefaults: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
-  useNotifications: () => ({ data: { enabled: false, webhook_url: '', secret: '', empty_response_threshold: 3, at_mobiles: [], at_all: false } }),
+  useNotifications: () => ({ data: { enabled: false, webhook_url: '', secret: '', empty_response_threshold: 3, same_response_enabled: false, same_response_threshold: 3, at_mobiles: [], at_all: false } }),
   useSaveNotifications: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
   useTestNotifications: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useWhitelist: () => ({ data: [], refetch: vi.fn() }),
+  useRemoveWhitelist: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }))
 
 describe('ConfigPage', () => {

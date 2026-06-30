@@ -99,6 +99,191 @@ async def test_failed_status_ignored(monkeypatch):
     assert sent == []
 
 
+# --- Same-response streak rule ---
+
+def _stub_vlm_config(value):
+    async def _get(key):
+        if key == "vlm":
+            return value
+        if key == "notifications":
+            return None
+        return None
+
+    return _get
+
+
+def _stub_judge(*, normal: bool, error: str | None = None):
+    async def _j(*, screenshot_paths, base_url, model, api_key, timeout_sec=30.0):
+        from autoagent.notifications.vlm_judge import JudgementResult
+
+        return JudgementResult(normal=normal, reason="stub", error=error)
+
+    return _j
+
+
+async def _stub_wl_contains_false(*args, **kwargs):
+    return False
+
+
+async def _stub_wl_add_record(sink):
+    async def _add(device, profile, response):
+        sink.append((device, profile, response))
+
+    return _add
+
+
+async def test_same_response_fires_when_vlm_abnormal(monkeypatch):
+    sent: list[dict] = []
+    added: list[tuple[str, str, str]] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,  # disable empty-rule for this test
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record(added))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same answer"), batch_id="b"
+        )
+    assert len(sent) == 1
+    assert added == []  # not whitelisted when abnormal
+
+
+async def test_same_response_whitelists_when_vlm_normal(monkeypatch):
+    sent: list[dict] = []
+    added: list[tuple[str, str, str]] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record(added))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=True))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same answer"), batch_id="b"
+        )
+    assert sent == []
+    assert added == [("A", "p", "same answer")]
+
+
+async def test_same_response_skips_if_no_vlm(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(None))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(5):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same answer"), batch_id="b"
+        )
+    assert sent == []
+
+
+async def test_same_response_resets_on_different_text(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(_make_sample(serial="A", response="x"), batch_id="b")
+    await rules.on_sample_result(_make_sample(serial="A", response="x"), batch_id="b")
+    await rules.on_sample_result(_make_sample(serial="A", response="y"), batch_id="b")
+    await rules.on_sample_result(_make_sample(serial="A", response="x"), batch_id="b")
+    # Only 1 "x" in the current streak — no fire.
+    assert sent == []
+
+
+async def test_same_response_alerts_on_vlm_failure(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False, error="timeout"))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="hi"), batch_id="b"
+        )
+    assert len(sent) == 1
+
+
+async def test_same_response_whitelisted_skips(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+
+    async def _wl_contains_true(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(rules.whitelist, "contains", _wl_contains_true)
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(5):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same"), batch_id="b"
+        )
+    assert sent == []
+
+
 def _stub_config(value):
     async def _load():
         return value

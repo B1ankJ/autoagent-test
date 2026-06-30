@@ -152,12 +152,28 @@ class DingTalkNotificationConfig(BaseModel):
     webhook_url: str = ""
     # Optional HMAC secret. When set, requests are signed per DingTalk spec.
     secret: str = ""
-    # Rule: alert when a single device produces N consecutive empty
+    # Rule 1: alert when a single device produces N consecutive empty
     # responses (status=done, responses[0] is empty/whitespace).
     empty_response_threshold: int = 3
+    # Rule 2: when the SAME response repeats N times on (device, profile),
+    # ask the global VLM "is this still a normal chat page?". VLM says no
+    # → alert. VLM says yes → whitelist that response so it never trips
+    # again for this (device, profile) pair. Requires /config/vlm to be
+    # configured; auto-skipped otherwise.
+    same_response_enabled: bool = False
+    same_response_threshold: int = 3
     # Optional @-mentions on alert (mobile numbers / "all").
     at_mobiles: list[str] = Field(default_factory=list)
     at_all: bool = False
+
+
+class WhitelistEntry(BaseModel):
+    device_serial: str
+    target_profile: str
+    response: str
+    # Truncated for display; the comparison still uses the full response.
+    response_excerpt: str
+    added_at: datetime
 
 
 class ProfileBuilderSessionCreate(BaseModel):

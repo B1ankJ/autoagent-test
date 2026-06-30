@@ -1,16 +1,18 @@
-import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch } from 'antd'
+import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import {
   DingTalkConfig,
   LLMCheckResult,
   useDefaults,
   useNotifications,
+  useRemoveWhitelist,
   useSaveDefaults,
   useSaveNotifications,
   useSaveVLM,
   useTestLLM,
   useTestNotifications,
   useVLM,
+  useWhitelist,
 } from '../api/config'
 import { PageHeader } from '../components/states/PageHeader'
 import { GlobalDefaults, VLMConfig } from '../types/api'
@@ -40,6 +42,8 @@ export function ConfigPage() {
   const notifications = useNotifications()
   const saveNotifications = useSaveNotifications()
   const testNotifications = useTestNotifications()
+  const whitelist = useWhitelist()
+  const removeWhitelist = useRemoveWhitelist()
   const [vlmForm] = Form.useForm<VLMConfig>()
   const [defaultsForm] = Form.useForm<GlobalDefaults>()
   const [notifyForm] = Form.useForm<DingTalkConfig>()
@@ -231,7 +235,21 @@ export function ConfigPage() {
           <Form.Item
             name="empty_response_threshold"
             label="连续空响应阈值"
-            extra="同一设备连续多少次空响应触发通知"
+            extra="规则 1:同一设备连续多少次空响应触发通知"
+          >
+            <InputNumber min={1} max={20} />
+          </Form.Item>
+          <Form.Item
+            name="same_response_enabled"
+            label="启用重复响应检测"
+            valuePropName="checked"
+            extra="规则 2:同设备同 profile 连续 N 次响应一样 → 截图给 VLM 判断是否还是聊天页(需 VLM 已配置)"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="same_response_threshold"
+            label="连续相同响应阈值"
           >
             <InputNumber min={1} max={20} />
           </Form.Item>
@@ -258,6 +276,70 @@ export function ConfigPage() {
             />
           ) : null}
         </Form>
+      </Card>
+
+      <Card
+        title="重复响应白名单"
+        size="small"
+        extra={
+          <Button size="small" onClick={() => whitelist.refetch()}>
+            刷新
+          </Button>
+        }
+      >
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="info"
+          showIcon
+          message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里。后续同样的响应不再触发判断/告警。"
+        />
+        {whitelist.data && whitelist.data.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {whitelist.data.map((entry, idx) => (
+              <div
+                key={`${entry.device_serial}-${entry.target_profile}-${idx}`}
+                style={{
+                  border: '1px solid var(--aa-border, #eee)',
+                  borderRadius: 6,
+                  padding: 8,
+                  display: 'flex',
+                  alignItems: 'start',
+                  gap: 8,
+                }}
+              >
+                <div style={{ flex: 1, fontSize: 12 }}>
+                  <div className="aa-mono">
+                    {entry.device_serial} / {entry.target_profile}
+                  </div>
+                  <div className="aa-muted" style={{ marginTop: 4 }}>
+                    {entry.response_excerpt || '(空)'}
+                  </div>
+                  <div className="aa-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                    {new Date(entry.added_at).toLocaleString()}
+                  </div>
+                </div>
+                <Button
+                  size="small"
+                  danger
+                  loading={removeWhitelist.isPending}
+                  onClick={() =>
+                    removeWhitelist
+                      .mutateAsync({
+                        device_serial: entry.device_serial,
+                        target_profile: entry.target_profile,
+                        response: entry.response,
+                      })
+                      .catch((e) => message.error((e as Error).message))
+                  }
+                >
+                  删除
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Typography.Text type="secondary">还没有白名单记录。</Typography.Text>
+        )}
       </Card>
       </Space>
     </div>

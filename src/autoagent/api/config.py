@@ -5,7 +5,13 @@ from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
 from autoagent.executors.llm_checker import check_llm_api
-from autoagent.models.api import DefaultsConfig, DingTalkNotificationConfig, VLMConfig
+from autoagent.models.api import (
+    DefaultsConfig,
+    DingTalkNotificationConfig,
+    VLMConfig,
+    WhitelistEntry,
+)
+from autoagent.notifications import whitelist as wl
 from autoagent.notifications.dingtalk import send_markdown
 from autoagent.storage.configs import get_config, put_config
 
@@ -81,6 +87,32 @@ async def put_notifications(body: DingTalkNotificationConfig) -> DingTalkNotific
         )
     await put_config("notifications", body.model_dump())
     return body
+
+
+@router.get("/notifications/whitelist", response_model=list[WhitelistEntry])
+async def list_whitelist() -> list[WhitelistEntry]:
+    raw = await wl.load_all()
+    out: list[WhitelistEntry] = []
+    for entry in raw:
+        try:
+            out.append(WhitelistEntry.model_validate(entry))
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+class _WhitelistRemove(BaseModel):
+    device_serial: str
+    target_profile: str
+    response: str
+
+
+@router.post("/notifications/whitelist/remove")
+async def remove_whitelist(body: _WhitelistRemove) -> dict:
+    removed = await wl.remove(body.device_serial, body.target_profile, body.response)
+    if not removed:
+        raise HTTPException(status_code=404, detail="entry not found")
+    return {"ok": True}
 
 
 @router.post("/notifications/test")

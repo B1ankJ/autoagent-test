@@ -53,8 +53,18 @@ export interface DingTalkConfig {
   webhook_url: string
   secret: string
   empty_response_threshold: number
+  same_response_enabled: boolean
+  same_response_threshold: number
   at_mobiles: string[]
   at_all: boolean
+}
+
+export interface WhitelistEntry {
+  device_serial: string
+  target_profile: string
+  response: string
+  response_excerpt: string
+  added_at: string
 }
 
 export interface DingTalkSendResult {
@@ -85,5 +95,23 @@ export function useTestNotifications() {
   return useMutation({
     mutationFn: async (body: DingTalkConfig) =>
       (await client.post<DingTalkSendResult>('/config/notifications/test', body)).data,
+  })
+}
+
+export function useWhitelist() {
+  return useQuery({
+    queryKey: ['config', 'notifications', 'whitelist'],
+    queryFn: async () =>
+      (await client.get<WhitelistEntry[]>('/config/notifications/whitelist')).data,
+  })
+}
+
+export function useRemoveWhitelist() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { device_serial: string; target_profile: string; response: string }) =>
+      (await client.post('/config/notifications/whitelist/remove', body)).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['config', 'notifications', 'whitelist'] }),
   })
 }
