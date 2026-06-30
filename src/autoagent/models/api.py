@@ -168,7 +168,6 @@ class DingTalkNotificationConfig(BaseModel):
 
 
 class WhitelistEntry(BaseModel):
-    device_serial: str
     target_profile: str
     response: str
     # Truncated for display; the comparison still uses the full response.

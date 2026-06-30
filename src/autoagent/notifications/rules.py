@@ -155,7 +155,7 @@ async def _rule_same_response_streak(
     if not profile:
         return
 
-    if await whitelist.contains(serial, profile, response):
+    if await whitelist.contains(profile, response):
         # Streak resets when something whitelisted comes through.
         async with _lock:
             _same_state.pop((serial, profile), None)
@@ -238,7 +238,7 @@ async def _judge_and_act(
     if judgement.normal:
         # Page is fine, the App is just answering identically. Whitelist
         # so this exact response never trips again for this (device, profile).
-        await whitelist.add(serial, profile, response)
+        await whitelist.add(profile, response)
         _log.info(
             "same-response streak on %s/%s judged normal by VLM; whitelisted "
             "(reason=%r)",

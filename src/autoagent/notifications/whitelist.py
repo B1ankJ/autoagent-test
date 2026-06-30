@@ -1,8 +1,12 @@
-"""Per-(device, profile) response whitelist for the same-response rule.
+"""Per-profile response whitelist for the same-response rule.
 
-Backed by the kv config table so it survives restart. Comparison is exact
-string equality after strip — matches what the rule uses to detect a
-"same response" streak.
+Scoped by `target_profile` only — if a profile legitimately produces a
+canned reply, that fact is the same regardless of which device runs it,
+so one whitelist add applies to every device using that profile.
+
+Backed by the kv config table so it survives restart. Comparison is
+exact string equality after strip — matches what the rule uses to
+detect a "same response" streak.
 """
 from __future__ import annotations
 
@@ -36,25 +40,23 @@ async def _save_all(entries: list[dict[str, Any]]) -> None:
     await put_config(_KEY, entries)
 
 
-async def contains(device: str, profile: str, response: str) -> bool:
+async def contains(profile: str, response: str) -> bool:
     target = normalize(response)
     for entry in await load_all():
         if (
-            entry.get("device_serial") == device
-            and entry.get("target_profile") == profile
+            entry.get("target_profile") == profile
             and normalize(str(entry.get("response") or "")) == target
         ):
             return True
     return False
 
 
-async def add(device: str, profile: str, response: str) -> None:
-    if await contains(device, profile, response):
+async def add(profile: str, response: str) -> None:
+    if await contains(profile, response):
         return
     entries = await load_all()
     entries.append(
         {
-            "device_serial": device,
             "target_profile": profile,
             "response": response,
             "response_excerpt": _excerpt(response),
@@ -64,15 +66,14 @@ async def add(device: str, profile: str, response: str) -> None:
     await _save_all(entries)
 
 
-async def remove(device: str, profile: str, response: str) -> bool:
+async def remove(profile: str, response: str) -> bool:
     target = normalize(response)
     entries = await load_all()
     keep = [
         e
         for e in entries
         if not (
-            e.get("device_serial") == device
-            and e.get("target_profile") == profile
+            e.get("target_profile") == profile
             and normalize(str(e.get("response") or "")) == target
         )
     ]

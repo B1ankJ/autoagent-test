@@ -102,14 +102,13 @@ async def list_whitelist() -> list[WhitelistEntry]:
 
 
 class _WhitelistRemove(BaseModel):
-    device_serial: str
     target_profile: str
     response: str
 
 
 @router.post("/notifications/whitelist/remove")
 async def remove_whitelist(body: _WhitelistRemove) -> dict:
-    removed = await wl.remove(body.device_serial, body.target_profile, body.response)
+    removed = await wl.remove(body.target_profile, body.response)
     if not removed:
         raise HTTPException(status_code=404, detail="entry not found")
     return {"ok": True}

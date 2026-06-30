@@ -126,8 +126,8 @@ async def _stub_wl_contains_false(*args, **kwargs):
 
 
 async def _stub_wl_add_record(sink):
-    async def _add(device, profile, response):
-        sink.append((device, profile, response))
+    async def _add(profile, response):
+        sink.append((profile, response))
 
     return _add
 
@@ -183,7 +183,7 @@ async def test_same_response_whitelists_when_vlm_normal(monkeypatch):
             _make_sample(serial="A", response="same answer"), batch_id="b"
         )
     assert sent == []
-    assert added == [("A", "p", "same answer")]
+    assert added == [("p", "same answer")]
 
 
 async def test_same_response_skips_if_no_vlm(monkeypatch):

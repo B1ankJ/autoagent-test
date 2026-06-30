@@ -60,7 +60,6 @@ export interface DingTalkConfig {
 }
 
 export interface WhitelistEntry {
-  device_serial: string
   target_profile: string
   response: string
   response_excerpt: string
@@ -109,7 +108,7 @@ export function useWhitelist() {
 export function useRemoveWhitelist() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { device_serial: string; target_profile: string; response: string }) =>
+    mutationFn: async (body: { target_profile: string; response: string }) =>
       (await client.post('/config/notifications/whitelist/remove', body)).data,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['config', 'notifications', 'whitelist'] }),

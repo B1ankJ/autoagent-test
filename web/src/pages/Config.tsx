@@ -243,7 +243,7 @@ export function ConfigPage() {
             name="same_response_enabled"
             label="启用重复响应检测"
             valuePropName="checked"
-            extra="规则 2:同设备同 profile 连续 N 次响应一样 → 截图给 VLM 判断是否还是聊天页(需 VLM 已配置)"
+            extra="规则 2:同设备连续 N 次响应一样 → 截图给 VLM 判断是否还是聊天页;白名单按 profile 维度(需 VLM 已配置)"
           >
             <Switch />
           </Form.Item>
@@ -297,7 +297,7 @@ export function ConfigPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {whitelist.data.map((entry, idx) => (
               <div
-                key={`${entry.device_serial}-${entry.target_profile}-${idx}`}
+                key={`${entry.target_profile}-${idx}`}
                 style={{
                   border: '1px solid var(--aa-border, #eee)',
                   borderRadius: 6,
@@ -308,9 +308,7 @@ export function ConfigPage() {
                 }}
               >
                 <div style={{ flex: 1, fontSize: 12 }}>
-                  <div className="aa-mono">
-                    {entry.device_serial} / {entry.target_profile}
-                  </div>
+                  <div className="aa-mono">profile: {entry.target_profile}</div>
                   <div className="aa-muted" style={{ marginTop: 4 }}>
                     {entry.response_excerpt || '(空)'}
                   </div>
@@ -325,7 +323,6 @@ export function ConfigPage() {
                   onClick={() =>
                     removeWhitelist
                       .mutateAsync({
-                        device_serial: entry.device_serial,
                         target_profile: entry.target_profile,
                         response: entry.response,
                       })
