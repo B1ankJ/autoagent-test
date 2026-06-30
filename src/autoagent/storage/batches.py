@@ -54,6 +54,26 @@ def _device_serial_like(serial: str) -> str:
     return f'%"device_serial"%"{serial}"%'
 
 
+def _is_empty_response_clause():
+    """SQL clause matching sample rows whose response is effectively empty.
+
+    Covers the shapes observed in this DB:
+      NULL              → missing column
+      "[]"              → wrote responses=[] (executor never appended)
+      '[""]'            → wrote responses=[""] (e.g. copy_button_vlm gave up)
+      '["", ...'        → multi-prompt sample with empty first response
+    First-empty in multi-prompt covers OpenAI-compat single-prompt batches
+    where most empty-response anomalies show up.
+    """
+    return or_(
+        Sample.responses_json.is_(None),
+        Sample.responses_json == "[]",
+        Sample.responses_json == '[""]',
+        Sample.responses_json.like('["", %'),
+        Sample.responses_json.like('["",%'),
+    )
+
+
 async def list_batches(
     limit: int = 50,
     offset: int = 0,
@@ -62,6 +82,7 @@ async def list_batches(
     created_before: datetime | None = None,
     target_profile: str | None = None,
     device_serial: str | None = None,
+    empty_response_only: bool = False,
 ) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
@@ -103,6 +124,13 @@ async def list_batches(
                     Sample.target_profile == target_profile,
                 )
             )
+        if empty_response_only:
+            # Constrain to single-sample done batches with an empty
+            # response. Multi-sample batches are intentionally excluded —
+            # one empty sample among many isn't the "anomaly" surface
+            # this filter is for.
+            stmt = stmt.where(Batch.total == 1, Batch.status == "done")
+            stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
@@ -121,6 +149,7 @@ async def count_batches_by_status(
     created_before: datetime | None = None,
     target_profile: str | None = None,
     device_serial: str | None = None,
+    empty_response_only: bool = False,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
 
@@ -159,6 +188,9 @@ async def count_batches_by_status(
                     Sample.target_profile == target_profile,
                 )
             )
+        if empty_response_only:
+            stmt = stmt.where(Batch.total == 1, Batch.status == "done")
+            stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:

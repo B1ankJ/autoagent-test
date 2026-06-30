@@ -5,7 +5,19 @@ import {
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { App, Button, DatePicker, Dropdown, Input, Popconfirm, Select, Space, Table, Tag } from 'antd'
+import {
+  App,
+  Button,
+  DatePicker,
+  Dropdown,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
@@ -38,6 +50,7 @@ const QP_FROM = 'from'   // ISO string, inclusive lower bound on Batch.created_a
 const QP_TO = 'to'       // ISO string, inclusive upper bound on Batch.created_at
 const QP_PROFILE = 'profile' // target_profile_default exact match
 const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
+const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
 
 export function BatchList() {
   const navigate = useNavigate()
@@ -61,6 +74,7 @@ export function BatchList() {
   ]
   const profileFilter = searchParams.get(QP_PROFILE) || undefined
   const deviceFilter = searchParams.get(QP_DEVICE) || undefined
+  const emptyResponseOnly = searchParams.get(QP_EMPTY) === '1'
 
   const profilesQ = useProfiles()
   const devicesQ = useDevices()
@@ -103,6 +117,9 @@ export function BatchList() {
   const setDeviceFilter = (v: string | undefined) => {
     updateParams({ [QP_DEVICE]: v, [QP_PAGE]: undefined })
   }
+  const setEmptyResponseOnly = (v: boolean) => {
+    updateParams({ [QP_EMPTY]: v ? '1' : undefined, [QP_PAGE]: undefined })
+  }
   const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
     const [from, to] = range ?? [null, null]
     updateParams({
@@ -132,6 +149,7 @@ export function BatchList() {
     createdBefore: toIso,
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
+    emptyResponseOnly,
   })
   const { data: stats } = useBatchStats({
     q: debouncedQ,
@@ -139,6 +157,7 @@ export function BatchList() {
     createdBefore: toIso,
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
+    emptyResponseOnly,
   })
 
   const rows = useMemo(
@@ -472,6 +491,16 @@ export function BatchList() {
             },
           ]}
         />
+        <Space size={6}>
+          <Switch
+            checked={emptyResponseOnly}
+            onChange={setEmptyResponseOnly}
+            size="small"
+          />
+          <span style={{ fontSize: 13 }} title="只看 total=1 / done / 响应为空的批次">
+            只看响应为空
+          </span>
+        </Space>
       </Space>
       {isError ? (
         <ErrorState

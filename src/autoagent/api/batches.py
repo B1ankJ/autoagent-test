@@ -184,6 +184,7 @@ async def batch_stats(
     created_before: datetime | None = None,
     target_profile: str | None = None,
     device_serial: str | None = None,
+    empty_response_only: bool = False,
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
@@ -197,6 +198,7 @@ async def batch_stats(
         created_before=created_before,
         target_profile=target_profile or None,
         device_serial=device_serial or None,
+        empty_response_only=empty_response_only,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
@@ -247,6 +249,7 @@ async def list_all(
     created_before: datetime | None = None,
     target_profile: str | None = None,
     device_serial: str | None = None,
+    empty_response_only: bool = False,
 ) -> list[BatchSummary]:
     rows = await list_batches(
         limit=limit,
@@ -256,6 +259,7 @@ async def list_all(
         created_before=created_before,
         target_profile=target_profile or None,
         device_serial=device_serial or None,
+        empty_response_only=empty_response_only,
     )
     summaries: list[BatchSummary] = []
     for r in rows:

@@ -18,10 +18,11 @@ interface BatchQueryFilters {
   createdBefore?: string
   targetProfile?: string
   deviceSerial?: string
+  emptyResponseOnly?: boolean
 }
 
 function buildBatchParams(p: BatchQueryFilters) {
-  const params: Record<string, string | number> = {}
+  const params: Record<string, string | number | boolean> = {}
   if (p.limit !== undefined) params.limit = p.limit
   if (p.offset !== undefined) params.offset = p.offset
   const q = p.q?.trim()
@@ -30,6 +31,7 @@ function buildBatchParams(p: BatchQueryFilters) {
   if (p.createdBefore) params.created_before = p.createdBefore
   if (p.targetProfile) params.target_profile = p.targetProfile
   if (p.deviceSerial) params.device_serial = p.deviceSerial
+  if (p.emptyResponseOnly) params.empty_response_only = true
   return params
 }
 
@@ -41,8 +43,9 @@ export function useBatches(params?: BatchQueryFilters) {
   const cb = params?.createdBefore ?? null
   const tp = params?.targetProfile ?? null
   const ds = params?.deviceSerial ?? null
+  const eo = !!params?.emptyResponseOnly
   return useQuery({
-    queryKey: ['batches', limit, offset, q ?? null, ca, cb, tp, ds],
+    queryKey: ['batches', limit, offset, q ?? null, ca, cb, tp, ds, eo],
     queryFn: async () =>
       (
         await client.get<BatchSummary[]>('/batches', {
@@ -54,6 +57,7 @@ export function useBatches(params?: BatchQueryFilters) {
             createdBefore: params?.createdBefore,
             targetProfile: params?.targetProfile,
             deviceSerial: params?.deviceSerial,
+            emptyResponseOnly: eo,
           }),
         })
       ).data,
@@ -76,14 +80,16 @@ export function useBatchStats(params?: {
   createdBefore?: string
   targetProfile?: string
   deviceSerial?: string
+  emptyResponseOnly?: boolean
 }) {
   const q = params?.q?.trim() || undefined
   const ca = params?.createdAfter ?? null
   const cb = params?.createdBefore ?? null
   const tp = params?.targetProfile ?? null
   const ds = params?.deviceSerial ?? null
+  const eo = !!params?.emptyResponseOnly
   return useQuery({
-    queryKey: ['batches', 'stats', q ?? null, ca, cb, tp, ds],
+    queryKey: ['batches', 'stats', q ?? null, ca, cb, tp, ds, eo],
     queryFn: async () =>
       (
         await client.get<BatchStats>('/batches/stats', {
@@ -93,6 +99,7 @@ export function useBatchStats(params?: {
             createdBefore: params?.createdBefore,
             targetProfile: params?.targetProfile,
             deviceSerial: params?.deviceSerial,
+            emptyResponseOnly: eo,
           }),
         })
       ).data,
