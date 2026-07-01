@@ -102,10 +102,13 @@ def get_device_monitor() -> DeviceMonitor:
             await mark_missing_devices_offline(seen_serials)
             await _refresh_pool()
 
+        from autoagent.notifications.device_state import on_device_state_change
+
         _device_monitor = DeviceMonitor(
             list_devices=adb_list_devices,
             upsert_device=_upsert_and_refresh,
             mark_missing_offline=_mark_missing_and_refresh,
+            on_state_change=on_device_state_change,
         )
     return _device_monitor
 

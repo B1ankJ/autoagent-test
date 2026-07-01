@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import logging
 import re as _re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
+
+# All adb subprocess calls carry a timeout so a wifi device that stopped
+# responding can't hang the caller (the monitor / device pool live on
+# the event loop).
+_DEFAULT_ADB_TIMEOUT_SEC = 10
 
 
 class AdbCommandError(RuntimeError):
@@ -20,16 +28,36 @@ class AdbDevice:
     adb_keyboard_enabled: bool | None = None
 
 
-def _run_adb(*args: str) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(
-        ["adb", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def _run_adb(
+    *args: str, timeout_sec: float = _DEFAULT_ADB_TIMEOUT_SEC
+) -> subprocess.CompletedProcess[str]:
+    try:
+        proc = subprocess.run(
+            ["adb", *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_sec,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise AdbCommandError(f"adb {' '.join(args)} timed out after {timeout_sec}s") from e
     if proc.returncode != 0:
         raise AdbCommandError(proc.stderr.strip() or f"adb {' '.join(args)} failed")
     return proc
+
+
+def _safe_meta_call(func, serial: str, *args) -> bool | None:
+    """Return the result of a metadata probe, or None if the device errors.
+
+    One flaky wifi device shouldn't invalidate the enumeration of every
+    other device — swallow per-device failures and let the caller keep
+    the row with unknown fields.
+    """
+    try:
+        return func(serial, *args)
+    except AdbCommandError as e:
+        _log.info("adb metadata probe failed for %s (%s): %s", serial, func.__name__, e)
+        return None
 
 
 def list_devices() -> list[AdbDevice]:
@@ -41,20 +69,23 @@ def list_devices() -> list[AdbDevice]:
         parts = line.split()
         serial, state, *extras = parts
         kv = {item.split(":", 1)[0]: item.split(":", 1)[1] for item in extras if ":" in item}
+        online = state == "device"
         rows.append(
             AdbDevice(
                 serial=serial,
-                online=state == "device",
+                online=online,
                 model=kv.get("model"),
                 android_version=None,
                 adb_keyboard_installed=(
-                    is_package_installed(serial, "com.android.adbkeyboard")
-                    if state == "device"
+                    _safe_meta_call(is_package_installed, serial, "com.android.adbkeyboard")
+                    if online
                     else None
                 ),
-                adb_keyboard_enabled=is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME")
-                if state == "device"
-                else None,
+                adb_keyboard_enabled=(
+                    _safe_meta_call(is_ime_enabled, serial, "com.android.adbkeyboard/.AdbIME")
+                    if online
+                    else None
+                ),
             )
         )
     return rows
@@ -94,7 +125,9 @@ def set_ime(serial: str, ime_id: str) -> None:
 
 
 def install_apk(serial: str, apk_path: Path) -> None:
-    _run_adb("-s", serial, "install", "-r", "-t", str(apk_path))
+    # APK install legitimately takes tens of seconds; the caller is a
+    # request handler where we're OK waiting longer than the default.
+    _run_adb("-s", serial, "install", "-r", "-t", str(apk_path), timeout_sec=120)
 
 
 def get_screen_resolution(serial: str, target_width: int = 0) -> tuple[int, int]:
