@@ -50,6 +50,12 @@ async def init_db() -> None:
                 await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_responses_json TEXT"))
             if "llm_errors_json" not in sample_columns:
                 await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_errors_json TEXT"))
+            # Index on batches.created_at so list/count/stats ORDER BY
+            # doesn't full-scan the table. create_all() adds it for fresh
+            # DBs; this covers upgrades of existing dev/prod databases.
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_batches_created_at ON batches (created_at)")
+            )
 
 
 async def reset_db_for_tests() -> None:

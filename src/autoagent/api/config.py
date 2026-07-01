@@ -1,10 +1,13 @@
+import asyncio
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
+from autoagent.config.settings import get_settings
 from autoagent.executors.llm_checker import check_llm_api
+from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import (
     DefaultsConfig,
     DingTalkNotificationConfig,
@@ -87,6 +90,57 @@ async def put_notifications(body: DingTalkNotificationConfig) -> DingTalkNotific
         )
     await put_config("notifications", body.model_dump())
     return body
+
+
+async def _current_retention_days() -> int:
+    v = await get_config("defaults")
+    cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
+    return cfg.log_retention_days
+
+
+@router.get("/logs/preview")
+async def preview_logs_cleanup(days: int | None = None) -> dict:
+    """Report what run_cleanup would delete without touching disk."""
+    settings = get_settings()
+    retention = days if days is not None else await _current_retention_days()
+    if retention <= 0:
+        return {"files_deleted": 0, "dirs_deleted": 0, "bytes_freed": 0, "retention_days": 0}
+    report = await asyncio.to_thread(
+        run_cleanup,
+        logs_root=settings.logs_root,
+        data_root=settings.data_root,
+        retention_days=retention,
+        dry_run=True,
+    )
+    return {
+        "files_deleted": report.files_deleted,
+        "dirs_deleted": report.dirs_deleted,
+        "bytes_freed": report.bytes_freed,
+        "retention_days": retention,
+    }
+
+
+@router.post("/logs/cleanup")
+async def run_logs_cleanup(days: int | None = None) -> dict:
+    settings = get_settings()
+    retention = days if days is not None else await _current_retention_days()
+    if retention <= 0:
+        raise HTTPException(
+            status_code=400, detail="log_retention_days is 0 (disabled); pass ?days=N to force"
+        )
+    report = await asyncio.to_thread(
+        run_cleanup,
+        logs_root=settings.logs_root,
+        data_root=settings.data_root,
+        retention_days=retention,
+        dry_run=False,
+    )
+    return {
+        "files_deleted": report.files_deleted,
+        "dirs_deleted": report.dirs_deleted,
+        "bytes_freed": report.bytes_freed,
+        "retention_days": retention,
+    }
 
 
 @router.get("/notifications/whitelist", response_model=list[WhitelistEntry])

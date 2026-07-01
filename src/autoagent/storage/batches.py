@@ -204,6 +204,28 @@ async def count_batches_by_status(
         return out
 
 
+async def recover_orphaned_batches() -> int:
+    """Flip all queued/running batches to cancelled and stamp ended_at.
+
+    Called from lifespan startup — any batch still marked "active" in the
+    DB at boot time is by definition orphaned (there's no scheduler task
+    in this process holding it), so it can never make progress and would
+    otherwise wedge the UI forever.
+    """
+    from sqlalchemy import update as sa_update
+
+    sm = get_sessionmaker()
+    async with sm() as s:
+        now = datetime.now(timezone.utc)
+        result = await s.execute(
+            sa_update(Batch)
+            .where(Batch.status.in_(("queued", "running")))
+            .values(status="cancelled", ended_at=now)
+        )
+        await s.commit()
+        return int(result.rowcount or 0)
+
+
 async def delete_batch_rows(batch_id: str) -> bool:
     """Delete the Batch row and all its Sample rows. Returns True if removed."""
     sm = get_sessionmaker()

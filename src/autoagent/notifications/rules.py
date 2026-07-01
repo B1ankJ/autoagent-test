@@ -16,12 +16,14 @@ from autoagent.models.api import SampleResult
 from autoagent.notifications import whitelist
 from autoagent.notifications.dingtalk import send_markdown
 from autoagent.notifications.vlm_judge import is_normal_chat_page
-from autoagent.storage.configs import get_config
+from autoagent.storage.configs import get_config, put_config
 
 _log = logging.getLogger(__name__)
 
-# Per-device counter of consecutive empty responses. Process-local — resets
-# on restart. That's fine: the rule is a "noisy alert" not an audit trail.
+# Per-device counter of consecutive empty responses. Persisted to the kv
+# config so uvicorn reload doesn't reset a mid-flight streak — that used
+# to mean "N more empties needed after every restart" and, at worst, the
+# streak never crossed the threshold on a chatty reload cycle.
 _streak: dict[str, int] = {}
 
 
@@ -35,12 +37,74 @@ class _SameResponseState:
 _same_state: dict[tuple[str, str], _SameResponseState] = {}
 
 _lock = asyncio.Lock()
+_state_loaded = False
 
 _CONFIG_KEY = "notifications"
+_STATE_KEY = "notification_state"
 
 
 async def _load_config() -> dict[str, Any] | None:
     return await get_config(_CONFIG_KEY)
+
+
+async def _hydrate_state_once() -> None:
+    """Lazy-load persisted streak state on first rule invocation.
+
+    We can't do this at import time (no event loop / DB yet). Callers
+    hold `_lock` when they invoke us, so this is single-flight per
+    process.
+    """
+    global _state_loaded
+    if _state_loaded:
+        return
+    _state_loaded = True
+    try:
+        raw = await get_config(_STATE_KEY)
+    except Exception:  # noqa: BLE001
+        raw = None
+    if not isinstance(raw, dict):
+        return
+    for serial, count in (raw.get("streak") or {}).items():
+        if isinstance(serial, str) and isinstance(count, int) and count > 0:
+            _streak[serial] = count
+    for key, payload in (raw.get("same") or {}).items():
+        # kv can't store tuple keys — we serialize as "device|profile".
+        if not isinstance(key, str) or "|" not in key:
+            continue
+        device, profile = key.split("|", 1)
+        if not isinstance(payload, dict):
+            continue
+        response = payload.get("response")
+        refs = payload.get("refs")
+        if not isinstance(response, str) or not isinstance(refs, list):
+            continue
+        rebuilt_refs: list[tuple[str, str]] = []
+        for entry in refs:
+            if (
+                isinstance(entry, list)
+                and len(entry) == 2
+                and all(isinstance(x, str) for x in entry)
+            ):
+                rebuilt_refs.append((entry[0], entry[1]))
+        if rebuilt_refs:
+            _same_state[(device, profile)] = _SameResponseState(
+                response=response, refs=rebuilt_refs
+            )
+
+
+async def _persist_state() -> None:
+    """Write current streak dicts back to kv. Caller must hold _lock."""
+    payload = {
+        "streak": {s: c for s, c in _streak.items() if c > 0},
+        "same": {
+            f"{d}|{p}": {"response": st.response, "refs": [list(r) for r in st.refs]}
+            for (d, p), st in _same_state.items()
+        },
+    }
+    try:
+        await put_config(_STATE_KEY, payload)
+    except Exception:  # noqa: BLE001
+        _log.exception("failed to persist notification state")
 
 
 def _is_terminal_done(result: SampleResult) -> bool:
@@ -103,6 +167,7 @@ async def _rule_empty_streak(
 
     empty = _has_empty_response(result)
     async with _lock:
+        await _hydrate_state_once()
         if empty:
             _streak[serial] = _streak.get(serial, 0) + 1
             count = _streak[serial]
@@ -112,6 +177,7 @@ async def _rule_empty_streak(
         should_fire = empty and count >= threshold
         if should_fire:
             _streak[serial] = 0
+        await _persist_state()
 
     if should_fire:
         await _fire_empty_streak_alert(
@@ -158,12 +224,15 @@ async def _rule_same_response_streak(
     if await whitelist.contains(profile, response):
         # Streak resets when something whitelisted comes through.
         async with _lock:
+            await _hydrate_state_once()
             _same_state.pop((serial, profile), None)
+            await _persist_state()
         return
 
     key = (serial, profile)
     refs_to_judge: list[tuple[str, str]] | None = None
     async with _lock:
+        await _hydrate_state_once()
         state = _same_state.get(key)
         if state is None or state.response != response:
             state = _SameResponseState(response=response, refs=[(batch_id, result.id)])
@@ -175,6 +244,7 @@ async def _rule_same_response_streak(
             # Reset so the next round needs to rebuild — both whitelist
             # and alert decisions consume the streak.
             del _same_state[key]
+        await _persist_state()
 
     if refs_to_judge is None:
         return
@@ -355,5 +425,7 @@ async def _fire_empty_streak_alert(
 
 def _reset_streak_for_tests() -> None:
     """Test-only helper to clear per-device state between cases."""
+    global _state_loaded
     _streak.clear()
     _same_state.clear()
+    _state_loaded = True  # skip hydrate; tests stub get_config themselves

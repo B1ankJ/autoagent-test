@@ -143,6 +143,10 @@ class DefaultsConfig(BaseModel):
     retry: int = 2
     concurrency: int = 1
     verbose_logs: bool = True
+    # 0 disables. Positive = delete artifacts under logs_root and
+    # data/profile_builder older than this many days. A background task
+    # runs it every 24h + endpoints allow manual trigger / preview.
+    log_retention_days: int = 7
 
 
 class DingTalkNotificationConfig(BaseModel):

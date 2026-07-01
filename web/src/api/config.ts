@@ -105,6 +105,37 @@ export function useWhitelist() {
   })
 }
 
+export interface LogCleanupReport {
+  files_deleted: number
+  dirs_deleted: number
+  bytes_freed: number
+  retention_days: number
+}
+
+export function usePreviewLogsCleanup() {
+  return useMutation({
+    mutationFn: async (days?: number) =>
+      (
+        await client.get<LogCleanupReport>('/config/logs/preview', {
+          params: days ? { days } : {},
+        })
+      ).data,
+  })
+}
+
+export function useRunLogsCleanup() {
+  return useMutation({
+    mutationFn: async (days?: number) =>
+      (
+        await client.post<LogCleanupReport>(
+          '/config/logs/cleanup',
+          null,
+          { params: days ? { days } : {} },
+        )
+      ).data,
+  })
+}
+
 export function useRemoveWhitelist() {
   const queryClient = useQueryClient()
   return useMutation({

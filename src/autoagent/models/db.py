@@ -30,7 +30,9 @@ class Batch(Base):
     target_profile_default = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    # Index because every list/count/stats query orders by it desc;
+    # without one SQLite full-scans as the batches table grows.
+    created_at = Column(DateTime, server_default=func.now(), index=True)
 
 
 class Sample(Base):

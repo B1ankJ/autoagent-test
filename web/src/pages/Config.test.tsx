@@ -20,6 +20,8 @@ vi.mock('../api/config', () => ({
   useTestNotifications: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useWhitelist: () => ({ data: [], refetch: vi.fn() }),
   useRemoveWhitelist: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  usePreviewLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRunLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }))
 
 describe('ConfigPage', () => {

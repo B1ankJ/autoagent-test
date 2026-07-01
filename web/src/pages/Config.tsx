@@ -1,11 +1,25 @@
-import { Alert, App, Button, Card, Form, Input, InputNumber, Space, Switch, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Switch,
+  Typography,
+} from 'antd'
 import { useEffect, useState } from 'react'
 import {
   DingTalkConfig,
   LLMCheckResult,
   useDefaults,
   useNotifications,
+  usePreviewLogsCleanup,
   useRemoveWhitelist,
+  useRunLogsCleanup,
   useSaveDefaults,
   useSaveNotifications,
   useSaveVLM,
@@ -23,6 +37,13 @@ const STAGE_TEXT: Record<LLMCheckResult['stage'], string> = {
   model_not_found: '模型不存在',
   response_shape: '返回格式异常',
   ok: '连通正常',
+}
+
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
 function saveErrorMessage(error: unknown): string {
@@ -44,6 +65,8 @@ export function ConfigPage() {
   const testNotifications = useTestNotifications()
   const whitelist = useWhitelist()
   const removeWhitelist = useRemoveWhitelist()
+  const previewLogsCleanup = usePreviewLogsCleanup()
+  const runLogsCleanup = useRunLogsCleanup()
   const [vlmForm] = Form.useForm<VLMConfig>()
   const [defaultsForm] = Form.useForm<GlobalDefaults>()
   const [notifyForm] = Form.useForm<DingTalkConfig>()
@@ -190,9 +213,56 @@ export function ConfigPage() {
           <Form.Item name="verbose_logs" label="Verbose logs" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
-            保存
-          </Button>
+          <Form.Item
+            name="log_retention_days"
+            label="日志保留天数"
+            extra="0 = 关闭自动清理。启用后,每日一次自动删除 logs/ 和 data/profile_builder/ 下超过该天数的产物。"
+          >
+            <InputNumber min={0} max={365} />
+          </Form.Item>
+          <Space>
+            <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
+              保存
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const days = defaultsForm.getFieldValue('log_retention_days') as number
+                  const r = await previewLogsCleanup.mutateAsync(days || undefined)
+                  message.info(
+                    `预览:将删除 ${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                  )
+                } catch (e) {
+                  message.error((e as Error).message)
+                }
+              }}
+              loading={previewLogsCleanup.isPending}
+            >
+              预览清理
+            </Button>
+            <Popconfirm
+              title="立即清理"
+              description="根据当前保留天数删除过期日志/Builder 产物。不可恢复。"
+              onConfirm={async () => {
+                try {
+                  const days = defaultsForm.getFieldValue('log_retention_days') as number
+                  const r = await runLogsCleanup.mutateAsync(days || undefined)
+                  message.success(
+                    `已删除 ${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                  )
+                } catch (e) {
+                  message.error((e as Error).message)
+                }
+              }}
+              okText="删除"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+            >
+              <Button danger loading={runLogsCleanup.isPending}>
+                立即清理
+              </Button>
+            </Popconfirm>
+          </Space>
         </Form>
       </Card>
 

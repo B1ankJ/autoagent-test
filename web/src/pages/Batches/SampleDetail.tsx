@@ -1,5 +1,6 @@
-import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
@@ -65,10 +66,51 @@ export function SampleDetail() {
   const { id, sid } = useParams()
   const navigate = useNavigate()
   const { data } = useBatchStream(id)
-  const sample = data?.samples.find((item) => item.id === decodeURIComponent(sid ?? ''))
+  const decodedSid = decodeURIComponent(sid ?? '')
+  const sample = data?.samples.find((item) => item.id === decodedSid)
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
   const summary = metadataSummary(sample?.metadata)
   const llmEnabled = hasLLMExtractionData(sample?.llm_responses, sample?.llm_errors)
+
+  // Prev/next navigation: use the batch's sample order as-is (matches what
+  // the batch detail table shows). At the head/tail the neighbor is null.
+  const { prev, next } = useMemo(() => {
+    const list = data?.samples ?? []
+    const idx = list.findIndex((s) => s.id === decodedSid)
+    if (idx < 0) return { prev: null, next: null }
+    return {
+      prev: idx > 0 ? list[idx - 1] : null,
+      next: idx < list.length - 1 ? list[idx + 1] : null,
+    }
+  }, [data?.samples, decodedSid])
+
+  const goTo = useCallback(
+    (target: { id: string } | null) => {
+      if (!target || !id) return
+      navigate(`/batches/${id}/samples/${encodeURIComponent(target.id)}`)
+    },
+    [id, navigate],
+  )
+
+  // Keyboard nav: j = next, k = prev. Skip when a text input owns focus so
+  // we don't fight with prompt-search boxes / textareas.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'j') {
+        e.preventDefault()
+        goTo(next)
+      } else if (e.key === 'k') {
+        e.preventDefault()
+        goTo(prev)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [goTo, prev, next])
 
   const breadcrumb = (
     <Space size={6}>
@@ -117,15 +159,35 @@ export function SampleDetail() {
           </Space>
         }
         extra={
-          replayAvailable ? (
+          <Space>
             <Button
-              icon={<DownloadOutlined />}
-              onClick={() => downloadSampleLogs(data.batch_id, sample.id)}
-              title="zip 包含 actions.jsonl + 截图 + XML + executor.log 等全部产物"
+              size="small"
+              icon={<LeftOutlined />}
+              disabled={!prev}
+              onClick={() => goTo(prev)}
+              title={prev ? `上一个 (k): ${prev.id}` : '已是第一个'}
             >
-              下载日志包
+              上一个
             </Button>
-          ) : null
+            <Button
+              size="small"
+              icon={<RightOutlined />}
+              disabled={!next}
+              onClick={() => goTo(next)}
+              title={next ? `下一个 (j): ${next.id}` : '已是最后一个'}
+            >
+              下一个
+            </Button>
+            {replayAvailable ? (
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => downloadSampleLogs(data.batch_id, sample.id)}
+                title="zip 包含 actions.jsonl + 截图 + XML + executor.log 等全部产物"
+              >
+                下载日志包
+              </Button>
+            ) : null}
+          </Space>
         }
       />
 

@@ -147,6 +147,7 @@ export interface GlobalDefaults {
   retry?: number
   concurrency?: number
   verbose_logs?: boolean
+  log_retention_days?: number
 }
 
 export interface ProfileBuilderCaptureArtifact {

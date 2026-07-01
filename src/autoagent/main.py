@@ -21,6 +21,8 @@ from autoagent.api.tests import router as tests_router
 from autoagent.api.web_profile_builder import router as web_profile_builder_router
 from autoagent.auth.passwords import hash_password
 from autoagent.config.settings import get_settings
+from autoagent.maintenance.scheduler import run_retention_loop
+from autoagent.storage.batches import recover_orphaned_batches
 from autoagent.storage.database import init_db
 from autoagent.storage.users import get_user, upsert_user
 from autoagent.utils.logging import configure_logging
@@ -39,13 +41,22 @@ async def lifespan(app: FastAPI):
         log.info("bootstrapped admin user %s", settings.admin_username)
     else:
         log.info("admin user %s already exists", settings.admin_username)
+    # Any batch still queued/running in the DB at boot has no scheduler
+    # task backing it (fresh process, empty _states dict). Flip them to
+    # cancelled so the UI stops showing zombie "running" rows forever.
+    recovered = await recover_orphaned_batches()
+    if recovered:
+        log.info("recovered %d orphaned batch(es) → cancelled", recovered)
     monitor_task = asyncio.create_task(get_device_monitor().run())
+    retention_task = asyncio.create_task(run_retention_loop())
     try:
         yield
     finally:
-        monitor_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await monitor_task
+        for task in (monitor_task, retention_task):
+            task.cancel()
+        for task in (monitor_task, retention_task):
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(title="AutoAgent Test", version="0.1.0", lifespan=lifespan)
