@@ -91,6 +91,7 @@ export interface BatchCreatedResponse {
 export interface ProfileSummary {
   name: string
   platform: ProfilePlatform
+  serials?: string[]
 }
 
 export interface Device {

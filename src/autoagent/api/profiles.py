@@ -6,10 +6,12 @@ from autoagent.profiles.registry import (
     delete_profile as _delete,
 )
 from autoagent.profiles.registry import (
+    get_profile_devices,
     list_profile_names,
     load_profile,
     load_profile_yaml,
     save_profile_yaml,
+    set_profile_devices,
     validate_yaml,
 )
 
@@ -23,6 +25,13 @@ class ProfileBody(BaseModel):
 class ProfileSummary(BaseModel):
     name: str
     platform: str
+    # Effective device pool (serial + serials merged). Empty for
+    # non-android platforms or an unbound android profile.
+    serials: list[str] = []
+
+
+class DeviceBindingBody(BaseModel):
+    serials: list[str]
 
 
 class ProfileYamlResponse(BaseModel):
@@ -42,7 +51,13 @@ async def list_profiles() -> list[ProfileSummary]:
         profile = load_profile(name)
         if profile is None:
             continue
-        profiles.append(ProfileSummary(name=profile.name, platform=profile.platform))
+        serial = getattr(profile, "serial", None)
+        serials = list(getattr(profile, "serials", None) or [])
+        if serial and serial not in serials:
+            serials = [serial, *serials]
+        profiles.append(
+            ProfileSummary(name=profile.name, platform=profile.platform, serials=serials)
+        )
     return profiles
 
 
@@ -80,6 +95,26 @@ async def update_profile(name: str, body: ProfileBody) -> dict:
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"name": name}
+
+
+@router.get("/{name}/devices")
+async def get_devices(name: str) -> dict:
+    if load_profile_yaml(name) is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return {"name": name, "serials": get_profile_devices(name)}
+
+
+@router.put("/{name}/devices")
+async def put_devices(name: str, body: DeviceBindingBody) -> dict:
+    try:
+        set_profile_devices(name, body.serials)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="profile not found") from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"name": name, "serials": get_profile_devices(name)}
 
 
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

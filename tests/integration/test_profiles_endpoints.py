@@ -51,7 +51,7 @@ async def test_profiles_crud(client):
 
     # List shows it
     r = await client.get("/api/v1/profiles", headers=h)
-    assert r.json() == [{"name": "openai_gpt4", "platform": "api"}]
+    assert r.json() == [{"name": "openai_gpt4", "platform": "api", "serials": []}]
 
     # Get
     r = await client.get("/api/v1/profiles/openai_gpt4", headers=h)
@@ -80,3 +80,63 @@ async def test_profiles_crud(client):
 async def test_profiles_require_auth(client):
     r = await client.get("/api/v1/profiles")
     assert r.status_code == 401
+
+
+async def test_android_device_binding(client):
+    token = await _login(client)
+    h = {"Authorization": f"Bearer {token}"}
+
+    android_yaml = yaml.safe_dump(
+        {
+            "name": "and1",
+            "platform": "android",
+            "package": "com.example",
+            "input_locator": {"type": "class", "value": "c"},
+            "response_extraction": {
+                "method": "ui_tree_only",
+                "response_container_locator": {"type": "class", "value": "c"},
+                "scroll_container_locator": {"type": "class", "value": "c"},
+                "latest_bubble_match": {"type": "class", "value": "c"},
+            },
+            "serial": "old-serial",
+        }
+    )
+    r = await client.post("/api/v1/profiles/and1", json={"yaml": android_yaml}, headers=h)
+    assert r.status_code == 201
+
+    # Effective binding starts as the legacy serial.
+    r = await client.get("/api/v1/profiles/and1/devices", headers=h)
+    assert r.json()["serials"] == ["old-serial"]
+
+    # Bind a pool of two (dedup + strip applied).
+    r = await client.put(
+        "/api/v1/profiles/and1/devices",
+        json={"serials": ["A", "B", "A ", ""]},
+        headers=h,
+    )
+    assert r.status_code == 200
+    assert r.json()["serials"] == ["A", "B"]
+
+    # Summary reflects it and legacy serial is gone.
+    r = await client.get("/api/v1/profiles", headers=h)
+    summary = next(p for p in r.json() if p["name"] == "and1")
+    assert summary["serials"] == ["A", "B"]
+
+    # Clear.
+    r = await client.put("/api/v1/profiles/and1/devices", json={"serials": []}, headers=h)
+    assert r.json()["serials"] == []
+
+
+async def test_device_binding_rejects_non_android(client):
+    token = await _login(client)
+    h = {"Authorization": f"Bearer {token}"}
+    api_yaml = yaml.safe_dump(
+        {
+            "name": "apip",
+            "platform": "api",
+            "api": {"base_url": "https://x/v1", "model": "m", "api_key": "k"},
+        }
+    )
+    await client.post("/api/v1/profiles/apip", json={"yaml": api_yaml}, headers=h)
+    r = await client.put("/api/v1/profiles/apip/devices", json={"serials": ["A"]}, headers=h)
+    assert r.status_code == 422

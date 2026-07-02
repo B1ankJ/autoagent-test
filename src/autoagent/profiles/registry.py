@@ -82,6 +82,65 @@ def save_profile_yaml(name: str, yaml_text: str) -> Profile:
     return profile
 
 
+_DEVICE_PLATFORMS = {"android", "agent_android"}
+
+
+def set_profile_devices(name: str, serials: list[str]) -> Profile:
+    """Patch just the device binding of an existing profile.
+
+    The `serials` list becomes the profile's device pool. We make it the
+    single source of truth: the legacy scalar `serial` key is dropped so
+    the two can't drift. An empty list clears both → "any online device".
+
+    Everything else in the YAML is preserved (field order kept via
+    sort_keys=False). Only android / agent_android profiles are
+    bindable.
+    """
+    path = _path(name)
+    if not path.exists():
+        raise FileNotFoundError(name)
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("profile YAML is not a mapping")
+    platform = data.get("platform")
+    if platform not in _DEVICE_PLATFORMS:
+        raise ValueError(f"platform {platform!r} does not support device binding")
+
+    cleaned = [s.strip() for s in serials if isinstance(s, str) and s.strip()]
+    # De-dupe while preserving order.
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for s in cleaned:
+        if s not in seen:
+            seen.add(s)
+            ordered.append(s)
+
+    data.pop("serial", None)
+    if ordered:
+        data["serials"] = ordered
+    else:
+        data.pop("serials", None)
+
+    profile = parse_profile(data)  # re-validate the whole thing
+    path.write_text(
+        yaml.dump(data, Dumper=_ProfileDumper, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return profile
+
+
+def get_profile_devices(name: str) -> list[str]:
+    """Return the effective device pool for a profile (serial + serials)."""
+    profile = load_profile(name)
+    if profile is None:
+        return []
+    serial = getattr(profile, "serial", None)
+    serials = list(getattr(profile, "serials", None) or [])
+    if serial and serial not in serials:
+        serials = [serial, *serials]
+    return serials
+
+
 def delete_profile(name: str) -> bool:
     path = _path(name)
     if path.exists():

@@ -51,3 +51,20 @@ export function useValidateProfile() {
       (await client.post<ValidateResponse>('/profiles/validate', { yaml })).data,
   })
 }
+
+export function useSaveProfileDevices() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { name: string; serials: string[] }) =>
+      (
+        await client.put<{ name: string; serials: string[] }>(
+          `/profiles/${args.name}/devices`,
+          { serials: args.serials },
+        )
+      ).data,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['profile', variables.name] })
+    },
+  })
+}

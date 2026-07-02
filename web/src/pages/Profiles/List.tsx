@@ -2,13 +2,16 @@ import {
   DeleteOutlined,
   EditOutlined,
   FileTextOutlined,
+  MobileOutlined,
   PlusOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import { App, Button, Popconfirm, Space, Table, Tabs } from 'antd'
+import { App, Button, Popconfirm, Space, Table, Tabs, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDeleteProfile, useProfiles } from '../../api/profiles'
+import { DeviceBindingModal } from '../../components/DeviceBindingModal'
 import { ModeTag } from '../../components/ModeTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
@@ -20,6 +23,9 @@ export function ProfileList() {
   const { data, isLoading } = useProfiles()
   const removeProfile = useDeleteProfile()
   const { message } = App.useApp()
+  // Which android profile's device-binding modal is open (name), + its
+  // current serials to seed the checkboxes.
+  const [bindTarget, setBindTarget] = useState<{ name: string; serials: string[] } | null>(null)
 
   const groups = {
     api: [] as ProfileSummary[],
@@ -33,15 +39,47 @@ export function ProfileList() {
   }
   const total = (data ?? []).length
 
-  const columns: ColumnsType<ProfileSummary> = [
-    { title: '名称', dataIndex: 'name' },
-    {
-      title: '平台',
-      dataIndex: 'platform',
-      width: 140,
-      render: (platform: ProfileSummary['platform']) => <ModeTag mode={platform} />,
-    },
-    {
+  const makeColumns = (withDevices: boolean): ColumnsType<ProfileSummary> => {
+    const cols: ColumnsType<ProfileSummary> = [
+      { title: '名称', dataIndex: 'name' },
+      {
+        title: '平台',
+        dataIndex: 'platform',
+        width: 140,
+        render: (platform: ProfileSummary['platform']) => <ModeTag mode={platform} />,
+      },
+    ]
+    if (withDevices) {
+      cols.push({
+        title: '绑定设备',
+        width: 260,
+        render: (_v, row) => {
+          const serials = row.serials ?? []
+          return (
+            <Space size={4} wrap>
+              {serials.length === 0 ? (
+                <Tag>任意在线设备</Tag>
+              ) : (
+                serials.map((s) => (
+                  <Tag key={s} className="aa-mono" color="blue">
+                    {s}
+                  </Tag>
+                ))
+              )}
+              <Button
+                size="small"
+                type="link"
+                icon={<MobileOutlined />}
+                onClick={() => setBindTarget({ name: row.name, serials })}
+              >
+                {serials.length ? '修改' : '绑定'}
+              </Button>
+            </Space>
+          )
+        },
+      })
+    }
+    cols.push({
       title: '操作',
       width: 200,
       render: (_value, row) => (
@@ -70,10 +108,11 @@ export function ProfileList() {
           </Popconfirm>
         </Space>
       ),
-    },
-  ]
+    })
+    return cols
+  }
 
-  const renderTab = (rows: ProfileSummary[]) =>
+  const renderTab = (rows: ProfileSummary[], withDevices = false) =>
     rows.length === 0 ? (
       <EmptyState
         compact
@@ -92,11 +131,22 @@ export function ProfileList() {
         }
       />
     ) : (
-      <Table rowKey="name" size="small" dataSource={rows} columns={columns} pagination={false} />
+      <Table
+        rowKey="name"
+        size="small"
+        dataSource={rows}
+        columns={makeColumns(withDevices)}
+        pagination={false}
+      />
     )
 
   return (
     <div>
+      <DeviceBindingModal
+        profileName={bindTarget?.name ?? null}
+        currentSerials={bindTarget?.serials ?? []}
+        onClose={() => setBindTarget(null)}
+      />
       <PageHeader
         eyebrow="资源"
         title="配置档 Profiles"
@@ -127,7 +177,7 @@ export function ProfileList() {
             {
               key: 'android',
               label: `Android (${groups.android.length})`,
-              children: renderTab(groups.android),
+              children: renderTab(groups.android, true),
             },
             {
               key: 'agent_pc',
@@ -137,7 +187,7 @@ export function ProfileList() {
             {
               key: 'agent_android',
               label: `Agent Android (${groups.agent_android.length})`,
-              children: renderTab(groups.agent_android),
+              children: renderTab(groups.agent_android, true),
             },
           ]}
         />
