@@ -99,6 +99,50 @@ def disconnect(target: str) -> None:
     _run_adb("disconnect", target)
 
 
+def _is_network_serial(serial: str) -> bool:
+    # host:port form — wifi/network adb. Reboot drops the TCP connection and
+    # it must be re-established explicitly (USB re-enumerates on its own).
+    return ":" in serial and not serial.startswith(":")
+
+
+def reboot(serial: str) -> None:
+    """Trigger a device reboot. Returns as soon as adb accepts the command."""
+    _run_adb("-s", serial, "reboot", timeout_sec=30)
+
+
+def is_boot_completed(serial: str) -> bool:
+    try:
+        out = _run_adb(
+            "-s", serial, "shell", "getprop", "sys.boot_completed", timeout_sec=8
+        ).stdout.strip()
+    except AdbCommandError:
+        return False
+    return out == "1"
+
+
+def wait_for_boot(serial: str, *, timeout_sec: float = 120.0, poll_sec: float = 3.0) -> bool:
+    """Block until sys.boot_completed==1 (reconnecting wifi devices first).
+
+    Returns True on success, False on timeout. Never raises — callers treat
+    a False as "reboot didn't come back, proceed / surface an error".
+    """
+    import time as _time
+
+    deadline = _time.monotonic() + timeout_sec
+    network = _is_network_serial(serial)
+    while _time.monotonic() < deadline:
+        if network:
+            # Reconnect is idempotent; keep trying until the device answers.
+            try:
+                _run_adb("connect", serial, timeout_sec=8)
+            except AdbCommandError:
+                pass
+        if is_boot_completed(serial):
+            return True
+        _time.sleep(poll_sec)
+    return False
+
+
 def shell(serial: str, *args: str) -> str:
     return _run_adb("-s", serial, "shell", *args).stdout
 

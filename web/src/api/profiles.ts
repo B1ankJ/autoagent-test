@@ -2,6 +2,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ProfileSummary, ValidateResponse } from '../types/api'
 import { client } from './client'
 
+export interface DeviceInitState {
+  serial: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  rebooted: boolean
+  steps_run: number
+  duration_ms: number
+  error: string | null
+}
+
+export interface InitJob {
+  id: string
+  profile_name: string
+  finished: boolean
+  devices: DeviceInitState[]
+}
+
 export function useProfiles() {
   return useQuery({
     queryKey: ['profiles'],
@@ -49,6 +65,28 @@ export function useValidateProfile() {
   return useMutation({
     mutationFn: async (yaml: string) =>
       (await client.post<ValidateResponse>('/profiles/validate', { yaml })).data,
+  })
+}
+
+export function useInitializeDevices() {
+  return useMutation({
+    mutationFn: async (args: { name: string; serials: string[]; reboot?: boolean | null }) =>
+      (
+        await client.post<InitJob>(`/profiles/${args.name}/initialize`, {
+          serials: args.serials,
+          reboot: args.reboot ?? null,
+        })
+      ).data,
+  })
+}
+
+export function useInitJob(jobId: string | null) {
+  return useQuery({
+    queryKey: ['init-job', jobId],
+    queryFn: async () => (await client.get<InitJob>(`/profiles/initialize/${jobId}`)).data,
+    enabled: !!jobId,
+    // Poll while running; stop once the backend reports finished.
+    refetchInterval: (query) => (query.state.data?.finished ? false : 1500),
   })
 }
 

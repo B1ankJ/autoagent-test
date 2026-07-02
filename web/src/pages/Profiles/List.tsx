@@ -3,6 +3,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   MobileOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
@@ -12,6 +13,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDeleteProfile, useProfiles } from '../../api/profiles'
 import { DeviceBindingModal } from '../../components/DeviceBindingModal'
+import { DeviceInitModal } from '../../components/DeviceInitModal'
 import { ModeTag } from '../../components/ModeTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
@@ -26,6 +28,7 @@ export function ProfileList() {
   // Which android profile's device-binding modal is open (name), + its
   // current serials to seed the checkboxes.
   const [bindTarget, setBindTarget] = useState<{ name: string; serials: string[] } | null>(null)
+  const [initTarget, setInitTarget] = useState<{ name: string; serials: string[] } | null>(null)
 
   const groups = {
     api: [] as ProfileSummary[],
@@ -73,6 +76,16 @@ export function ProfileList() {
                 onClick={() => setBindTarget({ name: row.name, serials })}
               >
                 {serials.length ? '修改' : '绑定'}
+              </Button>
+              <Button
+                size="small"
+                type="link"
+                icon={<PlayCircleOutlined />}
+                disabled={serials.length === 0}
+                title={serials.length === 0 ? '先绑定设备' : '运行初始化剧本'}
+                onClick={() => setInitTarget({ name: row.name, serials })}
+              >
+                初始化
               </Button>
             </Space>
           )
@@ -146,6 +159,11 @@ export function ProfileList() {
         profileName={bindTarget?.name ?? null}
         currentSerials={bindTarget?.serials ?? []}
         onClose={() => setBindTarget(null)}
+      />
+      <DeviceInitModal
+        profileName={initTarget?.name ?? null}
+        serials={initTarget?.serials ?? []}
+        onClose={() => setInitTarget(null)}
       />
       <PageHeader
         eyebrow="资源"

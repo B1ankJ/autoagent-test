@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
+from autoagent.devices.init_jobs import get_job, prune_old_jobs, start_job
 from autoagent.profiles.registry import (
     delete_profile as _delete,
 )
@@ -14,6 +15,7 @@ from autoagent.profiles.registry import (
     set_profile_devices,
     validate_yaml,
 )
+from autoagent.profiles.schemas import AndroidProfile
 
 router = APIRouter(prefix="/profiles", tags=["profiles"], dependencies=[Depends(require_user)])
 
@@ -115,6 +117,42 @@ async def put_devices(name: str, body: DeviceBindingBody) -> dict:
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"name": name, "serials": get_profile_devices(name)}
+
+
+class InitBody(BaseModel):
+    serials: list[str]
+    # None → use profile.init_reboot; true/false overrides it for this run.
+    reboot: bool | None = None
+
+
+@router.post("/{name}/initialize", status_code=202)
+async def initialize_devices(name: str, body: InitBody) -> dict:
+    """Kick off the profile's init_action on the given devices.
+
+    Returns a job id immediately; poll GET /profiles/initialize/{job_id}
+    for per-device progress. Async because init (esp. with reboot) can
+    take minutes and must not block on a reverse-proxy timeout.
+    """
+    profile = load_profile(name)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    if not isinstance(profile, AndroidProfile):
+        raise HTTPException(
+            status_code=422, detail="only android profiles support init playbooks"
+        )
+    if not body.serials:
+        raise HTTPException(status_code=422, detail="no devices specified")
+    prune_old_jobs()
+    job = start_job(profile, body.serials, reboot_override=body.reboot)
+    return job.to_dict()
+
+
+@router.get("/initialize/{job_id}")
+async def get_init_job(job_id: str) -> dict:
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="init job not found")
+    return job.to_dict()
 
 
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

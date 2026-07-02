@@ -247,6 +247,19 @@ class AndroidProfile(BaseModel):
     input_locator: Locator | None = None
     send_button_locator: Locator | None = None
     response_extraction: AndroidResponseExtraction
+    # Device-initialization playbook. Run on demand to bring a device from
+    # any state into the profile's ready-to-chat state (open app, dismiss
+    # popups, tap into the AI chat window, etc.). Reuses the same ActionStep
+    # framework as new_session_action. Empty ⇒ init just relaunches the app.
+    init_action: list[ActionStep] = Field(default_factory=list)
+    # Reboot the device before running init_action. Off by default because
+    # reboot costs 60-90s. When on, init waits for boot + (for wifi devices)
+    # reconnects before the playbook runs.
+    init_reboot: bool = False
+    # Max seconds to wait for sys.boot_completed after a reboot.
+    init_boot_wait_sec: float = 120.0
+    # Extra settle time after the app launches and before init_action runs.
+    init_launch_wait_sec: float = 3.0
     new_session_action: list[ActionStep] = Field(default_factory=list)
     input_focus_action: list[ActionStep] = Field(default_factory=list)
     send_action: list[ActionStep] = Field(default_factory=list)

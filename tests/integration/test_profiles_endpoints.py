@@ -127,6 +127,74 @@ async def test_android_device_binding(client):
     assert r.json()["serials"] == []
 
 
+async def test_device_init_job(client, monkeypatch):
+    token = await _login(client)
+    h = {"Authorization": f"Bearer {token}"}
+
+    android_yaml = yaml.safe_dump(
+        {
+            "name": "andinit",
+            "platform": "android",
+            "package": "com.example",
+            "input_locator": {"type": "class", "value": "c"},
+            "response_extraction": {
+                "method": "ui_tree_only",
+                "response_container_locator": {"type": "class", "value": "c"},
+                "scroll_container_locator": {"type": "class", "value": "c"},
+                "latest_bubble_match": {"type": "class", "value": "c"},
+            },
+        }
+    )
+    await client.post("/api/v1/profiles/andinit", json={"yaml": android_yaml}, headers=h)
+
+    # Stub the real device work so the job completes without hardware.
+    from autoagent.devices import init_jobs
+    from autoagent.devices.initializer import InitResult
+
+    async def _fake_init(serial, profile, *, reboot_override=None):
+        return InitResult(serial=serial, ok=True, steps_run=2, duration_ms=10)
+
+    monkeypatch.setattr(init_jobs, "initialize_device", _fake_init)
+
+    r = await client.post(
+        "/api/v1/profiles/andinit/initialize",
+        json={"serials": ["dev-A", "dev-B"]},
+        headers=h,
+    )
+    assert r.status_code == 202
+    job_id = r.json()["id"]
+    assert len(r.json()["devices"]) == 2
+
+    # Poll until finished.
+    import asyncio
+
+    for _ in range(50):
+        r = await client.get(f"/api/v1/profiles/initialize/{job_id}", headers=h)
+        body = r.json()
+        if body["finished"]:
+            break
+        await asyncio.sleep(0.02)
+    assert body["finished"] is True
+    assert all(d["status"] == "done" for d in body["devices"])
+
+
+async def test_init_rejects_non_android(client):
+    token = await _login(client)
+    h = {"Authorization": f"Bearer {token}"}
+    api_yaml = yaml.safe_dump(
+        {
+            "name": "apip2",
+            "platform": "api",
+            "api": {"base_url": "https://x/v1", "model": "m", "api_key": "k"},
+        }
+    )
+    await client.post("/api/v1/profiles/apip2", json={"yaml": api_yaml}, headers=h)
+    r = await client.post(
+        "/api/v1/profiles/apip2/initialize", json={"serials": ["A"]}, headers=h
+    )
+    assert r.status_code == 422
+
+
 async def test_device_binding_rejects_non_android(client):
     token = await _login(client)
     h = {"Authorization": f"Bearer {token}"}
