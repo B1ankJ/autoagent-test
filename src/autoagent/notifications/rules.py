@@ -329,6 +329,41 @@ async def _judge_and_act(
     )
 
 
+async def _maybe_auto_reinit(config: dict[str, Any], serial: str, profile_name: str) -> bool:
+    """If configured, run the profile's init playbook on the device to reset it.
+
+    Uses a generous device-lock hold timeout so the reinit waits for the
+    in-flight sample to finish (the device is by definition busy — that's
+    how the streak formed) then resets before the next sample. Returns True
+    when a reinit job was actually started.
+    """
+    if not bool(config.get("same_response_auto_reinit")):
+        return False
+    try:
+        from autoagent.profiles.registry import load_profile
+        from autoagent.profiles.schemas import AndroidProfile
+
+        profile = load_profile(profile_name)
+        if not isinstance(profile, AndroidProfile):
+            return False
+        from autoagent.api._deps import get_device_pool
+        from autoagent.devices.init_jobs import start_job
+
+        start_job(
+            profile,
+            [serial],
+            pool=get_device_pool(),
+            # Wait out the current sample rather than fail-fast; give it up
+            # to a few minutes to grab the lock before the next sample.
+            hold_timeout_sec=300.0,
+        )
+        _log.info("auto-reinit started for %s/%s (same-response rule)", serial, profile_name)
+        return True
+    except Exception:  # noqa: BLE001
+        _log.exception("auto-reinit failed to start for %s/%s", serial, profile_name)
+        return False
+
+
 async def _fire_same_response_alert(
     *,
     config: dict[str, Any],
@@ -339,6 +374,7 @@ async def _fire_same_response_alert(
     normal: bool | None,
     reason: str | None,
 ) -> None:
+    reinit = await _maybe_auto_reinit(config, serial, profile)
     excerpt = response.replace("\n", " ")
     if len(excerpt) > 160:
         excerpt = excerpt[:160] + "…"
@@ -348,6 +384,11 @@ async def _fire_same_response_alert(
         if normal is False
         else "VLM 判断**未完成**(见原因),保险起见仍然报警"
     )
+    reinit_line = (
+        "- **自动复位**: 已触发初始化剧本,设备将在当前任务结束后复位\n"
+        if reinit
+        else ""
+    )
     text = (
         f"### ⚠️ 设备 {serial} 重复响应异常\n\n"
         f"- **设备**: `{serial}`\n"
@@ -355,6 +396,7 @@ async def _fire_same_response_alert(
         f"- **连续相同响应**: {excerpt or '_(空)_'}\n"
         f"- **判定**: {verdict}\n"
         f"- **VLM 原因**: {reason or '_(无)_'}\n"
+        f"{reinit_line}"
         f"- **涉及 sample**:\n{samples_md}\n\n"
         "可能页面跳到了非聊天页面 / 设备卡住,请人工排查。"
         "如果其实是正常的,可去 Config 把这条响应加入白名单。"

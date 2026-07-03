@@ -60,17 +60,19 @@ async def _run_one(
     profile: AndroidProfile,
     reboot_override: bool | None,
     pool: DevicePool | None,
+    hold_timeout_sec: float,
 ) -> None:
     state = job.devices[serial]
     state.status = "running"
     # Fence off the device with the same lock the scheduler uses so a batch
-    # sample can't drive it mid-init (and vice versa). If the device is busy
-    # running a task, fail fast rather than colliding.
+    # sample can't drive it mid-init (and vice versa). A manual init fails
+    # fast if the device is busy; an auto-reinit waits (longer timeout) for
+    # the in-flight sample to finish, then resets before the next one.
     if pool is not None:
         from autoagent.devices.pool import DeviceBusy
 
         try:
-            async with pool.hold(serial, timeout_sec=5.0):
+            async with pool.hold(serial, timeout_sec=hold_timeout_sec):
                 result = await initialize_device(
                     serial, profile, reboot_override=reboot_override
                 )
@@ -91,6 +93,7 @@ def start_job(
     *,
     reboot_override: bool | None = None,
     pool: DevicePool | None = None,
+    hold_timeout_sec: float = 5.0,
 ) -> InitJob:
     import time
 
@@ -104,7 +107,9 @@ def start_job(
     _jobs[job_id] = job
     # One task per device so they initialize in parallel.
     _tasks[job_id] = [
-        asyncio.create_task(_run_one(job, serial, profile, reboot_override, pool))
+        asyncio.create_task(
+            _run_one(job, serial, profile, reboot_override, pool, hold_timeout_sec)
+        )
         for serial in serials
     ]
     return job

@@ -55,6 +55,7 @@ export interface DingTalkConfig {
   empty_response_threshold: number
   same_response_enabled: boolean
   same_response_threshold: number
+  same_response_auto_reinit: boolean
   at_mobiles: string[]
   at_all: boolean
 }

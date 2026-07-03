@@ -166,6 +166,11 @@ class DingTalkNotificationConfig(BaseModel):
     # configured; auto-skipped otherwise.
     same_response_enabled: bool = False
     same_response_threshold: int = 3
+    # When Rule 2 fires an abnormal-page alert, also auto-run the profile's
+    # init playbook on that device to reset it. The init waits for the
+    # in-flight sample to finish (it shares the scheduler's device lock)
+    # then reinitializes before the next sample runs. Off by default.
+    same_response_auto_reinit: bool = False
     # Optional @-mentions on alert (mobile numbers / "all").
     at_mobiles: list[str] = Field(default_factory=list)
     at_all: bool = False

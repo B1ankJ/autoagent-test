@@ -323,6 +323,14 @@ export function ConfigPage() {
           >
             <InputNumber min={1} max={20} />
           </Form.Item>
+          <Form.Item
+            name="same_response_auto_reinit"
+            label="异常时自动重新初始化设备"
+            valuePropName="checked"
+            extra="规则 2 判定页面异常时,自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。"
+          >
+            <Switch />
+          </Form.Item>
           <Form.Item name="at_all" label="@ 全体" valuePropName="checked">
             <Switch />
           </Form.Item>

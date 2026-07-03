@@ -132,6 +132,96 @@ async def _stub_wl_add_record(sink):
     return _add
 
 
+def _android_profile(name="p"):
+    from autoagent.profiles.schemas import AndroidProfile
+
+    return AndroidProfile(
+        name=name,
+        platform="android",
+        package="com.example",
+        input_locator={"type": "class", "value": "c"},
+        response_extraction={
+            "method": "ui_tree_only",
+            "response_container_locator": {"type": "class", "value": "c"},
+            "scroll_container_locator": {"type": "class", "value": "c"},
+            "latest_bubble_match": {"type": "class", "value": "c"},
+        },
+    )
+
+
+async def test_same_response_auto_reinit_when_enabled(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+        "same_response_auto_reinit": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    # Stub the lazily-imported reinit dependencies.
+    import autoagent.api._deps as deps
+    import autoagent.devices.init_jobs as init_jobs
+    import autoagent.profiles.registry as registry
+
+    monkeypatch.setattr(registry, "load_profile", lambda _n: _android_profile())
+    monkeypatch.setattr(deps, "get_device_pool", lambda: object())
+
+    def _fake_start(profile, serials, **kwargs):
+        started.append((serials, kwargs))
+
+    monkeypatch.setattr(init_jobs, "start_job", _fake_start)
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same answer"), batch_id="b"
+        )
+    assert len(sent) == 1
+    assert "自动复位" in sent[0]["text"]
+    assert started == [(["A"], {"pool": started[0][1]["pool"], "hold_timeout_sec": 300.0})]
+
+
+async def test_same_response_no_reinit_when_disabled(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+        # auto_reinit omitted → default False
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    import autoagent.devices.init_jobs as init_jobs
+
+    monkeypatch.setattr(init_jobs, "start_job", lambda *a, **k: started.append((a, k)))
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_sample(serial="A", response="same answer"), batch_id="b"
+        )
+    assert len(sent) == 1
+    assert "自动复位" not in sent[0]["text"]
+    assert started == []
+
+
 async def test_same_response_fires_when_vlm_abnormal(monkeypatch):
     sent: list[dict] = []
     added: list[tuple[str, str, str]] = []
