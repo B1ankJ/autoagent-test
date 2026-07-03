@@ -16,6 +16,7 @@ from typing import Any
 import uiautomator2 as u2
 
 from autoagent.devices import adb
+from autoagent.devices.expected_state import clear_expected_reboot, mark_expected_reboot
 from autoagent.executors.android_action_runner import AndroidActionRunner
 from autoagent.executors.android_input import AndroidInput
 from autoagent.executors.complete_detector import ensure_screen_awake
@@ -51,6 +52,10 @@ async def initialize_device(
     try:
         if do_reboot:
             _log.info("init: rebooting %s", serial)
+            # Tell the device monitor this offline is expected, so its
+            # DingTalk alert reads "初始化重启" rather than a hardware fault.
+            # Window = boot wait + margin for the settle + reconnect.
+            mark_expected_reboot(serial, ttl_sec=profile.init_boot_wait_sec + 60.0)
             await asyncio.to_thread(adb.reboot, serial)
             rebooted = True
             booted = await asyncio.to_thread(
@@ -59,6 +64,10 @@ async def initialize_device(
                 timeout_sec=profile.init_boot_wait_sec,
             )
             if not booted:
+                # Leave the expectation set: a device that never came back is
+                # arguably a real problem, but during THIS window the monitor
+                # already treated it as expected; the init job reports the
+                # failure separately in the UI.
                 return InitResult(
                     serial=serial,
                     ok=False,
@@ -69,6 +78,9 @@ async def initialize_device(
             # A freshly-booted device needs a moment before UI automation is
             # reliable even after boot_completed flips.
             await asyncio.sleep(5.0)
+            # Device is back and reconnected — end the expectation early so a
+            # genuine drop right after init still alerts normally.
+            clear_expected_reboot(serial)
 
         await asyncio.to_thread(ensure_screen_awake, serial)
         device = await asyncio.to_thread(u2.connect, serial)
