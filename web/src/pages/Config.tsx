@@ -9,6 +9,7 @@ import {
   Popconfirm,
   Space,
   Switch,
+  Tabs,
   Typography,
 } from 'antd'
 import { useEffect, useState } from 'react'
@@ -142,8 +143,13 @@ export function ConfigPage() {
         title="设置 Config"
         subtitle="VLM 凭据与运行时全局默认值"
       />
-      <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 720 }}>
-
+      <Tabs
+        style={{ maxWidth: 760 }}
+        items={[
+          {
+            key: 'vlm',
+            label: 'VLM',
+            children: (
       <Card title="VLM" size="small">
         <Form
           form={vlmForm}
@@ -184,7 +190,12 @@ export function ConfigPage() {
           ) : null}
         </Form>
       </Card>
-
+            ),
+          },
+          {
+            key: 'defaults',
+            label: '运行默认',
+            children: (
       <Card title="Global Defaults" size="small">
         <Form
           form={defaultsForm}
@@ -265,7 +276,12 @@ export function ConfigPage() {
           </Space>
         </Form>
       </Card>
-
+            ),
+          },
+          {
+            key: 'notify',
+            label: '钉钉通知',
+            children: (
       <Card title="钉钉通知" size="small">
         <Alert
           style={{ marginBottom: 12 }}
@@ -355,7 +371,12 @@ export function ConfigPage() {
           ) : null}
         </Form>
       </Card>
-
+            ),
+          },
+          {
+            key: 'whitelist',
+            label: '白名单',
+            children: (
       <Card
         title="重复响应白名单"
         size="small"
@@ -416,7 +437,10 @@ export function ConfigPage() {
           <Typography.Text type="secondary">还没有白名单记录。</Typography.Text>
         )}
       </Card>
-      </Space>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }

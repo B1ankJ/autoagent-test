@@ -2,16 +2,19 @@ import {
   DeleteOutlined,
   ExperimentOutlined,
   EyeOutlined,
+  FilterOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import {
   App,
+  Badge,
   Button,
   DatePicker,
   Dropdown,
   Input,
   Popconfirm,
+  Popover,
   Select,
   Space,
   Switch,
@@ -330,6 +333,118 @@ export function BatchList() {
     },
   ]
 
+  // Active (non-search) filters, rendered as removable chips + counted on
+  // the 筛选 button badge. Search stays on the main row.
+  const activeFilters: { key: string; label: string; onClear: () => void }[] = []
+  if (statusFilter)
+    activeFilters.push({ key: 's', label: `状态: ${statusFilter}`, onClear: () => setStatusFilter(undefined) })
+  if (modeFilter)
+    activeFilters.push({ key: 'm', label: `模式: ${modeFilter}`, onClear: () => setModeFilter(undefined) })
+  if (profileFilter)
+    activeFilters.push({ key: 'p', label: `Profile: ${profileFilter}`, onClear: () => setProfileFilter(undefined) })
+  if (deviceFilter)
+    activeFilters.push({ key: 'd', label: `设备: ${deviceFilter}`, onClear: () => setDeviceFilter(undefined) })
+  if (fromIso || toIso)
+    activeFilters.push({
+      key: 't',
+      label: `日期: ${fromIso ? dayjs(fromIso).format('MM-DD') : '…'} ~ ${toIso ? dayjs(toIso).format('MM-DD') : '…'}`,
+      onClear: () => setDateRange(null),
+    })
+  if (emptyResponseOnly)
+    activeFilters.push({ key: 'e', label: '仅响应为空', onClear: () => setEmptyResponseOnly(false) })
+
+  const clearAllFilters = () => {
+    setStatusFilter(undefined)
+    setModeFilter(undefined)
+    setProfileFilter(undefined)
+    setDeviceFilter(undefined)
+    setDateRange(null)
+    setEmptyResponseOnly(false)
+  }
+
+  const filterPopover = (
+    <Space direction="vertical" size={10} style={{ width: 260 }}>
+      <Select
+        allowClear
+        placeholder="状态"
+        style={{ width: '100%' }}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        options={['queued', 'running', 'done', 'failed', 'cancelled'].map((status) => ({
+          value: status,
+          label: status,
+        }))}
+      />
+      <Select
+        allowClear
+        placeholder="模式"
+        style={{ width: '100%' }}
+        value={modeFilter}
+        onChange={setModeFilter}
+        options={['api', 'gui_pc_web', 'gui_android', 'agent_pc', 'agent_android'].map((mode) => ({
+          value: mode,
+          label: mode,
+        }))}
+      />
+      <Select
+        allowClear
+        showSearch
+        placeholder="Profile"
+        style={{ width: '100%' }}
+        value={profileFilter}
+        onChange={setProfileFilter}
+        loading={profilesQ.isLoading}
+        options={(profilesQ.data ?? []).map((p) => ({
+          value: p.name,
+          label: `${p.name} (${p.platform})`,
+        }))}
+        filterOption={(input, option) =>
+          (option?.label as string).toLowerCase().includes(input.toLowerCase())
+        }
+      />
+      <Select
+        allowClear
+        showSearch
+        placeholder="设备"
+        style={{ width: '100%' }}
+        value={deviceFilter}
+        onChange={setDeviceFilter}
+        loading={devicesQ.isLoading}
+        options={(devicesQ.data ?? []).map((d) => ({
+          value: d.serial,
+          label: d.label || d.model ? `${d.label || d.model} (${d.serial})` : d.serial,
+        }))}
+        filterOption={(input, option) =>
+          (option?.label as string).toLowerCase().includes(input.toLowerCase())
+        }
+      />
+      <DatePicker.RangePicker
+        style={{ width: '100%' }}
+        value={dateRange as [Dayjs, Dayjs] | null}
+        onChange={(range) => setDateRange(range as [Dayjs | null, Dayjs | null] | null)}
+        allowEmpty={[true, true]}
+        placeholder={['开始日期', '结束日期']}
+        presets={[
+          { label: '今天', value: [dayjs().startOf('day'), dayjs().endOf('day')] },
+          {
+            label: '最近 7 天',
+            value: [dayjs().subtract(6, 'day').startOf('day'), dayjs().endOf('day')],
+          },
+          {
+            label: '最近 30 天',
+            value: [dayjs().subtract(29, 'day').startOf('day'), dayjs().endOf('day')],
+          },
+        ]}
+      />
+      <Space size={6}>
+        <Switch checked={emptyResponseOnly} onChange={setEmptyResponseOnly} size="small" />
+        <span style={{ fontSize: 13 }} title="只看 total=1 / done / 响应为空的批次">
+          只看响应为空
+        </span>
+      </Space>
+    </Space>
+  )
+
   return (
     <div>
       <BatchPromptModal
@@ -410,7 +525,7 @@ export function BatchList() {
           </Space>
         }
       />
-      <Space wrap style={{ marginBottom: 14 }}>
+      <Space wrap style={{ marginBottom: activeFilters.length ? 8 : 14 }}>
         <Input.Search
           placeholder="搜索批次名 / ID / Prompt 内容"
           allowClear
@@ -418,90 +533,24 @@ export function BatchList() {
           onChange={(e) => setSearchInput(e.target.value)}
           style={{ width: 340 }}
         />
-        <Select
-          allowClear
-          placeholder="状态"
-          style={{ width: 140 }}
-          value={statusFilter}
-          onChange={setStatusFilter}
-          options={['queued', 'running', 'done', 'failed', 'cancelled'].map((status) => ({
-            value: status,
-            label: status,
-          }))}
-        />
-        <Select
-          allowClear
-          placeholder="模式"
-          style={{ width: 170 }}
-          value={modeFilter}
-          onChange={setModeFilter}
-          options={['api', 'gui_pc_web', 'gui_android', 'agent_pc', 'agent_android'].map(
-            (mode) => ({
-              value: mode,
-              label: mode,
-            }),
-          )}
-        />
-        <Select
-          allowClear
-          showSearch
-          placeholder="Profile"
-          style={{ width: 200 }}
-          value={profileFilter}
-          onChange={setProfileFilter}
-          loading={profilesQ.isLoading}
-          options={(profilesQ.data ?? []).map((p) => ({
-            value: p.name,
-            label: `${p.name} (${p.platform})`,
-          }))}
-          filterOption={(input, option) =>
-            (option?.label as string).toLowerCase().includes(input.toLowerCase())
-          }
-        />
-        <Select
-          allowClear
-          showSearch
-          placeholder="设备"
-          style={{ width: 220 }}
-          value={deviceFilter}
-          onChange={setDeviceFilter}
-          loading={devicesQ.isLoading}
-          options={(devicesQ.data ?? []).map((d) => ({
-            value: d.serial,
-            label: d.label || d.model ? `${d.label || d.model} (${d.serial})` : d.serial,
-          }))}
-          filterOption={(input, option) =>
-            (option?.label as string).toLowerCase().includes(input.toLowerCase())
-          }
-        />
-        <DatePicker.RangePicker
-          value={dateRange as [Dayjs, Dayjs] | null}
-          onChange={(range) => setDateRange(range as [Dayjs | null, Dayjs | null] | null)}
-          allowEmpty={[true, true]}
-          placeholder={['开始日期', '结束日期']}
-          presets={[
-            { label: '今天', value: [dayjs().startOf('day'), dayjs().endOf('day')] },
-            {
-              label: '最近 7 天',
-              value: [dayjs().subtract(6, 'day').startOf('day'), dayjs().endOf('day')],
-            },
-            {
-              label: '最近 30 天',
-              value: [dayjs().subtract(29, 'day').startOf('day'), dayjs().endOf('day')],
-            },
-          ]}
-        />
-        <Space size={6}>
-          <Switch
-            checked={emptyResponseOnly}
-            onChange={setEmptyResponseOnly}
-            size="small"
-          />
-          <span style={{ fontSize: 13 }} title="只看 total=1 / done / 响应为空的批次">
-            只看响应为空
-          </span>
-        </Space>
+        <Popover content={filterPopover} trigger="click" placement="bottomLeft">
+          <Badge count={activeFilters.length} size="small">
+            <Button icon={<FilterOutlined />}>筛选</Button>
+          </Badge>
+        </Popover>
       </Space>
+      {activeFilters.length > 0 ? (
+        <Space wrap size={6} style={{ marginBottom: 14 }}>
+          {activeFilters.map((f) => (
+            <Tag key={f.key} closable onClose={f.onClear} style={{ marginInlineEnd: 0 }}>
+              {f.label}
+            </Tag>
+          ))}
+          <a style={{ fontSize: 12 }} onClick={clearAllFilters}>
+            清除全部
+          </a>
+        </Space>
+      ) : null}
       {isError ? (
         <ErrorState
           description="无法读取批次列表"
