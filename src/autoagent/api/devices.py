@@ -14,12 +14,13 @@ from autoagent.devices.adb import (
     set_ime,
 )
 from autoagent.models.api import DeviceInfo, DeviceLabelUpdate
-from autoagent.storage.devices import list_devices as list_stored_devices
 from autoagent.storage.devices import (
+    delete_device,
     update_device_enabled,
     update_device_label,
     upsert_discovered_device,
 )
+from autoagent.storage.devices import list_devices as list_stored_devices
 
 router = APIRouter(prefix="/devices", tags=["devices"], dependencies=[Depends(require_user)])
 
@@ -89,6 +90,14 @@ async def patch_label(serial: str, body: DeviceLabelUpdate) -> DeviceInfo:
     if row is None:
         raise HTTPException(status_code=404, detail="device not found")
     return row
+
+
+@router.delete("/{serial}", status_code=204)
+async def delete_device_route(serial: str) -> None:
+    """Prune a stale device row. A device adb still sees reappears on the
+    next monitor sync, so this is only useful for gone/decommissioned ones."""
+    if not await delete_device(serial):
+        raise HTTPException(status_code=404, detail="device not found")
 
 
 @router.post("/{serial}/install-adb-keyboard", response_model=DeviceInfo)

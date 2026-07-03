@@ -1,8 +1,15 @@
-import { AppstoreOutlined, MobileOutlined, ReloadOutlined, UnorderedListOutlined } from '@ant-design/icons'
-import { App, Button, Col, Row, Segmented, Space, Table, Tag, Typography } from 'antd'
+import {
+  AppstoreOutlined,
+  DeleteOutlined,
+  MobileOutlined,
+  ReloadOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons'
+import { App, Button, Col, Popconfirm, Row, Segmented, Space, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
 
 import {
+  useDeleteDevice,
   useDevices,
   useDisableIme,
   useEnableIme,
@@ -26,6 +33,7 @@ export function DevicesPage() {
   const enableIme = useEnableIme()
   const disableIme = useDisableIme()
   const updateLabel = useUpdateDeviceLabel()
+  const deleteDevice = useDeleteDevice()
   const { message } = App.useApp()
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
@@ -225,6 +233,32 @@ export function DevicesPage() {
                         Enable IME
                       </Button>
                     ))}
+                  <Popconfirm
+                    title="删除该设备记录"
+                    description={
+                      row.online
+                        ? '设备当前在线,删除后下次刷新会重新出现。确定删除?'
+                        : '从列表移除这条离线设备记录。'
+                    }
+                    okText="删除"
+                    okButtonProps={{ danger: true }}
+                    cancelText="取消"
+                    onConfirm={async () => {
+                      try {
+                        await deleteDevice.mutateAsync(row.serial)
+                        message.success('已删除')
+                      } catch (e) {
+                        message.error((e as Error).message)
+                      }
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      title="删除设备记录"
+                    />
+                  </Popconfirm>
                 </Space>
               ),
             },

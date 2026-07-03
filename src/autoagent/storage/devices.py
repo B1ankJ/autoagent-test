@@ -91,3 +91,20 @@ async def mark_missing_devices_offline(seen_serials: set[str]) -> None:
             if row.serial not in seen_serials:
                 row.online = False
         await s.commit()
+
+
+async def delete_device(serial: str) -> bool:
+    """Remove a device row. Returns True if it existed and was deleted.
+
+    A device the monitor still sees will simply reappear on the next sync;
+    this is for pruning stale rows (unplugged / decommissioned devices) so
+    they stop cluttering the list.
+    """
+    sm = get_sessionmaker()
+    async with sm() as s:
+        row = await s.get(Device, serial)
+        if row is None:
+            return False
+        await s.delete(row)
+        await s.commit()
+        return True

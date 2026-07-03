@@ -67,3 +67,32 @@ async def test_patch_label_404(client):
     h = await _h(client)
     r = await client.patch("/api/v1/devices/missing", json={"label": "x"}, headers=h)
     assert r.status_code == 404
+
+
+async def test_delete_device(client):
+    from datetime import datetime, timezone
+
+    from autoagent.storage.devices import upsert_discovered_device
+
+    h = await _h(client)
+    await upsert_discovered_device(
+        serial="stale-1",
+        model="X",
+        android_version=None,
+        adb_keyboard_installed=None,
+        adb_keyboard_enabled=None,
+        online=False,
+        seen_at=datetime.now(timezone.utc),
+    )
+    # Present in the list.
+    r = await client.get("/api/v1/devices", headers=h)
+    assert any(d["serial"] == "stale-1" for d in r.json())
+    # Delete it.
+    r = await client.delete("/api/v1/devices/stale-1", headers=h)
+    assert r.status_code == 204
+    # Gone.
+    r = await client.get("/api/v1/devices", headers=h)
+    assert not any(d["serial"] == "stale-1" for d in r.json())
+    # Deleting again 404s.
+    r = await client.delete("/api/v1/devices/stale-1", headers=h)
+    assert r.status_code == 404

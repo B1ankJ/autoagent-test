@@ -48,6 +48,7 @@ vi.mock('../../api/devices', () => ({
   useEnableIme: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDisableIme: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDeviceLabel: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteDevice: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 it('renders device rows', () => {

@@ -20,6 +20,21 @@ export function useRefreshDevices() {
   })
 }
 
+export function useDeleteDevice() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) => {
+      await client.delete(`/devices/${encodeURIComponent(serial)}`)
+    },
+    onSuccess: (_d, serial) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.filter((d) => d.serial !== serial),
+      )
+    },
+  })
+}
+
 export function useInstallAdbKeyboard() {
   const queryClient = useQueryClient()
 
