@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from autoagent.devices.pool import DeviceDisabled, DevicePool
+from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool
 from autoagent.models.api import DeviceInfo
 
 
@@ -78,3 +78,33 @@ async def test_acquire_preferred_and_pool_merge() -> None:
             preferred="c", timeout_sec=0.1, allowed_serials={"a"}
         ) as serial:
             assert serial in {"a", "c"}
+
+
+@pytest.mark.asyncio
+async def test_hold_blocks_acquire_of_same_device() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.hold("a"):
+        # The only device is held by init → acquire can't pick it up.
+        with pytest.raises(DeviceBusy):
+            async with pool.acquire(preferred="a", timeout_sec=0.2):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_hold_fails_fast_when_device_running_sample() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.acquire(preferred="a", timeout_sec=0.1):
+        # Device is running a sample → init hold times out → DeviceBusy.
+        with pytest.raises(DeviceBusy):
+            async with pool.hold("a", timeout_sec=0.2):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_hold_releases_for_next_user() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.hold("a"):
+        pass
+    # After hold releases, acquire works again.
+    async with pool.acquire(preferred="a", timeout_sec=0.2) as serial:
+        assert serial == "a"

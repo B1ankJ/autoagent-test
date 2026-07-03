@@ -34,6 +34,28 @@ class DevicePool:
         return count
 
     @asynccontextmanager
+    async def hold(self, serial: str, timeout_sec: float = 5.0):
+        """Exclusively hold one specific device's lock.
+
+        Uses the same per-serial lock as `acquire`, so a sample can't grab
+        the device while it's held (and vice versa). Used to fence off a
+        device during initialization. Raises DeviceBusy if the device is
+        already in use (running a sample / another init) and doesn't free
+        up within `timeout_sec`.
+        """
+        lock = self._locks.setdefault(serial, asyncio.Lock())
+        try:
+            await asyncio.wait_for(lock.acquire(), timeout=timeout_sec)
+        except asyncio.TimeoutError as e:
+            raise DeviceBusy(
+                f"device {serial} is busy (running a task or another init)"
+            ) from e
+        try:
+            yield serial
+        finally:
+            lock.release()
+
+    @asynccontextmanager
     async def acquire(
         self,
         preferred: str | None,

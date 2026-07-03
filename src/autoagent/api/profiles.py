@@ -143,7 +143,13 @@ async def initialize_devices(name: str, body: InitBody) -> dict:
     if not body.serials:
         raise HTTPException(status_code=422, detail="no devices specified")
     prune_old_jobs()
-    job = start_job(profile, body.serials, reboot_override=body.reboot)
+    # Share the scheduler's device pool so init holds the same per-serial
+    # lock a running sample would — they can't drive the device at once.
+    from autoagent.api._deps import get_device_pool
+
+    job = start_job(
+        profile, body.serials, reboot_override=body.reboot, pool=get_device_pool()
+    )
     return job.to_dict()
 
 

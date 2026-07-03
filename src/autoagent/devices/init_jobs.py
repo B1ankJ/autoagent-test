@@ -11,10 +11,13 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from autoagent.devices.initializer import initialize_device
+from autoagent.devices.initializer import InitResult, initialize_device
 from autoagent.profiles.schemas import AndroidProfile
+
+if TYPE_CHECKING:
+    from autoagent.devices.pool import DevicePool
 
 DeviceStatus = Literal["pending", "running", "done", "failed"]
 
@@ -52,11 +55,29 @@ _tasks: dict[str, list[asyncio.Task]] = {}
 
 
 async def _run_one(
-    job: InitJob, serial: str, profile: AndroidProfile, reboot_override: bool | None
+    job: InitJob,
+    serial: str,
+    profile: AndroidProfile,
+    reboot_override: bool | None,
+    pool: DevicePool | None,
 ) -> None:
     state = job.devices[serial]
     state.status = "running"
-    result = await initialize_device(serial, profile, reboot_override=reboot_override)
+    # Fence off the device with the same lock the scheduler uses so a batch
+    # sample can't drive it mid-init (and vice versa). If the device is busy
+    # running a task, fail fast rather than colliding.
+    if pool is not None:
+        from autoagent.devices.pool import DeviceBusy
+
+        try:
+            async with pool.hold(serial, timeout_sec=5.0):
+                result = await initialize_device(
+                    serial, profile, reboot_override=reboot_override
+                )
+        except DeviceBusy as e:
+            result = InitResult(serial=serial, ok=False, error=str(e))
+    else:
+        result = await initialize_device(serial, profile, reboot_override=reboot_override)
     state.status = "done" if result.ok else "failed"
     state.rebooted = result.rebooted
     state.steps_run = result.steps_run
@@ -65,7 +86,11 @@ async def _run_one(
 
 
 def start_job(
-    profile: AndroidProfile, serials: list[str], *, reboot_override: bool | None = None
+    profile: AndroidProfile,
+    serials: list[str],
+    *,
+    reboot_override: bool | None = None,
+    pool: DevicePool | None = None,
 ) -> InitJob:
     import time
 
@@ -79,7 +104,7 @@ def start_job(
     _jobs[job_id] = job
     # One task per device so they initialize in parallel.
     _tasks[job_id] = [
-        asyncio.create_task(_run_one(job, serial, profile, reboot_override))
+        asyncio.create_task(_run_one(job, serial, profile, reboot_override, pool))
         for serial in serials
     ]
     return job
