@@ -1,8 +1,7 @@
 import { EyeInvisibleOutlined, PictureOutlined } from '@ant-design/icons'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Image, Skeleton, Typography } from 'antd'
-import { useEffect } from 'react'
-import { fetchScreenshotBlobUrl, listScreenshots } from '../api/screenshots'
+import { listScreenshots, screenshotUrl } from '../api/screenshots'
 
 interface Props {
   batchId: string
@@ -28,35 +27,14 @@ function formatScreenshotLabel(label: string): string {
 
 const THUMB_W = 168
 const THUMB_H = 240
+// 2x the display width for crisp thumbnails on retina; the server caps at 720.
+const THUMB_FETCH_W = THUMB_W * 2
 
 export function ScreenshotStrip({ batchId, sampleId }: Props) {
   const screenshots = useQuery({
     queryKey: ['screenshots', batchId, sampleId],
     queryFn: async () => listScreenshots(batchId, sampleId),
   })
-  const screenshotUrls = useQueries({
-    queries: (screenshots.data ?? [])
-      .filter((shot) => !shot.is_sensitive)
-      .map((shot) => ({
-        queryKey: ['screenshot-blob', batchId, sampleId, shot.name],
-        queryFn: async () => fetchScreenshotBlobUrl(batchId, sampleId, shot.name),
-        staleTime: Infinity,
-      })),
-  })
-
-  useEffect(() => {
-    return () => {
-      const revoke = URL.revokeObjectURL
-      if (typeof revoke !== 'function') {
-        return
-      }
-      screenshotUrls.forEach((query) => {
-        if (typeof query.data === 'string') {
-          revoke(query.data)
-        }
-      })
-    }
-  }, [screenshotUrls])
 
   if (screenshots.isLoading) {
     return (
@@ -116,7 +94,8 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
             )
           }
 
-          const url = screenshotUrls[index]?.data
+          const thumbUrl = screenshotUrl(batchId, sampleId, shot.name, THUMB_FETCH_W)
+          const fullUrl = screenshotUrl(batchId, sampleId, shot.name)
           const pretty = formatScreenshotLabel(shot.label)
 
           return (
@@ -139,7 +118,7 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
                   overflow: 'hidden',
                   background: 'var(--aa-surface-alt)',
                   border: '1px solid var(--aa-border)',
-                  cursor: url ? 'zoom-in' : 'default',
+                  cursor: 'zoom-in',
                   transition: 'border-color 120ms ease, transform 120ms ease',
                 }}
                 onMouseEnter={(e) => {
@@ -149,24 +128,25 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
                   e.currentTarget.style.borderColor = 'var(--aa-border)'
                 }}
               >
-                {url ? (
-                  <Image
-                    src={url}
-                    alt={shot.label}
-                    width={THUMB_W}
-                    height={THUMB_H}
-                    style={{ objectFit: 'cover' }}
-                    preview={{
-                      mask: (
-                        <span style={{ fontSize: 12 }}>
-                          步骤 {stepNo} · {pretty}
-                        </span>
-                      ),
-                    }}
-                  />
-                ) : (
-                  <Skeleton.Image active style={{ width: THUMB_W, height: THUMB_H }} />
-                )}
+                <Image
+                  src={thumbUrl}
+                  alt={shot.label}
+                  width={THUMB_W}
+                  height={THUMB_H}
+                  loading="lazy"
+                  style={{ objectFit: 'cover' }}
+                  placeholder={
+                    <Skeleton.Image active style={{ width: THUMB_W, height: THUMB_H }} />
+                  }
+                  preview={{
+                    src: fullUrl,
+                    mask: (
+                      <span style={{ fontSize: 12 }}>
+                        步骤 {stepNo} · {pretty}
+                      </span>
+                    ),
+                  }}
+                />
                 <span
                   style={{
                     position: 'absolute',

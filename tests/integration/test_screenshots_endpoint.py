@@ -265,3 +265,69 @@ async def test_list_missing_dir_returns_empty(
         )
         assert response.status_code == 200
         assert response.json() == []
+
+
+def _seed_real_png(tmp_logs: Path, batch_id: str, sample_id: str, name: str) -> None:
+    from PIL import Image as _Image
+
+    directory = tmp_logs / batch_id / sample_id
+    directory.mkdir(parents=True, exist_ok=True)
+    _Image.new("RGB", (1080, 2400), (30, 60, 90)).save(directory / name, format="PNG")
+
+
+async def test_media_full_png_requires_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    logs = tmp_path / "logs"
+    _seed_real_png(logs, "b1", "s1", "after_result_1.png")
+    monkeypatch.setattr(
+        "autoagent.api.media.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": logs}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        base = "/api/v1/media/batches/b1/samples/s1/screenshot/after_result_1.png"
+        # No token → 401.
+        resp = await c.get(base)
+        assert resp.status_code == 401
+        # Full PNG.
+        resp = await c.get(f"{base}?token={token}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/png"
+        assert resp.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert resp.content.startswith(b"\x89PNG")
+
+
+async def test_media_thumbnail_is_smaller_jpeg(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    logs = tmp_path / "logs"
+    _seed_real_png(logs, "b1", "s1", "after_result_1.png")
+    monkeypatch.setattr(
+        "autoagent.api.media.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": logs}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        base = "/api/v1/media/batches/b1/samples/s1/screenshot/after_result_1.png"
+        full = await c.get(f"{base}?token={token}")
+        thumb = await c.get(f"{base}?token={token}&w=336")
+        assert thumb.status_code == 200
+        assert thumb.headers["content-type"] == "image/jpeg"
+        # Thumbnail is meaningfully smaller than the full PNG.
+        assert len(thumb.content) < len(full.content)
+
+
+async def test_media_rejects_path_traversal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, token: str
+) -> None:
+    logs = tmp_path / "logs"
+    _seed_real_png(logs, "b1", "s1", "after_result_1.png")
+    monkeypatch.setattr(
+        "autoagent.api.media.get_settings",
+        lambda: get_settings().model_copy(update={"logs_root": logs}),
+    )
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        resp = await c.get(
+            "/api/v1/media/batches/b1/samples/s1/screenshot/01_ready.jpg",
+            params={"token": token},
+        )
+        assert resp.status_code == 400

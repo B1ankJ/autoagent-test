@@ -1,4 +1,5 @@
 import { client } from './client'
+import { getToken } from './client'
 import { ScreenshotInfo } from '../types/api'
 
 export async function listScreenshots(
@@ -11,18 +12,22 @@ export async function listScreenshots(
   return data
 }
 
-export async function fetchScreenshotBlobUrl(
+/**
+ * Direct URL for a sample screenshot, usable as an <img src>. Auth rides in
+ * the `?token=` query because <img> can't set an Authorization header.
+ * Pass `width` for a downscaled JPEG thumbnail (log strip); omit for the
+ * full-resolution PNG (zoom).
+ */
+export function screenshotUrl(
   batchId: string,
   sampleId: string,
   name: string,
-): Promise<string> {
-  const { data } = await client.get<Blob>(
-    `/batches/${batchId}/samples/${sampleId}/screenshots/${encodeURIComponent(name)}`,
-    { responseType: 'blob' },
-  )
-  return URL.createObjectURL(data)
-}
-
-export function screenshotPath(batchId: string, sampleId: string, name: string): string {
-  return `/api/v1/batches/${batchId}/samples/${sampleId}/screenshots/${encodeURIComponent(name)}`
+  width?: number,
+): string {
+  const token = getToken() ?? ''
+  const params = new URLSearchParams({ token })
+  if (width) params.set('w', String(width))
+  return `/api/v1/media/batches/${encodeURIComponent(batchId)}/samples/${encodeURIComponent(
+    sampleId,
+  )}/screenshot/${encodeURIComponent(name)}?${params.toString()}`
 }

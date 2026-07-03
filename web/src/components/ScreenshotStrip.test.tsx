@@ -4,11 +4,13 @@ import { renderWithProviders } from '../test/test-utils'
 import { ScreenshotStrip } from './ScreenshotStrip'
 
 const listScreenshots = vi.fn()
-const fetchScreenshotBlobUrl = vi.fn()
 
 vi.mock('../api/screenshots', () => ({
   listScreenshots: (...args: unknown[]) => listScreenshots(...args),
-  fetchScreenshotBlobUrl: (...args: unknown[]) => fetchScreenshotBlobUrl(...args),
+  screenshotUrl: (batchId: string, sampleId: string, name: string, width?: number) =>
+    `/api/v1/media/batches/${batchId}/samples/${sampleId}/screenshot/${name}${
+      width ? `?w=${width}` : ''
+    }`,
 }))
 
 describe('ScreenshotStrip', () => {
@@ -20,19 +22,17 @@ describe('ScreenshotStrip', () => {
         taken_at: '2026-04-22T00:00:00Z',
       },
     ])
-    fetchScreenshotBlobUrl.mockResolvedValue('blob:ready')
 
     renderWithProviders(<ScreenshotStrip batchId="b1" sampleId="s1" />)
 
     await waitFor(() => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
-      expect(fetchScreenshotBlobUrl).toHaveBeenCalledWith('b1', 's1', 'before_input_1.png')
+      // Thumbnail img points at the media endpoint with a width param.
       expect(screen.getByRole('img', { name: 'before_input_1' })).toHaveAttribute(
         'src',
-        'blob:ready',
+        '/api/v1/media/batches/b1/samples/s1/screenshot/before_input_1.png?w=336',
       )
-      // Step number now rendered as a zero-padded badge overlay (`01`)
-      // instead of "步骤 1"; pretty label + raw label still shown.
+      // Step number rendered as a zero-padded badge overlay (`01`).
       expect(screen.getByText('01')).toBeInTheDocument()
       expect(screen.getByText('输入前 1')).toBeInTheDocument()
       expect(screen.getByText('before_input_1')).toBeInTheDocument()
