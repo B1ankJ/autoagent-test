@@ -62,6 +62,14 @@ export function useBatches(params?: BatchQueryFilters) {
         })
       ).data,
     placeholderData: (prev) => prev,
+    // Live progress: refetch every 2s while any row is still queued/running
+    // so the list's done/failed/total column advances without opening detail;
+    // idle otherwise to avoid pointless traffic.
+    refetchInterval: (query) => {
+      const rows = query.state.data
+      const active = rows?.some((b) => b.status === 'queued' || b.status === 'running')
+      return active ? 2000 : false
+    },
   })
 }
 
@@ -103,7 +111,12 @@ export function useBatchStats(params?: {
           }),
         })
       ).data,
-    refetchInterval: 5000,
+    // 2s while work is in flight (keeps the count chips in sync with the
+    // list's live rows), 5s at rest.
+    refetchInterval: (query) => {
+      const s = query.state.data
+      return s && (s.running > 0 || s.queued > 0) ? 2000 : 5000
+    },
     placeholderData: (prev) => prev,
   })
 }
