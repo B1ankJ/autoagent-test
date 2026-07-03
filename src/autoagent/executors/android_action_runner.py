@@ -69,7 +69,12 @@ class AndroidActionRunner:
         if step.action == "click_locator":
             resolve_target(self.device, step.locator).click()
         elif step.action == "input":
-            await self.input_controller.set_text(step.locator, step.text)
+            # locator is optional: omit it to type into the currently-focused
+            # field (set_text handles locator=None). Direct attribute access
+            # would raise AttributeError on a locator-less step.
+            await self.input_controller.set_text(
+                getattr(step, "locator", None), getattr(step, "text", "") or ""
+            )
         elif step.action == "wait_for":
             await asyncio.to_thread(
                 resolve_target(self.device, step.locator).wait,

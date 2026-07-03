@@ -53,3 +53,34 @@ async def test_tap_xy_records_coordinates_in_action_log() -> None:
     assert runner.log[0]["action"] == "tap_xy"
     assert runner.log[0]["x"] == 320
     assert runner.log[0]["y"] == 640
+
+
+@pytest.mark.asyncio
+async def test_input_without_locator_types_into_focused_field() -> None:
+    from unittest.mock import AsyncMock
+
+    device = MagicMock()
+    input_ctl = MagicMock()
+    input_ctl.set_text = AsyncMock()
+
+    runner = AndroidActionRunner(device=device, input_controller=input_ctl, action_log=[])
+    # locator omitted — should NOT raise AttributeError, should pass None.
+    await runner.run([ActionStep(action="input", text="你好世界")])
+
+    input_ctl.set_text.assert_awaited_once_with(None, "你好世界")
+    assert runner.log[0]["action"] == "input"
+    assert runner.log[0]["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_input_with_locator_passes_it_through() -> None:
+    from unittest.mock import AsyncMock
+
+    input_ctl = MagicMock()
+    input_ctl.set_text = AsyncMock()
+    loc = Locator(type="resource_id", value="com.example:id/input")
+
+    runner = AndroidActionRunner(device=MagicMock(), input_controller=input_ctl, action_log=[])
+    await runner.run([ActionStep(action="input", locator=loc, text="测试")])
+
+    input_ctl.set_text.assert_awaited_once_with(loc, "测试")
