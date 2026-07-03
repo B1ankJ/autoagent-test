@@ -245,7 +245,10 @@ class WebExecutor(Executor):
             return
         path = store.next_path(label)
         try:
-            await page.screenshot(path=str(path), full_page=False)
+            # JPEG q85 keeps these ~70% smaller than PNG; path ends in .jpg.
+            await page.screenshot(
+                path=str(path), full_page=False, type="jpeg", quality=85
+            )
         except Exception:  # noqa: BLE001
             pass
 

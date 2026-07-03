@@ -228,7 +228,7 @@ async def test_download_screenshot(
     [
         "../../etc/passwd",
         "..%2f..%2fetc%2fpasswd",
-        "01_ready.jpg",
+        "01_ready.gif",
         "01_READY.png",
     ],
 )
@@ -326,8 +326,9 @@ async def test_media_rejects_path_traversal(
         lambda: get_settings().model_copy(update={"logs_root": logs}),
     )
     async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        # .gif isn't an allowed screenshot extension → rejected by the regex.
         resp = await c.get(
-            "/api/v1/media/batches/b1/samples/s1/screenshot/01_ready.jpg",
+            "/api/v1/media/batches/b1/samples/s1/screenshot/01_ready.gif",
             params={"token": token},
         )
         assert resp.status_code == 400

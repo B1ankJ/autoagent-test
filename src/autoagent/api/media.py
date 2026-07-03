@@ -22,7 +22,8 @@ from autoagent.config.settings import get_settings
 
 router = APIRouter(prefix="/media", tags=["media"])
 
-_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.png$")
+# Accept both .png (legacy batches) and .jpg (current, JPEG-compressed).
+_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.(png|jpg)$")
 _MAX_THUMB_W = 720
 # Immutable: the file at <batch>/<sample>/<name> never changes once written.
 _CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
@@ -97,8 +98,9 @@ async def get_screenshot(
         data = _make_thumbnail(target, width)
         return Response(content=data, media_type="image/jpeg", headers=_CACHE_HEADERS)
 
+    media_type = "image/jpeg" if target.suffix.lower() == ".jpg" else "image/png"
     return Response(
         content=target.read_bytes(),
-        media_type="image/png",
+        media_type=media_type,
         headers=_CACHE_HEADERS,
     )

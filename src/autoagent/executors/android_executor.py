@@ -173,9 +173,10 @@ class AndroidExecutor(Executor):
                             idx,
                         )
                         await action_runner.run(profile.input_focus_action)
-                    before_input_path = store.artifact_path(f"before_input_{idx}", "png")
                     before_input = await asyncio.to_thread(capture_screenshot_bytes, device)
-                    await asyncio.to_thread(before_input_path.write_bytes, before_input)
+                    before_input_path = await asyncio.to_thread(
+                        store.write_screenshot, f"before_input_{idx}", before_input
+                    )
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=before_input_path, label=f"before_input_{idx}")
                     )
@@ -192,14 +193,15 @@ class AndroidExecutor(Executor):
                         locator_desc,
                     )
                     await input_ctl.set_text(profile.input_locator, prompt)
-                    screenshot_path = store.artifact_path(f"after_input_{idx}", "png")
                     after_input = await asyncio.to_thread(capture_screenshot_bytes, device)
-                    await asyncio.to_thread(screenshot_path.write_bytes, after_input)
+                    screenshot_path = await asyncio.to_thread(
+                        store.write_screenshot, f"after_input_{idx}", after_input
+                    )
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=screenshot_path, label=f"after_input_{idx}")
                     )
                     sample_log.info(
-                        "android sample %s prompt %s captured after_input screenshot: png=%s",
+                        "android sample %s prompt %s captured after_input screenshot: file=%s",
                         sample.id,
                         idx,
                         screenshot_path.name,
@@ -233,9 +235,10 @@ class AndroidExecutor(Executor):
                                 )
                             ]
                         )
-                    after_send_path = store.artifact_path(f"after_send_{idx}", "png")
                     after_send = await asyncio.to_thread(capture_screenshot_bytes, device)
-                    await asyncio.to_thread(after_send_path.write_bytes, after_send)
+                    after_send_path = await asyncio.to_thread(
+                        store.write_screenshot, f"after_send_{idx}", after_send
+                    )
                     ctx.screenshot_index.append(
                         ScreenshotResult(path=after_send_path, label=f"after_send_{idx}")
                     )
@@ -416,14 +419,11 @@ class AndroidExecutor(Executor):
                             if vlm_attempt < _VLM_MAX_ATTEMPTS - 1:
                                 await asyncio.sleep(_VLM_RETRY_BACKOFF_SEC)
                         # Always snapshot final state for diagnostics.
-                        after_result_path = store.artifact_path(
-                            f"after_result_{idx}", "png"
-                        )
                         after_result = await asyncio.to_thread(
                             capture_screenshot_bytes, device
                         )
-                        await asyncio.to_thread(
-                            after_result_path.write_bytes, after_result
+                        after_result_path = await asyncio.to_thread(
+                            store.write_screenshot, f"after_result_{idx}", after_result
                         )
                         ctx.screenshot_index.append(
                             ScreenshotResult(
@@ -523,16 +523,17 @@ class AndroidExecutor(Executor):
                             rvlm_last_error = rvlm_res.error or "empty_text"
                             if rvlm_attempt < rvlm_cfg.max_attempts - 1:
                                 await asyncio.sleep(rvlm_cfg.retry_backoff_sec)
-                        # Always snapshot final state for diagnostics.
+                        # Always snapshot final state for diagnostics — unless a
+                        # prior branch already wrote after_result for this idx.
                         rvlm_result_path = store.artifact_path(
-                            f"after_result_{idx}", "png"
+                            f"after_result_{idx}", "jpg"
                         )
                         if not rvlm_result_path.exists():
                             rvlm_final_shot = await asyncio.to_thread(
                                 capture_screenshot_bytes, device
                             )
-                            await asyncio.to_thread(
-                                rvlm_result_path.write_bytes, rvlm_final_shot
+                            rvlm_result_path = await asyncio.to_thread(
+                                store.write_screenshot, f"after_result_{idx}", rvlm_final_shot
                             )
                             ctx.screenshot_index.append(
                                 ScreenshotResult(
@@ -619,14 +620,13 @@ class AndroidExecutor(Executor):
                                     await asyncio.to_thread(
                                         after_result_xml_path.write_text, xml, "utf-8"
                                     )
-                                after_result_path = store.artifact_path(
-                                    f"after_result_{idx}", "png"
-                                )
                                 after_result = await asyncio.to_thread(
                                     capture_screenshot_bytes, device
                                 )
-                                await asyncio.to_thread(
-                                    after_result_path.write_bytes, after_result
+                                after_result_path = await asyncio.to_thread(
+                                    store.write_screenshot,
+                                    f"after_result_{idx}",
+                                    after_result,
                                 )
                                 ctx.screenshot_index.append(
                                     ScreenshotResult(
@@ -762,9 +762,10 @@ class AndroidExecutor(Executor):
                     after_result_xml_path = store.artifact_path(f"after_result_{idx}", "xml")
                     if xml is not None:
                         await asyncio.to_thread(after_result_xml_path.write_text, xml, "utf-8")
-                    after_result_path = store.artifact_path(f"after_result_{idx}", "png")
                     after_result = await asyncio.to_thread(capture_screenshot_bytes, device)
-                    await asyncio.to_thread(after_result_path.write_bytes, after_result)
+                    after_result_path = await asyncio.to_thread(
+                        store.write_screenshot, f"after_result_{idx}", after_result
+                    )
                     sample_log.info(
                         "android sample %s prompt %s extraction done: method=%s text=%r",
                         sample.id,
@@ -817,10 +818,9 @@ class AndroidExecutor(Executor):
                         ctx.llm_responses.append(llm_res.text)
                         ctx.llm_errors.append(llm_res.error)
         except Exception:
-            error_path = store.artifact_path("on_error", "png")
             try:
                 on_error = await asyncio.to_thread(capture_screenshot_bytes, device)
-                await asyncio.to_thread(error_path.write_bytes, on_error)
+                await asyncio.to_thread(store.write_screenshot, "on_error", on_error)
             except Exception:
                 pass
             sample_log.exception("android sample %s failed", sample.id)

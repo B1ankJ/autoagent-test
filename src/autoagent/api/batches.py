@@ -47,7 +47,8 @@ from autoagent.storage.batches import (
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
-_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.png$")
+# Accept both .png (legacy batches) and .jpg (current, JPEG-compressed).
+_SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.(png|jpg)$")
 _STAGE_ORDER = {
     "before_input": 0,
     "after_input": 1,
@@ -618,8 +619,9 @@ async def download_screenshot(batch_id: str, sample_id: str, name: str) -> FileR
         raise HTTPException(status_code=400, detail="path traversal blocked") from e
     if not target.is_file():
         raise HTTPException(status_code=404, detail="not found")
+    media_type = "image/jpeg" if target.suffix.lower() == ".jpg" else "image/png"
     return FileResponse(
         target,
-        media_type="image/png",
+        media_type=media_type,
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
