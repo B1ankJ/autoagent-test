@@ -147,8 +147,8 @@ async def test_agent_pc_executor_runs_task_and_propagates_extraction(
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-1" / "s1").resolve())
     assert any(isinstance(item, ScreenshotResult) for item in ctx.screenshot_index)
-    assert (tmp_path / "batch-1" / "s1" / "step_1_1.png").is_file()
-    assert (tmp_path / "batch-1" / "s1" / "final_1.png").is_file()
+    assert (tmp_path / "batch-1" / "s1" / "step_1_1.jpg").is_file()
+    assert (tmp_path / "batch-1" / "s1" / "final_1.jpg").is_file()
     trace_path = tmp_path / "batch-1" / "s1" / "loop_trace_1.json"
     assert trace_path.is_file()
     assert (tmp_path / "batch-1" / "s1" / "extract_1.json").is_file()
@@ -512,8 +512,8 @@ async def test_agent_android_executor_prefers_ctx_device_serial(
         }
     ]
     assert ctx.logs_dir == str((tmp_path / "batch-2" / "s1").resolve())
-    assert (tmp_path / "batch-2" / "s1" / "step_1_1.png").is_file()
-    assert (tmp_path / "batch-2" / "s1" / "final_1.png").is_file()
+    assert (tmp_path / "batch-2" / "s1" / "step_1_1.jpg").is_file()
+    assert (tmp_path / "batch-2" / "s1" / "final_1.jpg").is_file()
     trace_path = tmp_path / "batch-2" / "s1" / "loop_trace_1.json"
     assert trace_path.is_file()
     assert (tmp_path / "batch-2" / "s1" / "extract_1.json").is_file()

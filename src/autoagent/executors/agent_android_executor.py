@@ -125,20 +125,17 @@ class AgentAndroidExecutor(Executor):
                 json.dumps(trace_payload, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             for step in loop_result.steps:
-                step_path = store.artifact_path(
-                    f"step_{len(responses) + 1}_{step.step}",
-                    "png",
+                step_label = f"step_{len(responses) + 1}_{step.step}"
+                step_path = store.write_screenshot(
+                    step_label, base64.b64decode(step.screenshot.base64_data)
                 )
-                step_path.write_bytes(base64.b64decode(step.screenshot.base64_data))
                 ctx.screenshot_index.append(
-                    ScreenshotResult(
-                        path=step_path,
-                        label=f"step_{len(responses) + 1}_{step.step}",
-                    )
+                    ScreenshotResult(path=step_path, label=step_label)
                 )
             screenshot = await loop.run_in_executor(None, device.capture)
-            final_path = store.artifact_path(f"final_{len(responses) + 1}", "png")
-            final_path.write_bytes(base64.b64decode(screenshot.base64_data))
+            final_path = store.write_screenshot(
+                f"final_{len(responses) + 1}", base64.b64decode(screenshot.base64_data)
+            )
             ctx.screenshot_index.append(
                 ScreenshotResult(path=final_path, label=f"final_{len(responses) + 1}")
             )

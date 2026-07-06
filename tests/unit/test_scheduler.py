@@ -108,3 +108,37 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
 
     assert seen["device_serial"] == "emulator-5554"
     assert seen["preferred"] is None
+
+
+def test_resolve_concurrency_capped_by_bound_pool():
+    from types import SimpleNamespace
+
+    from autoagent.scheduler.batch_scheduler import _resolve_concurrency
+
+    samples = [
+        Sample(id=f"s{i}", prompts=["hi"], mode="gui_android", target_profile="p")
+        for i in range(10)
+    ]
+    # Profile bound to 2 devices; 5 online globally, requested 8 → cap to 2.
+    def lookup(_n):
+        return SimpleNamespace(serial=None, serials=["A", "B"])
+
+    n = _resolve_concurrency(8, "gui_android", samples, lookup, available_devices=5)
+    assert n == 2
+
+
+def test_resolve_concurrency_unbound_uses_available():
+    from types import SimpleNamespace
+
+    from autoagent.scheduler.batch_scheduler import _resolve_concurrency
+
+    samples = [
+        Sample(id=f"s{i}", prompts=["hi"], mode="gui_android", target_profile="p")
+        for i in range(10)
+    ]
+    # Unbound profile (any online device) → capped only by available_devices.
+    def lookup(_n):
+        return SimpleNamespace(serial=None, serials=[])
+
+    n = _resolve_concurrency(8, "gui_android", samples, lookup, available_devices=3)
+    assert n == 3

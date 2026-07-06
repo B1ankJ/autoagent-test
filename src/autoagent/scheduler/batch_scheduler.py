@@ -37,7 +37,30 @@ def _resolve_concurrency(
 ) -> int:
     if mode in {"gui_android", "agent_android"}:
         avail = max(1, available_devices or 1)
-        return max(1, min(requested, avail))
+        capped = min(requested, avail)
+        # If every distinct profile binds a device pool, a sample can only run
+        # on one of those pooled devices — so concurrency above the union of
+        # bound serials just parks extra samples in acquire-wait. Cap by it.
+        bound: set[str] = set()
+        all_bound = True
+        for name in {s.target_profile for s in samples}:
+            try:
+                profile = profile_lookup(name)
+            except Exception:
+                all_bound = False
+                break
+            serial = getattr(profile, "serial", None)
+            serials = list(getattr(profile, "serials", None) or [])
+            if serial:
+                serials.append(serial)
+            if serials:
+                bound.update(serials)
+            else:
+                all_bound = False  # this profile can use any online device
+                break
+        if all_bound and bound:
+            capped = min(capped, len(bound))
+        return max(1, capped)
 
     if mode != "gui_pc_web" or not samples:
         return max(1, requested)
