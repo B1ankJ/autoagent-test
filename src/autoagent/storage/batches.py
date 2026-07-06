@@ -239,6 +239,22 @@ async def delete_batch_rows(batch_id: str) -> bool:
         return True
 
 
+_TERMINAL_STATUSES = ("done", "failed", "cancelled")
+
+
+async def list_finished_batch_ids_before(cutoff: datetime) -> list[str]:
+    """IDs of terminal (done/failed/cancelled) batches created before cutoff."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        result = await s.execute(
+            select(Batch.id).where(
+                Batch.status.in_(_TERMINAL_STATUSES),
+                Batch.created_at < cutoff,
+            )
+        )
+        return [row[0] for row in result.all()]
+
+
 async def update_batch_status(batch_id: str, status: str) -> None:
     sm = get_sessionmaker()
     async with sm() as s:

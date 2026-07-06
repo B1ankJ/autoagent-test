@@ -18,7 +18,13 @@ def _db_url() -> str:
 def get_engine():
     global _engine, _sessionmaker
     if _engine is None:
-        _engine = create_async_engine(_db_url(), echo=False, future=True)
+        url = _db_url()
+        # timeout (seconds) → sqlite busy_timeout on every pooled connection,
+        # so a transient WAL lock waits instead of raising "database is locked".
+        connect_args = {"timeout": 5} if url.startswith("sqlite") else {}
+        _engine = create_async_engine(
+            url, echo=False, future=True, connect_args=connect_args
+        )
         _sessionmaker = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
     return _engine
 
@@ -32,6 +38,13 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
+        if engine.url.get_backend_name().startswith("sqlite"):
+            # WAL lets readers (2s UI polling) run concurrently with writers
+            # (per-sample upserts) instead of blocking on a whole-db lock.
+            # journal_mode is persistent (stored in the db file); setting it
+            # once at boot is enough. Per-connection busy waiting comes from
+            # the engine connect_args timeout above.
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
         if engine.url.get_backend_name().startswith("sqlite"):
             result = await conn.execute(text("PRAGMA table_info(devices)"))

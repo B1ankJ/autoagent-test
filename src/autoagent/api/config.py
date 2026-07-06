@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.executors.llm_checker import check_llm_api
+from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import (
     DefaultsConfig,
@@ -100,13 +101,25 @@ async def _current_retention_days() -> int:
 
 @router.get("/logs/preview")
 async def preview_logs_cleanup(days: int | None = None) -> dict:
-    """Report what run_cleanup would delete without touching disk."""
+    """Report what cleanup would delete without touching disk / DB."""
     settings = get_settings()
     retention = days if days is not None else await _current_retention_days()
     if retention <= 0:
-        return {"files_deleted": 0, "dirs_deleted": 0, "bytes_freed": 0, "retention_days": 0}
+        return {
+            "files_deleted": 0,
+            "dirs_deleted": 0,
+            "bytes_freed": 0,
+            "batches_pruned": 0,
+            "retention_days": 0,
+        }
     report = await asyncio.to_thread(
         run_cleanup,
+        logs_root=settings.logs_root,
+        data_root=settings.data_root,
+        retention_days=retention,
+        dry_run=True,
+    )
+    batch_report = await prune_old_batches(
         logs_root=settings.logs_root,
         data_root=settings.data_root,
         retention_days=retention,
@@ -116,6 +129,7 @@ async def preview_logs_cleanup(days: int | None = None) -> dict:
         "files_deleted": report.files_deleted,
         "dirs_deleted": report.dirs_deleted,
         "bytes_freed": report.bytes_freed,
+        "batches_pruned": batch_report.batches,
         "retention_days": retention,
     }
 
@@ -128,6 +142,12 @@ async def run_logs_cleanup(days: int | None = None) -> dict:
         raise HTTPException(
             status_code=400, detail="log_retention_days is 0 (disabled); pass ?days=N to force"
         )
+    batch_report = await prune_old_batches(
+        logs_root=settings.logs_root,
+        data_root=settings.data_root,
+        retention_days=retention,
+        dry_run=False,
+    )
     report = await asyncio.to_thread(
         run_cleanup,
         logs_root=settings.logs_root,
@@ -139,6 +159,7 @@ async def run_logs_cleanup(days: int | None = None) -> dict:
         "files_deleted": report.files_deleted,
         "dirs_deleted": report.dirs_deleted,
         "bytes_freed": report.bytes_freed,
+        "batches_pruned": batch_report.batches,
         "retention_days": retention,
     }
 

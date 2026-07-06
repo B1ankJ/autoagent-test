@@ -110,6 +110,7 @@ export interface LogCleanupReport {
   files_deleted: number
   dirs_deleted: number
   bytes_freed: number
+  batches_pruned: number
   retention_days: number
 }
 

@@ -226,8 +226,8 @@ export function ConfigPage() {
           </Form.Item>
           <Form.Item
             name="log_retention_days"
-            label="日志保留天数"
-            extra="0 = 关闭自动清理。启用后,每日一次自动删除 logs/ 和 data/profile_builder/ 下超过该天数的产物。"
+            label="数据保留天数"
+            extra="0 = 关闭自动清理。启用后每日一次:删除超过该天数的已完成批次(DB 记录 + 结果 JSONL + 日志),并清理 logs/ 与 data/profile_builder/ 下的过期产物。"
           >
             <InputNumber min={0} max={365} />
           </Form.Item>
@@ -241,7 +241,7 @@ export function ConfigPage() {
                   const days = defaultsForm.getFieldValue('log_retention_days') as number
                   const r = await previewLogsCleanup.mutateAsync(days || undefined)
                   message.info(
-                    `预览:将删除 ${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                    `预览:将清理 ${r.batches_pruned} 个过期批次、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
                   )
                 } catch (e) {
                   message.error((e as Error).message)
@@ -253,13 +253,13 @@ export function ConfigPage() {
             </Button>
             <Popconfirm
               title="立即清理"
-              description="根据当前保留天数删除过期日志/Builder 产物。不可恢复。"
+              description="根据当前保留天数删除过期批次(含 DB 记录/结果)与日志/Builder 产物。不可恢复。"
               onConfirm={async () => {
                 try {
                   const days = defaultsForm.getFieldValue('log_retention_days') as number
                   const r = await runLogsCleanup.mutateAsync(days || undefined)
                   message.success(
-                    `已删除 ${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                    `已清理 ${r.batches_pruned} 个过期批次、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
                   )
                 } catch (e) {
                   message.error((e as Error).message)

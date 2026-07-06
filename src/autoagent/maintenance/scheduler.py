@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from autoagent.config.settings import get_settings
+from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import DefaultsConfig
 from autoagent.storage.configs import get_config
@@ -32,6 +33,14 @@ async def _tick_once() -> None:
         _log.info("log_retention_days=%d, skipping cleanup tick", days)
         return
     settings = get_settings()
+    # Prune whole finished batches (DB rows + results + logs dir) first so the
+    # file sweep below doesn't have to re-walk their logs.
+    batch_report = await prune_old_batches(
+        logs_root=settings.logs_root,
+        data_root=settings.data_root,
+        retention_days=days,
+        dry_run=False,
+    )
     report = await asyncio.to_thread(
         run_cleanup,
         logs_root=settings.logs_root,
@@ -40,8 +49,9 @@ async def _tick_once() -> None:
         dry_run=False,
     )
     _log.info(
-        "log retention tick: retention=%dd deleted files=%d dirs=%d bytes=%d",
+        "retention tick: retention=%dd pruned batches=%d; files=%d dirs=%d bytes=%d",
         days,
+        batch_report.batches,
         report.files_deleted,
         report.dirs_deleted,
         report.bytes_freed,
