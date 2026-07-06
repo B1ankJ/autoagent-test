@@ -29,6 +29,7 @@ import {
   useBatches,
   useBatchStats,
   useCancelActiveBatches,
+  useCancelBatch,
   useDeleteBatch,
   useDeleteBatchesByStatus,
 } from '../../api/batches'
@@ -60,9 +61,12 @@ export function BatchList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { message } = App.useApp()
   const cancelActive = useCancelActiveBatches()
+  const cancelOne = useCancelBatch()
   const deleteOne = useDeleteBatch()
   const deleteByStatus = useDeleteBatchesByStatus()
   const [previewBatchId, setPreviewBatchId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
@@ -206,6 +210,26 @@ export function BatchList() {
       )
     } catch (e) {
       message.error((e as Error).message)
+    }
+  }
+
+  // Bulk ops over the checkbox selection. Runs the existing single-batch
+  // endpoints in parallel and reports how many succeeded.
+  const runBulk = async (
+    verb: '取消' | '删除',
+    fn: (id: string) => Promise<unknown>,
+  ) => {
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(selectedIds.map((id) => fn(id)))
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      message[failed ? 'warning' : 'success'](
+        `已${verb} ${ok} 个批次${failed ? `,${failed} 个失败` : ''}`,
+      )
+      setSelectedIds([])
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -573,22 +597,60 @@ export function BatchList() {
           }
         />
       ) : (
-        <Table<BatchSummary>
-          rowKey="batch_id"
-          size="small"
-          loading={isLoading}
-          dataSource={rows}
-          columns={columns}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: ['20', '50', '100', '200'],
-            showTotal: (n) => `共 ${n} 条`,
-            onChange: setPagination,
-          }}
-        />
+        <>
+          {selectedIds.length > 0 ? (
+            <Space style={{ marginBottom: 10 }}>
+              <span style={{ fontSize: 13 }}>已选 {selectedIds.length} 项</span>
+              <Popconfirm
+                title={`取消选中的 ${selectedIds.length} 个批次?`}
+                description="仅对 queued/running 的批次生效。"
+                onConfirm={() => runBulk('取消', (id) => cancelOne.mutateAsync(id))}
+                okText="取消批次"
+                cancelText="返回"
+              >
+                <Button size="small" icon={<StopOutlined />} loading={bulkBusy}>
+                  批量取消
+                </Button>
+              </Popconfirm>
+              <Popconfirm
+                title={`删除选中的 ${selectedIds.length} 个批次?`}
+                description="连同 DB 记录 / JSONL / logs 一并删除,不可恢复。active 批次会删除失败。"
+                onConfirm={() => runBulk('删除', (id) => deleteOne.mutateAsync(id))}
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="返回"
+              >
+                <Button size="small" danger icon={<DeleteOutlined />} loading={bulkBusy}>
+                  批量删除
+                </Button>
+              </Popconfirm>
+              <a style={{ fontSize: 12 }} onClick={() => setSelectedIds([])}>
+                清除选择
+              </a>
+            </Space>
+          ) : null}
+          <Table<BatchSummary>
+            rowKey="batch_id"
+            size="small"
+            loading={isLoading}
+            dataSource={rows}
+            columns={columns}
+            rowSelection={{
+              selectedRowKeys: selectedIds,
+              onChange: (keys) => setSelectedIds(keys as string[]),
+              preserveSelectedRowKeys: true,
+            }}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: ['20', '50', '100', '200'],
+              showTotal: (n) => `共 ${n} 条`,
+              onChange: setPagination,
+            }}
+          />
+        </>
       )}
     </div>
   )

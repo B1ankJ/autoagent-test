@@ -10,11 +10,12 @@ import {
   SettingOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import { Button, Layout, Menu, Space, Typography } from 'antd'
+import { Badge, Button, Layout, Menu, Space, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logoutApi } from '../api/auth'
+import { useBatchStats } from '../api/batches'
 import { useAuth } from '../hooks/useAuth'
 import { CommandPalette } from './CommandPalette'
 import { ThemeToggle } from './ThemeToggle'
@@ -105,7 +106,7 @@ const NAV: NavGroup[] = [
   },
 ]
 
-function buildMenuItems(): MenuProps['items'] {
+function buildMenuItems(runningCount: number): MenuProps['items'] {
   return NAV.map((group) => ({
     key: group.key,
     type: 'group',
@@ -113,7 +114,17 @@ function buildMenuItems(): MenuProps['items'] {
     children: group.items.map((item) => ({
       key: item.key,
       icon: item.icon,
-      label: item.label,
+      // Surface in-flight batches as a badge on the Batches entry so
+      // background work is visible from any page.
+      label:
+        item.key === '/batches' && runningCount > 0 ? (
+          <Space size={8}>
+            <span>{item.label}</span>
+            <Badge count={runningCount} size="small" style={{ boxShadow: 'none' }} />
+          </Space>
+        ) : (
+          item.label
+        ),
     })),
   }))
 }
@@ -133,7 +144,9 @@ export function AppLayout() {
   const location = useLocation()
   const { logout } = useAuth()
 
-  const items = useMemo(() => buildMenuItems(), [])
+  const stats = useBatchStats()
+  const runningCount = (stats.data?.running ?? 0) + (stats.data?.queued ?? 0)
+  const items = useMemo(() => buildMenuItems(runningCount), [runningCount])
   const selected = useMemo(() => [findActiveKey(location.pathname)], [location.pathname])
 
   const onLogout = async () => {

@@ -3,6 +3,7 @@ import { Button, Card, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 
 import { useDeviceHttpStream } from '../api/deviceStream'
+import { usePageVisible } from '../hooks/usePageVisible'
 import type { Device } from '../types/api'
 
 interface Props {
@@ -18,8 +19,10 @@ interface Props {
  * render a placeholder so the grid stays balanced.
  */
 export function DeviceStreamCard({ device, onOpenFullView }: Props) {
-  // Pass null to the hook when offline so we don't try to open a doomed ws.
-  const serial = device.online ? device.serial : null
+  // Stream only when online AND the tab is visible — passing null tears the
+  // stream down, so a hidden tab stops burning CPU/adb bandwidth on N decoders.
+  const visible = usePageVisible()
+  const serial = device.online && visible ? device.serial : null
   const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(serial)
   const [hovered, setHovered] = useState(false)
 
