@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from autoagent.utils.http_retry import post_json_with_retry
+
 _SYSTEM_PROMPT = (
     "你是一个 Android 聊天 App 响应抽取器。用户会给你：\n"
     "1) 本轮用户发送的 prompt 文本；\n"
@@ -54,10 +56,6 @@ class LLMExtractionResult:
     raw_message_content: str | None = None
     truncated_input: bool = False
     xml_sent: str | None = None
-
-
-async def _make_client(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout)
 
 
 _EMOJI_PLACEHOLDER_RE = re.compile(r'\s*\.\.\s*')
@@ -128,12 +126,12 @@ async def extract_response_via_llm(
         "Content-Type": "application/json",
     }
     url = base_url.rstrip("/") + "/chat/completions"
-    timeout = httpx.Timeout(timeout_sec)
 
     started = time.monotonic()
     try:
-        async with (await _make_client(timeout=timeout)) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=timeout_sec
+        )
     except httpx.TimeoutException:
         return LLMExtractionResult(
             "",

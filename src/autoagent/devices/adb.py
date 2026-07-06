@@ -168,6 +168,21 @@ def set_ime(serial: str, ime_id: str) -> None:
     _run_adb("-s", serial, "shell", "ime", "set", ime_id)
 
 
+def list_enabled_imes(serial: str) -> list[str]:
+    out = shell(serial, "ime", "list", "-s")
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def reset_ime(serial: str) -> None:
+    """Reset IMEs to the device's system defaults (cross-ROM safe).
+
+    `ime reset` re-enables the framework defaults and selects one, so it
+    works even on ROMs that lack the AOSP LatinIME. Used to switch off the
+    ADB keyboard without guessing a package name.
+    """
+    _run_adb("-s", serial, "shell", "ime", "reset")
+
+
 def install_apk(serial: str, apk_path: Path) -> None:
     # APK install legitimately takes tens of seconds; the caller is a
     # request handler where we're OK waiting longer than the default.

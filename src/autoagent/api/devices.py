@@ -127,15 +127,16 @@ async def enable_ime_route(serial: str) -> DeviceInfo:
 @router.post("/{serial}/disable-ime", response_model=DeviceInfo)
 async def disable_ime_route(serial: str) -> DeviceInfo:
     try:
-        # 获取当前IME，如果是ADB Keyboard则切换到其他IME
-        from autoagent.devices.adb import get_current_ime
+        # If ADB Keyboard is the active IME, reset to the ROM's default IMEs
+        # rather than guessing a package (AOSP LatinIME doesn't exist on many
+        # devices). `ime reset` is cross-ROM safe.
+        from autoagent.devices.adb import get_current_ime, reset_ime
 
         current = get_current_ime(serial)
         if current and "adbkeyboard" in current:
-            # 切换到Android默认输入法
-            set_ime(serial, "com.android.inputmethod.latin/.LatinIME")
+            reset_ime(serial)
     except AdbCommandError:
-        pass  # 忽略切换失败
+        pass  # best-effort; status is re-read below
 
     return await upsert_discovered_device(
         serial=serial,

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import httpx
 
+from autoagent.utils.http_retry import post_json_with_retry
+
 _log = logging.getLogger(__name__)
 _TIMEOUT_SEC = 30.0
 
@@ -110,8 +112,9 @@ async def is_normal_chat_page(
     url = base_url.rstrip("/") + "/chat/completions"
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_sec) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=timeout_sec
+        )
     except httpx.TimeoutException:
         return JudgementResult(
             normal=False, reason="", error="timeout",

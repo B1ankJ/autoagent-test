@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from autoagent.profiles.schemas import CopyButtonVLMConfig
+from autoagent.utils.http_retry import post_json_with_retry
 
 _log = logging.getLogger(__name__)
 
@@ -165,8 +166,9 @@ async def locate_copy_button_via_vlm(
 
     started = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=config.timeout_sec) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=config.timeout_sec
+        )
     except httpx.TimeoutException:
         return CopyButtonLocateResult(
             None, "", int((time.monotonic() - started) * 1000), error="timeout"
