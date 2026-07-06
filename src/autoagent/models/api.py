@@ -92,6 +92,10 @@ class BatchSummary(BaseModel):
     # text (typical when copy_button_vlm exhausts retries with no fallback).
     # The frontend uses this to flag "响应为空" anomalies on the list.
     preview_response: str | None = None
+    # Distinct target profiles + device serials used across the batch's
+    # samples, for at-a-glance display. Aggregated in one query per page.
+    profiles: list[str] = Field(default_factory=list)
+    devices: list[str] = Field(default_factory=list)
 
 
 class BatchDetail(BatchSummary):

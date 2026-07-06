@@ -59,6 +59,8 @@ export interface BatchSummary {
   ended_at?: string
   preview_prompt?: string | null
   preview_response?: string | null
+  profiles?: string[]
+  devices?: string[]
 }
 
 export interface BatchDetail extends BatchSummary {

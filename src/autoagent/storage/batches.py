@@ -239,6 +239,37 @@ async def delete_batch_rows(batch_id: str) -> bool:
         return True
 
 
+async def batch_profiles_and_devices(
+    batch_ids: list[str],
+) -> dict[str, tuple[list[str], list[str]]]:
+    """Distinct target_profile + device_serial per batch, in one pass.
+
+    Returns {batch_id: (profiles, devices)}. device_serial is pulled from
+    Sample.metadata_json via json_extract so we don't load full rows.
+    Batches with no samples are absent from the map.
+    """
+    if not batch_ids:
+        return {}
+    sm = get_sessionmaker()
+    out: dict[str, tuple[set[str], set[str]]] = {b: (set(), set()) for b in batch_ids}
+    async with sm() as s:
+        rows = await s.execute(
+            select(
+                Sample.batch_id,
+                Sample.target_profile,
+                func.json_extract(Sample.metadata_json, "$.device_serial"),
+            ).where(Sample.batch_id.in_(batch_ids))
+        )
+        for batch_id, profile, serial in rows.all():
+            if batch_id not in out:
+                continue
+            if profile:
+                out[batch_id][0].add(str(profile))
+            if serial:
+                out[batch_id][1].add(str(serial))
+    return {b: (sorted(p), sorted(d)) for b, (p, d) in out.items()}
+
+
 _TERMINAL_STATUSES = ("done", "failed", "cancelled")
 
 

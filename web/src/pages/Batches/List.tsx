@@ -290,6 +290,55 @@ export function BatchList() {
       render: (mode: ExecutionMode) => <ModeTag mode={mode} />,
     },
     {
+      title: 'Profile / 设备',
+      width: 220,
+      render: (_v, row) => {
+        const profiles = row.profiles ?? []
+        const devices = row.devices ?? []
+        if (profiles.length === 0 && devices.length === 0) {
+          return <span className="aa-muted">-</span>
+        }
+        const chips = (items: string[], color: string, prefix: string) => {
+          const shown = items.slice(0, 2)
+          return (
+            <>
+              {shown.map((s) => (
+                <Tag
+                  key={prefix + s}
+                  color={color}
+                  className="aa-mono"
+                  style={{ marginInlineEnd: 4, maxWidth: 180 }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      maxWidth: 168,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      verticalAlign: 'bottom',
+                    }}
+                    title={s}
+                  >
+                    {s}
+                  </span>
+                </Tag>
+              ))}
+              {items.length > 2 ? (
+                <Tag title={items.join(', ')}>+{items.length - 2}</Tag>
+              ) : null}
+            </>
+          )
+        }
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {profiles.length ? <div>{chips(profiles, 'blue', 'p')}</div> : null}
+            {devices.length ? <div>{chips(devices, 'default', 'd')}</div> : null}
+          </div>
+        )
+      },
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       width: 110,

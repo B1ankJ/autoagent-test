@@ -38,6 +38,7 @@ from autoagent.models.api import (
     ScreenshotInfo,
 )
 from autoagent.storage.batches import (
+    batch_profiles_and_devices,
     count_batches_by_status,
     delete_batch_rows,
     get_batch,
@@ -262,12 +263,15 @@ async def list_all(
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
     )
+    # One aggregate query for the whole page's profiles + devices.
+    pd_map = await batch_profiles_and_devices([r.id for r in rows])
     summaries: list[BatchSummary] = []
     for r in rows:
         if r.total == 1:
             preview, response = await _single_sample_preview(r.id)
         else:
             preview, response = None, None
+        profiles, devices = pd_map.get(r.id, ([], []))
         summaries.append(
             BatchSummary(
                 batch_id=r.id,
@@ -283,6 +287,8 @@ async def list_all(
                 ended_at=r.ended_at,
                 preview_prompt=preview,
                 preview_response=response,
+                profiles=profiles,
+                devices=devices,
             )
         )
     return summaries
