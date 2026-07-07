@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
+from autoagent.utils.http_retry import post_json_with_retry
 
 _SYSTEM_PROMPT = (
     "你是一个网页内容提取助手。用户会给你：\n"
@@ -32,10 +33,6 @@ _RESPONSE_SCHEMA = {
         "required": ["response"],
     },
 }
-
-
-async def _make_client(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout)
 
 
 def _truncate_html(html: str, max_chars: int) -> tuple[str, bool]:
@@ -93,12 +90,12 @@ async def extract_web_response_via_llm(
         "Content-Type": "application/json",
     }
     url = base_url.rstrip("/") + "/chat/completions"
-    timeout = httpx.Timeout(timeout_sec)
 
     started = time.monotonic()
     try:
-        async with await _make_client(timeout=timeout) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=timeout_sec
+        )
     except httpx.TimeoutException:
         return LLMExtractionResult(
             "",

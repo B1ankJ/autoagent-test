@@ -9,6 +9,7 @@ import httpx
 
 from autoagent.executors.agent_core.device import Screenshot
 from autoagent.executors.response_llm_extractor import LLMExtractionResult
+from autoagent.utils.http_retry import post_json_with_retry
 
 _SYSTEM_PROMPT = (
     "你是一个截图内容提取助手。用户会给你一张屏幕截图和一段定位描述。\n"
@@ -53,10 +54,6 @@ class TextEntryVerificationResult:
     status_code: int | None = None
 
 
-async def _make_client(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout)
-
-
 def _parse_content(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -75,7 +72,6 @@ async def extract_response_from_screenshot(
     api_key: str,
     timeout_sec: float = 30.0,
 ) -> LLMExtractionResult:
-    timeout = httpx.Timeout(timeout_sec)
     body = {
         "model": model,
         "temperature": 0,
@@ -109,8 +105,9 @@ async def extract_response_from_screenshot(
 
     started = time.monotonic()
     try:
-        async with await _make_client(timeout=timeout) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=timeout_sec
+        )
     except httpx.TimeoutException:
         return LLMExtractionResult("", "timeout", int((time.monotonic() - started) * 1000))
     except httpx.HTTPError:
@@ -174,7 +171,6 @@ async def verify_text_entry_in_screenshot(
     api_key: str,
     timeout_sec: float = 30.0,
 ) -> TextEntryVerificationResult:
-    timeout = httpx.Timeout(timeout_sec)
     body = {
         "model": model,
         "temperature": 0,
@@ -212,8 +208,9 @@ async def verify_text_entry_in_screenshot(
 
     started = time.monotonic()
     try:
-        async with await _make_client(timeout=timeout) as client:
-            resp = await client.post(url, headers=headers, json=body)
+        resp = await post_json_with_retry(
+            url=url, headers=headers, json=body, timeout_sec=timeout_sec
+        )
     except httpx.TimeoutException:
         return TextEntryVerificationResult(False, "", error="timeout")
     except httpx.HTTPError:

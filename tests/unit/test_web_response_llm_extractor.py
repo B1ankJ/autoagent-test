@@ -16,10 +16,12 @@ async def test_extract_success(monkeypatch):
             json={"choices": [{"message": {"content": '{"response": "Hello from AI"}'}}]},
         )
 
-    async def _f(*, timeout):
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     r = await extract_web_response_via_llm(
         prompt="hi",
         html="<div class='reply'>Hello from AI</div>",
@@ -38,10 +40,12 @@ async def test_extract_empty_response_is_not_error(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={"choices": [{"message": {"content": '{"response": ""}'}}]})
 
-    async def _f(*, timeout):
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     r = await extract_web_response_via_llm(
         prompt="hi", html="<div/>", base_url="https://api/v1", model="m", api_key="k"
     )
@@ -54,10 +58,12 @@ async def test_extract_auth_failure(monkeypatch):
     def handler(request):
         return httpx.Response(401, json={"error": {"message": "bad key"}})
 
-    async def _f(*, timeout):
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     r = await extract_web_response_via_llm(
         prompt="hi", html="<div/>", base_url="https://api/v1", model="m", api_key="bad"
     )
@@ -71,10 +77,12 @@ async def test_extract_response_shape_failure(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={"choices": [{"message": {"content": "not-json"}}]})
 
-    async def _f(*, timeout):
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     r = await extract_web_response_via_llm(
         prompt="hi", html="<div/>", base_url="https://api/v1", model="m", api_key="k"
     )
@@ -84,13 +92,12 @@ async def test_extract_response_shape_failure(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_extract_connect_error(monkeypatch):
-    async def _f(*, timeout):
-        return httpx.AsyncClient(
-            transport=_mock(lambda req: (_ for _ in ()).throw(httpx.ConnectError("refused"))),
-            timeout=timeout,
-        )
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     r = await extract_web_response_via_llm(
         prompt="hi", html="<div/>", base_url="https://api/v1", model="m", api_key="k"
     )
@@ -109,10 +116,12 @@ async def test_extract_truncates_oversized_html(monkeypatch):
             200, json={"choices": [{"message": {"content": '{"response": "ok"}'}}]}
         )
 
-    async def _f(*, timeout):
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.web_response_llm_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.web_response_llm_extractor.post_json_with_retry", _post
+    )
     huge = "x" * 300_000
     r = await extract_web_response_via_llm(
         prompt="hi",

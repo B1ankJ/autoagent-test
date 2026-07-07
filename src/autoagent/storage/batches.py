@@ -46,12 +46,11 @@ async def get_batch(batch_id: str) -> Batch | None:
         return await s.get(Batch, batch_id)
 
 
-def _device_serial_like(serial: str) -> str:
-    # Match `"device_serial"` key (eventually) followed by the serial value.
-    # Loose enough to handle both compact (`"device_serial":"x"`) and
-    # pretty-printed (`"device_serial": "x"`) JSON — sample.metadata_json
-    # is written with json.dumps default separators (`, ` / `: `).
-    return f'%"device_serial"%"{serial}"%'
+def _device_serial_match(serial: str):
+    # Exact match on the JSON field, not a substring LIKE — the old
+    # `%"device_serial"%"x"%` could false-match when a serial appears as a
+    # substring elsewhere in metadata. json_extract pulls the actual value.
+    return func.json_extract(Sample.metadata_json, "$.device_serial") == serial
 
 
 def _is_empty_response_clause():
@@ -108,10 +107,10 @@ async def list_batches(
                 )
             )
         if device_serial:
-            # device_serial only exists per-sample inside metadata_json, so we
-            # have to JOIN samples and LIKE.
+            # device_serial only exists per-sample inside metadata_json, so
+            # join samples and match on the extracted JSON value.
             stmt = ensure_samples_join(stmt).where(
-                Sample.metadata_json.like(_device_serial_like(device_serial))
+                _device_serial_match(device_serial)
             )
         if target_profile:
             # Match either Batch.target_profile_default (set only when the
@@ -179,7 +178,7 @@ async def count_batches_by_status(
             )
         if device_serial:
             stmt = ensure_samples_join(stmt).where(
-                Sample.metadata_json.like(_device_serial_like(device_serial))
+                _device_serial_match(device_serial)
             )
         if target_profile:
             stmt = ensure_samples_join(stmt).where(

@@ -26,10 +26,12 @@ async def test_extract_success(monkeypatch: pytest.MonkeyPatch) -> None:
             json={"choices": [{"message": {"content": '{"response": "Hello from screen"}'}}]},
         )
 
-    async def _f(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.agent_screenshot_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_screenshot_extractor.post_json_with_retry", _post
+    )
 
     result = await extract_response_from_screenshot(
         screenshot=_shot(),
@@ -49,10 +51,12 @@ async def test_extract_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": {"message": "bad key"}})
 
-    async def _f(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.agent_screenshot_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_screenshot_extractor.post_json_with_retry", _post
+    )
 
     result = await extract_response_from_screenshot(
         screenshot=_shot(),
@@ -69,13 +73,12 @@ async def test_extract_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_extract_connect_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _f(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            transport=_mock(lambda _req: (_ for _ in ()).throw(httpx.ConnectError("refused"))),
-            timeout=timeout,
-        )
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("autoagent.executors.agent_screenshot_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_screenshot_extractor.post_json_with_retry", _post
+    )
 
     result = await extract_response_from_screenshot(
         screenshot=_shot(),
@@ -105,10 +108,12 @@ async def test_verify_text_entry_success(monkeypatch: pytest.MonkeyPatch) -> Non
             },
         )
 
-    async def _f(*, timeout: httpx.Timeout) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=_mock(handler), timeout=timeout)
+    async def _post(*, url, headers, json, timeout_sec, max_attempts=3):
+        return handler(httpx.Request("POST", url, json=json))
 
-    monkeypatch.setattr("autoagent.executors.agent_screenshot_extractor._make_client", _f)
+    monkeypatch.setattr(
+        "autoagent.executors.agent_screenshot_extractor.post_json_with_retry", _post
+    )
 
     result = await verify_text_entry_in_screenshot(
         screenshot=_shot(),
