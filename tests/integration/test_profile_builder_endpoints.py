@@ -251,6 +251,33 @@ async def test_profile_builder_generate_draft_skips_llm_optimization_when_disabl
     assert llm_mock.await_count == 0
 
 
+async def test_profile_builder_generate_draft_applies_advanced_options(client, monkeypatch):
+    import yaml as _yaml
+
+    headers, session = await _create_builder_session_with_captures(client, monkeypatch)
+    draft = await client.post(
+        f"/api/v1/profile-builder/sessions/{session['id']}/draft",
+        json={
+            "draft_mode": "rule",
+            "advanced": {
+                "complete_detection": {"type": "fixed_delay", "wait_sec": 8},
+                "method": "ocr_only",
+                "copy_button_vlm": {"base_url": "b", "model": "m", "api_key": "k"},
+                "init_reboot": True,
+                "init_action": [{"action": "tap_xy", "x": 1, "y": 2}],
+            },
+        },
+        headers=headers,
+    )
+    assert draft.status_code == 200, draft.text
+    profile = _yaml.safe_load(draft.json()["draft_profile_yaml"])
+    assert profile["complete_detection"] == {"type": "fixed_delay", "wait_sec": 8}
+    assert profile["response_extraction"]["method"] == "ocr_only"
+    assert profile["response_extraction"]["copy_button_vlm"]["model"] == "m"
+    assert profile["init_reboot"] is True
+    assert profile["init_action"] == [{"action": "tap_xy", "x": 1, "y": 2}]
+
+
 async def test_profile_builder_generate_rule_draft_requires_manual_review(
     client, monkeypatch
 ):

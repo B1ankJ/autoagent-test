@@ -11,7 +11,7 @@ import uiautomator2 as u2
 import yaml
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
@@ -56,15 +56,61 @@ _SESSIONS: dict[str, ProfileBuilderSessionView] = {}
 _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 
 
+class _AdvancedDraftOptions(BaseModel):
+    """Optional overrides applied to the generated draft before it's saved.
+
+    Surfaces schema capabilities the guided capture doesn't infer on its own
+    (H5/VLM extraction, alternate completion detection, device init). Every
+    field is optional; None leaves the rule-derived value in place. An empty
+    dict for a VLM block means "remove it" (the frontend sends null to omit).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    complete_detection: dict | None = None
+    method: Literal["ui_tree_only", "ocr_only", "ui_tree_then_ocr"] | None = None
+    copy_button_vlm: dict | None = None
+    response_vlm: dict | None = None
+    init_action: list[dict] | None = None
+    init_reboot: bool | None = None
+
+
 class _GenerateDraftRequest(BaseModel):
     draft_mode: Literal["rule", "smart"] = "rule"
     use_llm_optimization: bool | None = None
     inject_llm: bool = False
+    advanced: _AdvancedDraftOptions = Field(default_factory=_AdvancedDraftOptions)
 
     def resolved_draft_mode(self) -> Literal["rule", "smart"]:
         if self.use_llm_optimization is not None:
             return "smart" if self.use_llm_optimization else "rule"
         return self.draft_mode
+
+
+def _apply_advanced_options(draft: dict, adv: _AdvancedDraftOptions) -> dict:
+    """Merge advanced overrides into the draft dict in place."""
+    if adv.complete_detection is not None:
+        draft["complete_detection"] = adv.complete_detection
+    re = draft.get("response_extraction")
+    if isinstance(re, dict):
+        if adv.method is not None:
+            re["method"] = adv.method
+        # A truthy dict sets the VLM block; an explicit empty dict removes it.
+        if adv.copy_button_vlm is not None:
+            if adv.copy_button_vlm:
+                re["copy_button_vlm"] = adv.copy_button_vlm
+            else:
+                re.pop("copy_button_vlm", None)
+        if adv.response_vlm is not None:
+            if adv.response_vlm:
+                re["response_vlm"] = adv.response_vlm
+            else:
+                re.pop("response_vlm", None)
+    if adv.init_action is not None:
+        draft["init_action"] = adv.init_action
+    if adv.init_reboot is not None:
+        draft["init_reboot"] = adv.init_reboot
+    return draft
 
 
 def reset_sessions_for_tests() -> None:
@@ -1369,6 +1415,9 @@ async def generate_draft(
             json.dumps(candidates["review_items"], indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        # Apply advanced overrides (VLM extraction, completion detection,
+        # init playbook) that the guided capture can't infer.
+        draft_profile = _apply_advanced_options(draft_profile, body.advanced)
         draft_profile_yaml = _dump_draft_profile_yaml(draft_profile)
         (artifact_dir / "draft_profile.yaml").write_text(draft_profile_yaml, encoding="utf-8")
 
