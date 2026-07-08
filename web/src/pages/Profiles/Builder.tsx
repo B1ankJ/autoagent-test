@@ -29,6 +29,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 
 import { useVLM } from '../../api/config'
+import type { BuilderAdvancedOptions } from '../../api/profileBuilder'
 import {
   useApplyProfileBuilderReview,
   useCaptureProfileBuilderStep,
@@ -45,6 +46,7 @@ import {
   useProfileBuilderRuntime,
 } from '../../api/profileBuilderRuntime'
 import { useDevices } from '../../api/devices'
+import { BuilderAdvancedPanel } from '../../components/BuilderAdvancedPanel'
 import { ResponseComparison } from '../../components/ResponseComparison'
 import {
   Device,
@@ -321,6 +323,7 @@ export default function Builder() {
   const [profileName, setProfileName] = useState('qwen_android')
   const [draftMode, setDraftMode] = useState<'rule' | 'smart'>('smart')
   const [injectLlm, setInjectLlm] = useState(false)
+  const [advancedOptions, setAdvancedOptions] = useState<BuilderAdvancedOptions>({})
   const [session, setSession] = useState<ProfileBuilderSessionView | null>(null)
   const [draft, setDraft] = useState<ProfileBuilderDraftResponse | null>(null)
   const [draftYamlText, setDraftYamlText] = useState('')
@@ -643,6 +646,7 @@ export default function Builder() {
         sessionId: session.id,
         draftMode,
         injectLlm,
+        advanced: advancedOptions,
       })
       setSession(nextDraft.session)
       setDraft(nextDraft)
@@ -1020,6 +1024,9 @@ export default function Builder() {
             ),
           }))}
         />
+        <div style={{ marginTop: 12 }}>
+          <BuilderAdvancedPanel onChange={setAdvancedOptions} />
+        </div>
         <Button
           style={{ marginTop: 16 }}
           icon={<FileSearchOutlined />}

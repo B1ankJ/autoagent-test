@@ -183,6 +183,7 @@ describe('Builder', () => {
         sessionId: 'pb_1',
         draftMode: 'rule',
         injectLlm: true,
+        advanced: {},
       })
     })
   })
@@ -309,6 +310,7 @@ describe('Builder', () => {
         sessionId: 'pb_1',
         draftMode: 'smart',
         injectLlm: false,
+        advanced: {},
       })
     })
     await waitFor(() => {
@@ -510,6 +512,7 @@ describe('Builder', () => {
         sessionId: 'pb_1',
         draftMode: 'smart',
         injectLlm: false,
+        advanced: {},
       })
     })
     expect(applyReviewMock).toHaveBeenCalled()

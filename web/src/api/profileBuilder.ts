@@ -46,15 +46,30 @@ export function useCaptureProfileBuilderStep() {
   })
 }
 
+export interface BuilderAdvancedOptions {
+  complete_detection?: Record<string, unknown> | null
+  method?: 'ui_tree_only' | 'ocr_only' | 'ui_tree_then_ocr' | null
+  copy_button_vlm?: Record<string, unknown> | null
+  response_vlm?: Record<string, unknown> | null
+  init_action?: Array<Record<string, unknown>> | null
+  init_reboot?: boolean | null
+}
+
 export function useGenerateProfileBuilderDraft() {
   return useMutation({
-    mutationFn: async (args: { sessionId: string; draftMode: 'rule' | 'smart'; injectLlm?: boolean }) =>
+    mutationFn: async (args: {
+      sessionId: string
+      draftMode: 'rule' | 'smart'
+      injectLlm?: boolean
+      advanced?: BuilderAdvancedOptions
+    }) =>
       (
         await client.post<ProfileBuilderDraftResponse>(
           `/profile-builder/sessions/${args.sessionId}/draft`,
           {
             draft_mode: args.draftMode,
             inject_llm: !!args.injectLlm,
+            ...(args.advanced ? { advanced: args.advanced } : {}),
           },
         )
       ).data,
