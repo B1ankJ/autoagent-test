@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from autoagent.system import updater
@@ -194,3 +196,16 @@ def test_preflight_fails_on_dirty_tree(monkeypatch):
     r = updater.preflight()
     assert r.ok is False
     assert r.tree_clean is False
+    # the offending file is named so the user can act on it
+    assert "src/x.py" in r.tree_detail
+
+
+def test_augmented_path_appends_user_tool_dirs(monkeypatch, tmp_path):
+    local_bin = tmp_path / ".local" / "bin"
+    local_bin.mkdir(parents=True)
+    monkeypatch.setattr(updater, "_EXTRA_PATH_DIRS", (str(local_bin), "/does/not/exist"))
+    monkeypatch.setenv("PATH", "/usr/bin")
+    result = updater._augmented_path()
+    assert str(local_bin) in result.split(os.pathsep)
+    assert "/does/not/exist" not in result  # skipped: not a real dir
+    assert "/usr/bin" in result.split(os.pathsep)

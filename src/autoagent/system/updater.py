@@ -47,12 +47,30 @@ class CommandResult:
         return (self.stdout + self.stderr).strip()
 
 
+# Where per-user tools land but a service's PATH often misses them. uv installs
+# to ~/.local/bin (newer) or ~/.cargo/bin (older); pnpm/node may be under a
+# version manager. We append these so `uv sync` etc. resolve even when the
+# service was started from a minimal environment.
+_EXTRA_PATH_DIRS = ("~/.local/bin", "~/.cargo/bin")
+
+
+def _augmented_path() -> str:
+    parts = os.environ.get("PATH", "").split(os.pathsep)
+    parts = [p for p in parts if p]
+    for d in _EXTRA_PATH_DIRS:
+        expanded = os.path.expanduser(d)
+        if os.path.isdir(expanded) and expanded not in parts:
+            parts.append(expanded)
+    return os.pathsep.join(parts)
+
+
 def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 300.0) -> CommandResult:
     """Run a subprocess capturing combined output. Never raises on non-zero."""
     # GIT_TERMINAL_PROMPT=0 makes git fail fast on missing credentials instead
     # of blocking on an interactive username/password prompt (which would hang
-    # the request / the whole update).
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    # the request / the whole update). PATH is augmented so per-user tools
+    # (uv, pnpm) resolve even under a minimal service environment.
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "PATH": _augmented_path()}
     try:
         proc = subprocess.run(
             cmd,
@@ -210,8 +228,10 @@ def preflight() -> PreflightResult:
         tree_detail = st.output or "git status failed"
     elif st.stdout.strip():
         tree_clean = False
-        n = len(st.stdout.strip().splitlines())
-        tree_detail = f"{n} 个未提交的改动(会阻止 --ff-only 拉取)"
+        lines = st.stdout.strip().splitlines()
+        shown = ", ".join(line.strip() for line in lines[:4])
+        more = f" 等 {len(lines)} 项" if len(lines) > 4 else ""
+        tree_detail = f"{len(lines)} 个未提交改动(阻止 --ff-only): {shown}{more}"
     else:
         tree_clean = True
         tree_detail = "clean"
