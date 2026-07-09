@@ -23,7 +23,9 @@ function mockStatus(overrides: Record<string, unknown>) {
 }
 
 describe('SystemUpdatePanel', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
   it('shows a disabled notice when self-update is off', async () => {
     mockStatus({ enabled: false })
