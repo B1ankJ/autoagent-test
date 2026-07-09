@@ -14,6 +14,7 @@ MITM the fetch) controls the server. It is gated behind DefaultsConfig
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,6 +49,10 @@ class CommandResult:
 
 def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 300.0) -> CommandResult:
     """Run a subprocess capturing combined output. Never raises on non-zero."""
+    # GIT_TERMINAL_PROMPT=0 makes git fail fast on missing credentials instead
+    # of blocking on an interactive username/password prompt (which would hang
+    # the request / the whole update).
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
         proc = subprocess.run(
             cmd,
@@ -55,6 +60,7 @@ def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 300.0) -> 
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         return CommandResult(cmd, proc.returncode, proc.stdout or "", proc.stderr or "")
     except FileNotFoundError as e:
@@ -156,6 +162,69 @@ def _deps_changed(old: str, new: str) -> bool:
         return True
     changed = set(r.stdout.split())
     return any(dep in changed for dep in _DEP_FILES)
+
+
+@dataclass
+class ToolCheck:
+    name: str
+    ok: bool
+    detail: str = ""
+
+
+@dataclass
+class PreflightResult:
+    ok: bool = False
+    tools: list[ToolCheck] = field(default_factory=list)
+    remote_ok: bool = False
+    remote_detail: str = ""
+    tree_clean: bool = False
+    tree_detail: str = ""
+
+
+def _tool_check(name: str) -> ToolCheck:
+    r = _run([name, "--version"], timeout=20.0)
+    if r.ok:
+        first = r.output.splitlines()[0] if r.output else name
+        return ToolCheck(name=name, ok=True, detail=first)
+    return ToolCheck(name=name, ok=False, detail=r.output or "not found on PATH")
+
+
+def preflight() -> PreflightResult:
+    """Diagnose whether an update could run: tools reachable, remote pullable,
+    working tree clean. Read-only — never fetches or mutates the checkout."""
+    tools = [_tool_check("git"), _tool_check("uv"), _tool_check("pnpm")]
+
+    # ls-remote proves network + non-interactive auth without changing anything.
+    ls = _run(["git", "ls-remote", "--heads", _REMOTE, _BRANCH], timeout=30.0)
+    remote_ok = ls.ok and bool(ls.stdout.strip())
+    if remote_ok:
+        remote_detail = ls.stdout.split()[0][:8]
+    else:
+        remote_detail = ls.output or "remote unreachable"
+
+    # Uncommitted changes to *tracked* files would block `git pull --ff-only`
+    # (untracked runtime files under data/ do not, so exclude them).
+    st = _run(["git", "status", "--porcelain", "--untracked-files=no"])
+    if not st.ok:
+        tree_clean = False
+        tree_detail = st.output or "git status failed"
+    elif st.stdout.strip():
+        tree_clean = False
+        n = len(st.stdout.strip().splitlines())
+        tree_detail = f"{n} 个未提交的改动(会阻止 --ff-only 拉取)"
+    else:
+        tree_clean = True
+        tree_detail = "clean"
+
+    ok = all(t.ok for t in tools) and remote_ok and tree_clean
+    return PreflightResult(
+        ok=ok,
+        tools=tools,
+        remote_ok=remote_ok,
+        remote_detail=remote_detail,
+        tree_clean=tree_clean,
+        tree_detail=tree_detail,
+    )
 
 
 def _spawn_detached_restart() -> None:

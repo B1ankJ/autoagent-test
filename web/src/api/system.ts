@@ -22,6 +22,29 @@ export interface ApplyResult {
   active_batches: number
 }
 
+export interface ToolCheck {
+  name: string
+  ok: boolean
+  detail: string
+}
+
+export interface PreflightResult {
+  ok: boolean
+  tools: ToolCheck[]
+  remote_ok: boolean
+  remote_detail: string
+  tree_clean: boolean
+  tree_detail: string
+}
+
+/** Read-only readiness check: git/uv/pnpm reachable, remote pullable, clean tree. */
+export function usePreflight() {
+  return useMutation({
+    mutationFn: async () =>
+      (await client.get<PreflightResult>('/system/update/preflight')).data,
+  })
+}
+
 /** Cached local-vs-remote status (no network fetch). Polled by the nav badge. */
 export function useUpdateStatus(enabled = true) {
   return useQuery({

@@ -147,3 +147,50 @@ def test_apply_noop_when_already_current(monkeypatch):
 def test_deps_changed(monkeypatch, diff, expected):
     monkeypatch.setattr(updater, "_run", lambda cmd, **k: CommandResult(cmd, 0, diff, ""))
     assert updater._deps_changed("a", "b") is expected
+
+
+def _preflight_runner(*, tools_ok=True, remote_ok=True, tree_dirty=False):
+    def run(cmd, **k) -> CommandResult:
+        if cmd[1:2] == ["--version"]:  # git/uv/pnpm --version
+            return CommandResult(cmd, 0 if tools_ok else 127, f"{cmd[0]} 1.0", "")
+        if cmd[:2] == ["git", "ls-remote"]:
+            if remote_ok:
+                return CommandResult(cmd, 0, "deadbeef123\trefs/heads/main", "")
+            return CommandResult(cmd, 128, "", "Authentication failed")
+        if cmd[:2] == ["git", "status"]:
+            return CommandResult(cmd, 0, " M src/x.py\n" if tree_dirty else "", "")
+        return CommandResult(cmd, 0, "", "")
+
+    return run
+
+
+def test_preflight_all_green(monkeypatch):
+    monkeypatch.setattr(updater, "_run", _preflight_runner())
+    r = updater.preflight()
+    assert r.ok is True
+    assert [t.name for t in r.tools] == ["git", "uv", "pnpm"]
+    assert all(t.ok for t in r.tools)
+    assert r.remote_ok is True
+    assert r.remote_detail == "deadbeef"
+    assert r.tree_clean is True
+
+
+def test_preflight_fails_on_missing_tool(monkeypatch):
+    monkeypatch.setattr(updater, "_run", _preflight_runner(tools_ok=False))
+    r = updater.preflight()
+    assert r.ok is False
+    assert all(not t.ok for t in r.tools)
+
+
+def test_preflight_fails_on_unreachable_remote(monkeypatch):
+    monkeypatch.setattr(updater, "_run", _preflight_runner(remote_ok=False))
+    r = updater.preflight()
+    assert r.ok is False
+    assert r.remote_ok is False
+
+
+def test_preflight_fails_on_dirty_tree(monkeypatch):
+    monkeypatch.setattr(updater, "_run", _preflight_runner(tree_dirty=True))
+    r = updater.preflight()
+    assert r.ok is False
+    assert r.tree_clean is False

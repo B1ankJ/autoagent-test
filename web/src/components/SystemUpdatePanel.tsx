@@ -1,10 +1,13 @@
+import { CheckCircleTwoTone, CloseCircleTwoTone } from '@ant-design/icons'
 import { App, Alert, Button, Card, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import {
   ApplyResult,
+  PreflightResult,
   probeHealth,
   useApplyUpdate,
   useCheckUpdate,
+  usePreflight,
   useUpdateStatus,
 } from '../api/system'
 
@@ -40,8 +43,10 @@ export function SystemUpdatePanel() {
   const status = useUpdateStatus()
   const check = useCheckUpdate()
   const apply = useApplyUpdate()
+  const preflight = usePreflight()
   const [steps, setSteps] = useState<string[]>([])
   const [restarting, setRestarting] = useState(false)
+  const [pf, setPf] = useState<PreflightResult | null>(null)
 
   const s = status.data
   const disabled = s ? !s.enabled : false
@@ -121,6 +126,18 @@ export function SystemUpdatePanel() {
           <Button
             onClick={async () => {
               try {
+                setPf(await preflight.mutateAsync())
+              } catch (e) {
+                message.error((e as Error).message)
+              }
+            }}
+            loading={preflight.isPending}
+          >
+            环境自检
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
                 await check.mutateAsync()
                 await status.refetch()
                 message.success('已检查更新')
@@ -143,6 +160,8 @@ export function SystemUpdatePanel() {
             {restarting ? '正在重启…' : '应用并重启'}
           </Button>
         </Space>
+
+        {pf ? <PreflightChecklist pf={pf} /> : null}
 
         {s?.error ? <Alert type="error" showIcon message={s.error} /> : null}
 
@@ -175,6 +194,47 @@ export function SystemUpdatePanel() {
             </Paragraph>
           </Card>
         ) : null}
+      </Space>
+    </Card>
+  )
+}
+
+function CheckRow({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
+  return (
+    <Space size={8} align="start">
+      {ok ? (
+        <CheckCircleTwoTone twoToneColor="#52c41a" />
+      ) : (
+        <CloseCircleTwoTone twoToneColor="#ff4d4f" />
+      )}
+      <Text style={{ minWidth: 96, display: 'inline-block' }}>{label}</Text>
+      <Text type="secondary" className="aa-mono" style={{ fontSize: 12 }}>
+        {detail}
+      </Text>
+    </Space>
+  )
+}
+
+function PreflightChecklist({ pf }: { pf: PreflightResult }) {
+  return (
+    <Card
+      size="small"
+      type="inner"
+      title="环境自检"
+      extra={
+        pf.ok ? (
+          <Tag color="green">就绪</Tag>
+        ) : (
+          <Tag color="red">存在问题,更新会中止</Tag>
+        )
+      }
+    >
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        {pf.tools.map((t) => (
+          <CheckRow key={t.name} ok={t.ok} label={t.name} detail={t.detail} />
+        ))}
+        <CheckRow ok={pf.remote_ok} label="远端可拉取" detail={pf.remote_detail} />
+        <CheckRow ok={pf.tree_clean} label="工作区干净" detail={pf.tree_detail} />
       </Space>
     </Card>
   )

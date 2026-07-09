@@ -39,6 +39,17 @@ async def update_status() -> dict:
     return asdict(status)
 
 
+@router.get("/update/preflight")
+async def update_preflight() -> dict:
+    """Diagnose the box (git/uv/pnpm reachable, remote pullable, clean tree).
+
+    Read-only, so it's allowed regardless of the self_update_enabled flag —
+    admins can check readiness before turning self-update on.
+    """
+    result = await asyncio.to_thread(updater.preflight)
+    return asdict(result)
+
+
 @router.post("/update/check")
 async def update_check() -> dict:
     """Fetch origin/main and report whether an update is available."""

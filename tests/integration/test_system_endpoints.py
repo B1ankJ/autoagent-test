@@ -44,6 +44,29 @@ async def test_status_reports_disabled_by_default(client, monkeypatch):
     assert r.json()["enabled"] is False
 
 
+async def test_preflight_allowed_when_disabled(client, monkeypatch):
+    # preflight is read-only diagnostics, so it works even with self-update off.
+    from autoagent.system.updater import PreflightResult, ToolCheck
+
+    monkeypatch.setattr(
+        updater,
+        "preflight",
+        lambda: PreflightResult(
+            ok=True,
+            tools=[ToolCheck(name="git", ok=True, detail="git 2.0")],
+            remote_ok=True,
+            remote_detail="abc123",
+            tree_clean=True,
+            tree_detail="clean",
+        ),
+    )
+    r = await client.get("/api/v1/system/update/preflight", headers=await _h(client))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["tools"][0]["name"] == "git"
+
+
 async def test_check_forbidden_when_disabled(client):
     r = await client.post("/api/v1/system/update/check", headers=await _h(client))
     assert r.status_code == 403
