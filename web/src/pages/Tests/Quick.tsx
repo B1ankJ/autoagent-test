@@ -22,6 +22,7 @@ import { useProfiles } from '../../api/profiles'
 import { useAsyncResult, useRunAsync } from '../../api/tests'
 import { ExecutionMode, SingleTestSyncResponse } from '../../types/api'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
+import { splitPrompts } from '../../utils/prompts'
 
 interface FormValues {
   id?: string
@@ -62,7 +63,9 @@ function writeHistory(entries: HistoryEntry[]) {
 }
 
 function shortPreview(prompts: string): string {
-  const first = prompts.split('\n')[0] ?? ''
+  // Collapse internal newlines so a multi-line first prompt still previews
+  // as one line in the history dropdown.
+  const first = (splitPrompts(prompts)[0] ?? '').replace(/\s+/g, ' ')
   return first.length > 36 ? `${first.slice(0, 36)}…` : first || '(空 prompt)'
 }
 
@@ -174,7 +177,7 @@ export function TestsQuick() {
   const onSubmit = async (values: FormValues) => {
     const sample = {
       id: values.id || `quick-${Date.now()}`,
-      prompts: values.prompts.split('\n').filter(Boolean),
+      prompts: splitPrompts(values.prompts),
       mode: values.mode,
       target_profile: values.target_profile,
       retry: 0,
@@ -258,8 +261,12 @@ export function TestsQuick() {
           <Form.Item name="target_profile" label="Profile" rules={[{ required: true }]}>
             <Select options={profileOptions} placeholder="选择 profile" />
           </Form.Item>
-          <Form.Item name="prompts" label="Prompts(每行一条)" rules={[{ required: true }]}>
-            <Input.TextArea rows={4} />
+          <Form.Item
+            name="prompts"
+            label="Prompts(空行分隔多条,单条内可换行)"
+            rules={[{ required: true }]}
+          >
+            <Input.TextArea rows={4} placeholder="prompt 内容可以直接换行；空一行表示下一条 prompt" />
           </Form.Item>
           <Form.Item name="kind" label="执行方式">
             <Radio.Group>

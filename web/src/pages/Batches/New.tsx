@@ -27,6 +27,7 @@ import { useProfiles } from '../../api/profiles'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { ExecutionMode } from '../../types/api'
+import { splitPrompts } from '../../utils/prompts'
 
 interface JsonFormValues {
   name: string
@@ -166,7 +167,7 @@ export function BatchNew() {
         webhook_url: values.webhook_url,
         samples: values.samples.map((sample) => ({
           id: sample.id,
-          prompts: sample.prompts.split('\n').filter(Boolean),
+          prompts: splitPrompts(sample.prompts),
           mode: values.mode,
           target_profile: sample.target_profile ?? values.target_profile_default ?? '',
           new_session: sample.new_session,
@@ -326,7 +327,7 @@ export function BatchNew() {
                             <Form.Item name={[field.name, 'prompts']} rules={[{ required: true }]}>
                               <Input.TextArea
                                 rows={2}
-                                placeholder="prompts（每行一条）"
+                                placeholder="prompts（空行分隔多条，单条内可换行）"
                                 style={{ width: 400 }}
                               />
                             </Form.Item>
