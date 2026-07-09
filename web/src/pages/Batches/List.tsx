@@ -4,12 +4,14 @@ import {
   EyeOutlined,
   FilterOutlined,
   PlusOutlined,
+  SettingOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import {
   App,
   Badge,
   Button,
+  Checkbox,
   DatePicker,
   Dropdown,
   Input,
@@ -56,6 +58,33 @@ const QP_PROFILE = 'profile' // target_profile_default exact match
 const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
 
+// Column visibility: 名称/操作 always show; these five can be hidden and the
+// choice is remembered per browser so different people can trim the table to
+// what they care about (device-heavy vs. timing-heavy workflows differ).
+const TOGGLEABLE_COLUMNS = [
+  { key: 'mode', label: '模式' },
+  { key: 'profile_device', label: 'Profile / 设备' },
+  { key: 'status', label: '状态' },
+  { key: 'progress', label: '进度' },
+  { key: 'started_at', label: '开始时间' },
+] as const
+
+const COLUMN_VISIBILITY_KEY = 'autoagent_batches_visible_columns'
+
+function loadVisibleColumns(): Set<string> {
+  const all = new Set(TOGGLEABLE_COLUMNS.map((c) => c.key))
+  try {
+    const raw = localStorage.getItem(COLUMN_VISIBILITY_KEY)
+    if (!raw) return all
+    const arr = JSON.parse(raw) as string[]
+    if (!Array.isArray(arr)) return all
+    // Ignore stale keys from an older column set; unknown keys are dropped.
+    return new Set(arr.filter((k) => TOGGLEABLE_COLUMNS.some((c) => c.key === k)))
+  } catch {
+    return all
+  }
+}
+
 export function BatchList() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -67,6 +96,16 @@ export function BatchList() {
   const [previewBatchId, setPreviewBatchId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleColumns())
+  const toggleCol = (key: string) => {
+    setVisibleCols((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
 
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
@@ -284,12 +323,14 @@ export function BatchList() {
       },
     },
     {
+      key: 'mode',
       title: '模式',
       dataIndex: 'mode',
       width: 140,
       render: (mode: ExecutionMode) => <ModeTag mode={mode} />,
     },
     {
+      key: 'profile_device',
       title: 'Profile / 设备',
       width: 220,
       render: (_v, row) => {
@@ -339,12 +380,14 @@ export function BatchList() {
       },
     },
     {
+      key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 110,
       render: (status: BatchStatus) => <StatusTag status={status} />,
     },
     {
+      key: 'progress',
       title: '进度',
       width: 110,
       render: (_value, row) => (
@@ -354,6 +397,7 @@ export function BatchList() {
       ),
     },
     {
+      key: 'started_at',
       title: '开始时间',
       dataIndex: 'started_at',
       width: 200,
@@ -405,6 +449,13 @@ export function BatchList() {
       },
     },
   ]
+
+  // Columns without an explicit `key` (名称/操作) always show; the five
+  // TOGGLEABLE_COLUMNS are filtered by the user's saved visibility choice.
+  const visibleColumns = columns.filter((c) => {
+    const key = c.key as string | undefined
+    return !key || visibleCols.has(key)
+  })
 
   // Active (non-search) filters, rendered as removable chips + counted on
   // the 筛选 button badge. Search stays on the main row.
@@ -611,6 +662,25 @@ export function BatchList() {
             <Button icon={<FilterOutlined />}>筛选</Button>
           </Badge>
         </Popover>
+        <Popover
+          trigger="click"
+          placement="bottomLeft"
+          content={
+            <Space direction="vertical" size={6}>
+              {TOGGLEABLE_COLUMNS.map((c) => (
+                <Checkbox
+                  key={c.key}
+                  checked={visibleCols.has(c.key)}
+                  onChange={() => toggleCol(c.key)}
+                >
+                  {c.label}
+                </Checkbox>
+              ))}
+            </Space>
+          }
+        >
+          <Button icon={<SettingOutlined />}>列</Button>
+        </Popover>
       </Space>
       {activeFilters.length > 0 ? (
         <Space wrap size={6} style={{ marginBottom: 14 }}>
@@ -683,7 +753,7 @@ export function BatchList() {
             size="small"
             loading={isLoading}
             dataSource={rows}
-            columns={columns}
+            columns={visibleColumns}
             rowSelection={{
               selectedRowKeys: selectedIds,
               onChange: (keys) => setSelectedIds(keys as string[]),

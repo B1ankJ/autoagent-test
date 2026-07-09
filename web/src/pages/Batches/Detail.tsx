@@ -35,6 +35,7 @@ import {
   useBatchDoneNotification,
   type NotificationPermissionState,
 } from '../../hooks/useBatchDoneNotification'
+import { RunningThumbGrid } from '../../components/RunningThumbGrid'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { PageHeader } from '../../components/states/PageHeader'
@@ -226,9 +227,13 @@ export function BatchDetail() {
         }
         title={data.name}
         subtitle={
-          <span className="aa-mono aa-muted" style={{ fontSize: 12 }}>
+          <Typography.Text
+            className="aa-mono aa-muted"
+            style={{ fontSize: 12 }}
+            copyable={{ text: data.batch_id, tooltips: ['复制', '已复制'] }}
+          >
             {data.batch_id}
-          </span>
+          </Typography.Text>
         }
         extra={
           <>
@@ -317,6 +322,17 @@ export function BatchDetail() {
           ) : null}
         </Space>
       </Card>
+
+      {counts.running > 0 ? (
+        <Card
+          size="small"
+          title="运行中预览"
+          style={{ marginBottom: 16 }}
+          styles={{ body: { padding: '0 12px' } }}
+        >
+          <RunningThumbGrid batchId={data.batch_id} samples={allSamples} />
+        </Card>
+      ) : null}
 
       {allSamples.length === 0 ? (
         <EmptyState

@@ -149,7 +149,14 @@ export function SampleDetail() {
     <div>
       <PageHeader
         eyebrow={breadcrumb}
-        title={<span className="aa-mono">{sample.id}</span>}
+        title={
+          <Typography.Text
+            className="aa-mono"
+            copyable={{ text: sample.id, tooltips: ['复制', '已复制'] }}
+          >
+            {sample.id}
+          </Typography.Text>
+        }
         subtitle={
           <Space size={10}>
             {sample.status ? <StatusTag status={sample.status} /> : null}
@@ -202,9 +209,20 @@ export function SampleDetail() {
             {String(sample.new_session ?? false)}
           </Descriptions.Item>
           <Descriptions.Item label="运行设备">
-            <span className="aa-mono">
-              {sample.device_serial ?? (sample.metadata?.device_serial as string | undefined) ?? '-'}
-            </span>
+            {(() => {
+              const serial =
+                sample.device_serial ?? (sample.metadata?.device_serial as string | undefined)
+              return serial ? (
+                <Typography.Text
+                  className="aa-mono"
+                  copyable={{ text: serial, tooltips: ['复制', '已复制'] }}
+                >
+                  {serial}
+                </Typography.Text>
+              ) : (
+                <span className="aa-mono">-</span>
+              )
+            })()}
           </Descriptions.Item>
           <Descriptions.Item label="等待设备">
             {String(sample.waiting_for_device ?? false)}

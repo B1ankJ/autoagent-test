@@ -11,10 +11,12 @@ import {
   StopOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Space, Typography } from 'antd'
+import { Button, Card, Space, Steps, Typography } from 'antd'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBatches, useBatchStats } from '../api/batches'
+import { useVLM } from '../api/config'
+import { useProfiles } from '../api/profiles'
 import { ModeTag } from '../components/ModeTag'
 import { StatusTag } from '../components/StatusTag'
 import { EmptyState } from '../components/states/EmptyState'
@@ -162,10 +164,68 @@ function QuickAction({ icon, title, description, onClick }: QuickActionProps) {
   )
 }
 
+interface OnboardingChecklistProps {
+  hasVlm: boolean
+  hasProfiles: boolean
+  onNavigate: (path: string) => void
+}
+
+/** Fresh-install guidance shown until the first batch has run. Each step
+ * reflects live system state instead of a dismissible flag, so it stays
+ * accurate if the user configures things out of order or in another tab. */
+function OnboardingChecklist({ hasVlm, hasProfiles, onNavigate }: OnboardingChecklistProps) {
+  const steps = [
+    {
+      title: '配置 VLM(可选)',
+      description: 'Android / Web GUI 模式用它理解截图、抽取响应。仅用 API 模式可跳过。',
+      done: hasVlm,
+      path: '/config',
+    },
+    {
+      title: '创建 Profile',
+      description: '描述目标产品怎么连接 —— API 地址,或安卓/Web 的操作步骤。',
+      done: hasProfiles,
+      path: '/profiles/new',
+    },
+    {
+      title: '跑第一个批次',
+      description: '单次测试验证 Profile 生效后,上传 JSONL/CSV 批量跑。',
+      done: false,
+      path: '/batches/new',
+    },
+  ]
+  // First not-done step is "current" (in progress); earlier ones are "finish".
+  const current = steps.findIndex((s) => !s.done)
+
+  return (
+    <Card size="small" title="上手清单" style={{ marginBottom: 22 }}>
+      <Steps
+        current={current === -1 ? steps.length : current}
+        items={steps.map((s) => ({
+          title: s.title,
+          description: (
+            <Space direction="vertical" size={4}>
+              <span>{s.description}</span>
+              {!s.done ? (
+                <a onClick={() => onNavigate(s.path)}>
+                  去完成 <ArrowRightOutlined />
+                </a>
+              ) : null}
+            </Space>
+          ),
+          status: s.done ? 'finish' : undefined,
+        }))}
+      />
+    </Card>
+  )
+}
+
 export function Dashboard() {
   const navigate = useNavigate()
   const { data: running } = useBatches({ limit: 6 })
   const { data: stats } = useBatchStats()
+  const { data: profiles } = useProfiles()
+  const { data: vlm } = useVLM()
   const byStatus = {
     queued: stats?.queued ?? 0,
     running: stats?.running ?? 0,
@@ -186,6 +246,14 @@ export function Dashboard() {
         title="Dashboard"
         subtitle="今日运行状态与快捷入口"
       />
+
+      {total === 0 ? (
+        <OnboardingChecklist
+          hasVlm={!!vlm}
+          hasProfiles={(profiles?.length ?? 0) > 0}
+          onNavigate={navigate}
+        />
+      ) : null}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
         <StatCard
