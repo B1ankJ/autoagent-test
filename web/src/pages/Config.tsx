@@ -231,6 +231,13 @@ export function ConfigPage() {
           >
             <InputNumber min={0} max={365} />
           </Form.Item>
+          <Form.Item
+            name="archive_retention_days"
+            label="归档保留天数"
+            extra="0 = 不归档,批次直接删除。> 0:批次被清理前,先把结果 JSONL + 日志 + DB 快照打包到 data/archive/<batch>.zip;归档包本身在该天数后才删除(建议 ≥ 数据保留天数)。归档失败时会跳过删除以防丢数据。"
+          >
+            <InputNumber min={0} max={365} />
+          </Form.Item>
           <Space>
             <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
               保存
@@ -240,8 +247,11 @@ export function ConfigPage() {
                 try {
                   const days = defaultsForm.getFieldValue('log_retention_days') as number
                   const r = await previewLogsCleanup.mutateAsync(days || undefined)
+                  const archived = r.batches_archived
+                    ? `(其中 ${r.batches_archived} 个先归档)`
+                    : ''
                   message.info(
-                    `预览:将清理 ${r.batches_pruned} 个过期批次、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                    `预览:将清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
                   )
                 } catch (e) {
                   message.error((e as Error).message)
@@ -258,8 +268,11 @@ export function ConfigPage() {
                 try {
                   const days = defaultsForm.getFieldValue('log_retention_days') as number
                   const r = await runLogsCleanup.mutateAsync(days || undefined)
+                  const archived = r.batches_archived
+                    ? `(其中 ${r.batches_archived} 个已归档)`
+                    : ''
                   message.success(
-                    `已清理 ${r.batches_pruned} 个过期批次、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                    `已清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
                   )
                 } catch (e) {
                   message.error((e as Error).message)

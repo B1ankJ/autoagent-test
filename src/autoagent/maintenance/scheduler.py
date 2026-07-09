@@ -21,26 +21,30 @@ _STARTUP_DELAY_SEC = 600.0  # 10 min
 _INTERVAL_SEC = 24 * 3600.0
 
 
-async def _current_days() -> int:
+async def _current_days() -> tuple[int, int]:
     v = await get_config("defaults")
     cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
-    return cfg.log_retention_days
+    return cfg.log_retention_days, cfg.archive_retention_days
 
 
 async def _tick_once() -> None:
-    days = await _current_days()
-    if days <= 0:
-        _log.info("log_retention_days=%d, skipping cleanup tick", days)
-        return
+    days, archive_days = await _current_days()
     settings = get_settings()
     # Prune whole finished batches (DB rows + results + logs dir) first so the
-    # file sweep below doesn't have to re-walk their logs.
+    # file sweep below doesn't have to re-walk their logs. Also prunes old
+    # archives even when log_retention_days is 0.
     batch_report = await prune_old_batches(
         logs_root=settings.logs_root,
         data_root=settings.data_root,
         retention_days=days,
+        archive_retention_days=archive_days,
         dry_run=False,
     )
+    if days <= 0:
+        _log.info(
+            "log_retention_days=0; archives pruned=%d", batch_report.archives_pruned
+        )
+        return
     report = await asyncio.to_thread(
         run_cleanup,
         logs_root=settings.logs_root,
@@ -49,9 +53,12 @@ async def _tick_once() -> None:
         dry_run=False,
     )
     _log.info(
-        "retention tick: retention=%dd pruned batches=%d; files=%d dirs=%d bytes=%d",
+        "retention tick: retention=%dd pruned batches=%d archived=%d archives_pruned=%d; "
+        "files=%d dirs=%d bytes=%d",
         days,
         batch_report.batches,
+        batch_report.archived,
+        batch_report.archives_pruned,
         report.files_deleted,
         report.dirs_deleted,
         report.bytes_freed,

@@ -151,6 +151,7 @@ export interface GlobalDefaults {
   concurrency?: number
   verbose_logs?: boolean
   log_retention_days?: number
+  archive_retention_days?: number
 }
 
 export interface ProfileBuilderCaptureArtifact {

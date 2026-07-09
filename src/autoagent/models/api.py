@@ -151,6 +151,11 @@ class DefaultsConfig(BaseModel):
     # data/profile_builder older than this many days. A background task
     # runs it every 24h + endpoints allow manual trigger / preview.
     log_retention_days: int = 7
+    # 0 = no archive (batches deleted directly). Positive = before a batch
+    # is pruned, zip its results + logs + a DB snapshot into
+    # data/archive/<batch>.zip; the archives themselves are deleted after
+    # this many days (should be >= log_retention_days to be useful).
+    archive_retention_days: int = 0
 
 
 class DingTalkNotificationConfig(BaseModel):

@@ -36,6 +36,8 @@ async def test_defaults_roundtrip(client):
         "retry": 5,
         "concurrency": 2,
         "verbose_logs": False,
+        "log_retention_days": 7,
+        "archive_retention_days": 0,
     }
     r = await client.put("/api/v1/config/defaults", json=new_vals, headers=h)
     assert r.status_code == 200
