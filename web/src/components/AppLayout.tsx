@@ -206,7 +206,7 @@ export function AppLayout() {
                 fontFamily: 'var(--aa-mono)',
               }}
             >
-              v0.4
+              v0.4 · 自更新验证 ✓
             </span>
           </div>
         </div>
