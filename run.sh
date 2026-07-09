@@ -25,7 +25,16 @@ cd "$(dirname "$0")"
 ROOT=$(pwd)
 
 APP="autoagent.main:app"
-PYTHON=${PYTHON:-python3.11}
+# Prefer the project venv's interpreter (deps are installed there via `uv sync`)
+# so restarts — including the self-update restart — don't need the caller to
+# `source .venv/bin/activate` and don't fall back to a system python missing deps.
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "$ROOT/.venv/bin/python" ]]; then
+    PYTHON="$ROOT/.venv/bin/python"
+  else
+    PYTHON="python3.11"
+  fi
+fi
 HOST=${HOST:-0.0.0.0}
 PORT=${PORT:-8000}
 LOG_FILE=${LOG_FILE:-$ROOT/logs/uvicorn.log}
