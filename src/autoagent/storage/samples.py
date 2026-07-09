@@ -43,7 +43,10 @@ async def upsert_sample(batch_id: str, result: SampleResult) -> None:
             )
             s.add(existing)
         existing.status = result.status
-        existing.prompts_sent_json = json.dumps(result.prompts_sent)
+        # ensure_ascii=False so non-ASCII prompts store as literal text, not
+        # \uXXXX escapes — otherwise the batch search LIKE on this column
+        # can never match a Chinese query.
+        existing.prompts_sent_json = json.dumps(result.prompts_sent, ensure_ascii=False)
         existing.responses_json = json.dumps(result.responses, ensure_ascii=False)
         existing.llm_responses_json = json.dumps(result.llm_responses, ensure_ascii=False)
         existing.llm_errors_json = json.dumps(result.llm_errors, ensure_ascii=False)

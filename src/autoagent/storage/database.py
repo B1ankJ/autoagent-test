@@ -69,6 +69,38 @@ async def init_db() -> None:
             await conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_batches_created_at ON batches (created_at)")
             )
+            # Backfill: prompts_sent_json used to be written with ensure_ascii
+            # (default), so non-ASCII prompts were stored as \uXXXX escapes and
+            # the batch search LIKE could never match a Chinese query. Re-dump
+            # any still-escaped rows as literal UTF-8. Idempotent: converted
+            # rows no longer contain "\u" so they're skipped next boot.
+            await _backfill_prompts_ensure_ascii(conn)
+
+
+async def _backfill_prompts_ensure_ascii(conn) -> None:
+    import json as _json
+
+    rows = (
+        await conn.execute(
+            text(
+                "SELECT batch_id, id, prompts_sent_json FROM samples "
+                "WHERE prompts_sent_json LIKE '%\\u%'"
+            )
+        )
+    ).fetchall()
+    for batch_id, sample_id, raw in rows:
+        try:
+            fixed = _json.dumps(_json.loads(raw), ensure_ascii=False)
+        except (TypeError, ValueError):
+            continue
+        if fixed != raw:
+            await conn.execute(
+                text(
+                    "UPDATE samples SET prompts_sent_json = :v "
+                    "WHERE batch_id = :b AND id = :s"
+                ),
+                {"v": fixed, "b": batch_id, "s": sample_id},
+            )
 
 
 async def reset_db_for_tests() -> None:
