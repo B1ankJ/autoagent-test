@@ -30,6 +30,7 @@ import {
   useWhitelist,
 } from '../api/config'
 import { PageHeader } from '../components/states/PageHeader'
+import { SystemUpdatePanel } from '../components/SystemUpdatePanel'
 import { GlobalDefaults, VLMConfig } from '../types/api'
 
 const STAGE_TEXT: Record<LLMCheckResult['stage'], string> = {
@@ -237,6 +238,14 @@ export function ConfigPage() {
             extra="0 = 不归档,批次直接删除。> 0:批次被清理前,先把结果 JSONL + 日志 + DB 快照打包到 data/archive/<batch>.zip;归档包本身在该天数后才删除(建议 ≥ 数据保留天数)。归档失败时会跳过删除以防丢数据。"
           >
             <InputNumber min={0} max={365} />
+          </Form.Item>
+          <Form.Item
+            name="self_update_enabled"
+            label="启用自更新"
+            valuePropName="checked"
+            extra="打开后可在「系统更新」页从 origin/main 拉取新代码并原地重启。等同远程代码执行,仅在信任来源时开启。"
+          >
+            <Switch />
           </Form.Item>
           <Space>
             <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
@@ -451,6 +460,11 @@ export function ConfigPage() {
         )}
       </Card>
             ),
+          },
+          {
+            key: 'update',
+            label: '系统更新',
+            children: <SystemUpdatePanel />,
           },
         ]}
       />

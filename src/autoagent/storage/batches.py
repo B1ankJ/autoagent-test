@@ -109,9 +109,7 @@ async def list_batches(
         if device_serial:
             # device_serial only exists per-sample inside metadata_json, so
             # join samples and match on the extracted JSON value.
-            stmt = ensure_samples_join(stmt).where(
-                _device_serial_match(device_serial)
-            )
+            stmt = ensure_samples_join(stmt).where(_device_serial_match(device_serial))
         if target_profile:
             # Match either Batch.target_profile_default (set only when the
             # explicit JSON/upload endpoints supply one) OR any sample's
@@ -136,9 +134,7 @@ async def list_batches(
             stmt = stmt.where(Batch.created_at <= created_before)
         if joined_samples:
             stmt = stmt.distinct()
-        result = await s.execute(
-            stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset)
-        )
+        result = await s.execute(stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset))
         return list(result.scalars().all())
 
 
@@ -177,9 +173,7 @@ async def count_batches_by_status(
                 )
             )
         if device_serial:
-            stmt = ensure_samples_join(stmt).where(
-                _device_serial_match(device_serial)
-            )
+            stmt = ensure_samples_join(stmt).where(_device_serial_match(device_serial))
         if target_profile:
             stmt = ensure_samples_join(stmt).where(
                 or_(
@@ -201,6 +195,20 @@ async def count_batches_by_status(
             out[str(status)] = int(count)
         out["total"] = sum(out.values())
         return out
+
+
+async def count_active_batches() -> int:
+    """Number of batches currently queued or running.
+
+    Used by the self-update gate: restarting the process kills any in-flight
+    batch, so the API surfaces this count and requires force=true to proceed.
+    """
+    sm = get_sessionmaker()
+    async with sm() as s:
+        result = await s.execute(
+            select(func.count()).select_from(Batch).where(Batch.status.in_(("queued", "running")))
+        )
+        return int(result.scalar_one() or 0)
 
 
 async def recover_orphaned_batches() -> int:

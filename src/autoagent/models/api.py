@@ -156,6 +156,10 @@ class DefaultsConfig(BaseModel):
     # data/archive/<batch>.zip; the archives themselves are deleted after
     # this many days (should be >= log_retention_days to be useful).
     archive_retention_days: int = 0
+    # Self-update: when true, the /system/update endpoints can git-pull
+    # origin/main and restart the service in place. This is RCE-by-design
+    # (whoever controls the remote controls the box), so it stays opt-in.
+    self_update_enabled: bool = False
 
 
 class DingTalkNotificationConfig(BaseModel):

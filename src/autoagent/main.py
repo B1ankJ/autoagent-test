@@ -18,6 +18,7 @@ from autoagent.api.media import router as media_router
 from autoagent.api.openai_compat import router as openai_compat_router
 from autoagent.api.profile_builder import router as profile_builder_router
 from autoagent.api.profiles import router as profiles_router
+from autoagent.api.system import router as system_router
 from autoagent.api.tests import router as tests_router
 from autoagent.api.web_profile_builder import router as web_profile_builder_router
 from autoagent.auth.passwords import hash_password
@@ -26,6 +27,7 @@ from autoagent.maintenance.scheduler import run_retention_loop
 from autoagent.storage.batches import recover_orphaned_batches
 from autoagent.storage.database import init_db
 from autoagent.storage.users import get_user, upsert_user
+from autoagent.system.update_scheduler import run_update_fetch_loop
 from autoagent.utils.logging import configure_logging
 
 log = logging.getLogger(__name__)
@@ -50,12 +52,14 @@ async def lifespan(app: FastAPI):
         log.info("recovered %d orphaned batch(es) → cancelled", recovered)
     monitor_task = asyncio.create_task(get_device_monitor().run())
     retention_task = asyncio.create_task(run_retention_loop())
+    update_task = asyncio.create_task(run_update_fetch_loop())
+    background_tasks = (monitor_task, retention_task, update_task)
     try:
         yield
     finally:
-        for task in (monitor_task, retention_task):
+        for task in background_tasks:
             task.cancel()
-        for task in (monitor_task, retention_task):
+        for task in background_tasks:
             with suppress(asyncio.CancelledError):
                 await task
 
@@ -82,6 +86,7 @@ app.include_router(profile_builder_router, prefix="/api/v1")
 app.include_router(web_profile_builder_router, prefix="/api/v1")
 app.include_router(device_stream_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
+app.include_router(system_router, prefix="/api/v1")
 
 
 def _mount_static(app: FastAPI) -> None:
@@ -113,7 +118,11 @@ def _mount_static(app: FastAPI) -> None:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    # commit lets the UI detect when a self-update restart has landed on the
+    # new code (it polls this after applying an update).
+    from autoagent.system.updater import _short, current_commit
+
+    return {"status": "ok", "commit": _short(current_commit())}
 
 
 _mount_static(app)

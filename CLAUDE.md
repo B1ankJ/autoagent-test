@@ -42,6 +42,7 @@ src/autoagent/
   results/      per-batch JSONL result writer (thread-safe)
   scheduler/    async BatchScheduler with per-batch concurrency
   storage/      async SQLAlchemy CRUD (batches, samples, users, kv config)
+  system/       self-update (git pull + uv sync + pnpm build + detached run.sh restart) + hourly fetch loop
   webhooks/     async webhook sender with exponential backoff
   main.py       FastAPI app + lifespan (DB init + admin bootstrap + CORS)
 tests/
@@ -96,6 +97,7 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Profile Builder connectivity:** reuse the existing `/api/v1/tests/sync` execution path (via shared backend helper), not a duplicate executor path.
 - **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.
 - **SSE progress:** `GET /api/v1/batches/{id}/events` is the live progress stream. Frontend `useBatchStream` reconciles updates via `seq`; WebSocket is not used.
+- **Self-update:** `src/autoagent/system/updater.py` pulls `origin/main`, runs `uv sync` only when `pyproject.toml`/`uv.lock` changed, `pnpm build`s, then spawns a detached `run.sh restart --no-build` (new session) — all build steps run while the old process still serves, so a broken pull/build aborts with zero downtime. Endpoints `POST /api/v1/system/update/{check,apply}` + `GET /status`; gated behind `DefaultsConfig.self_update_enabled` (off by default, admin-only) — it is RCE-by-design. `apply` returns 409 with `active_batches` when batches are running; UI re-calls with `force=true`. `/health` returns `commit` so the UI can poll for the restart to land. Hourly `git fetch` loop (`system/update_scheduler.py`) keeps `origin/main` fresh so `/status` needs no network; nav shows a dot on Config when behind.
 
 ## Common commands
 

@@ -152,6 +152,7 @@ export interface GlobalDefaults {
   verbose_logs?: boolean
   log_retention_days?: number
   archive_retention_days?: number
+  self_update_enabled?: boolean
 }
 
 export interface ProfileBuilderCaptureArtifact {
