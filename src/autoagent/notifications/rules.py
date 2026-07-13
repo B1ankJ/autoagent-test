@@ -15,7 +15,7 @@ from autoagent.config.settings import get_settings
 from autoagent.models.api import SampleResult
 from autoagent.notifications import whitelist
 from autoagent.notifications.dingtalk import send_markdown
-from autoagent.notifications.vlm_judge import is_normal_chat_page
+from autoagent.notifications.vlm_judge import describe_judgement_error, is_normal_chat_page
 from autoagent.storage.configs import get_config, put_config
 
 _log = logging.getLogger(__name__)
@@ -272,10 +272,13 @@ async def _judge_and_act(
     shot_paths = []
     for batch_id, sample_id in refs:
         sample_dir = settings.logs_root / batch_id / sample_id
-        # Pick the last after_result_*.png in the sample dir (typically
-        # after_result_1.png for single-prompt samples).
+        # Pick the last after_result_* in the sample dir (typically
+        # after_result_1.jpg for single-prompt samples). Screenshots write as
+        # JPEG now but accept legacy .png too, same as media.py's serving route.
         if sample_dir.is_dir():
-            candidates = sorted(sample_dir.glob("after_result_*.png"))
+            candidates = sorted(
+                [*sample_dir.glob("after_result_*.jpg"), *sample_dir.glob("after_result_*.png")]
+            )
             if candidates:
                 shot_paths.append(candidates[-1])
 
@@ -287,12 +290,16 @@ async def _judge_and_act(
     )
 
     if judgement.error is not None:
-        # VLM unavailable — err on the side of alerting (per user request).
+        # Judgement couldn't complete (either the VLM call itself failed, or
+        # we never had a screenshot to send it) — err on the side of
+        # alerting rather than silently skipping (per user request).
+        detail = describe_judgement_error(judgement.error)
         _log.warning(
-            "vlm judge unavailable for %s/%s: %s — alerting anyway",
+            "vlm judge unavailable for %s/%s: %s (%s) — alerting anyway",
             serial,
             profile,
             judgement.error,
+            detail,
         )
         await _fire_same_response_alert(
             config=config,
@@ -301,7 +308,7 @@ async def _judge_and_act(
             response=response,
             refs=refs,
             normal=None,
-            reason=f"VLM 不可用: {judgement.error}",
+            reason=f"{detail}(error={judgement.error})",
         )
         return
 

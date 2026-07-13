@@ -345,6 +345,65 @@ async def test_same_response_alerts_on_vlm_failure(monkeypatch):
             _make_sample(serial="A", response="hi"), batch_id="b"
         )
     assert len(sent) == 1
+    # The alert text should explain *why* judgement failed in human terms,
+    # not just echo the raw error code.
+    assert "调用 VLM 超时" in sent[0]["text"]
+    assert "error=timeout" in sent[0]["text"]
+
+
+async def test_same_response_finds_jpg_screenshots(monkeypatch, tmp_path):
+    """Regression: after_result screenshots write as .jpg since the JPEG
+    migration, but the collection glob used to only look for .png and
+    silently found nothing — misreporting a perfectly healthy VLM as
+    "VLM 不可用: no_screenshots" when the real problem was a stale glob."""
+    sample_dir = tmp_path / "b" / "s1"
+    sample_dir.mkdir(parents=True)
+    shot = sample_dir / "after_result_1.jpg"
+    shot.write_bytes(b"fake-jpeg")
+
+    class _Settings:
+        logs_root = tmp_path
+
+    monkeypatch.setattr(rules, "get_settings", lambda: _Settings())
+
+    seen_paths: list = []
+
+    async def _judge(*, screenshot_paths, base_url, model, api_key, timeout_sec=30.0):
+        from autoagent.notifications.vlm_judge import JudgementResult
+
+        seen_paths.extend(screenshot_paths)
+        return JudgementResult(normal=True, reason="ok")
+
+    monkeypatch.setattr(rules, "is_normal_chat_page", _judge)
+
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 1,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(
+        rules, "get_config", _stub_vlm_config({"base_url": "x", "model": "m", "api_key": "k"})
+    )
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+
+    await rules.on_sample_result(
+        SampleResult(
+            id="s1",
+            status="done",
+            prompts_sent=["hi"],
+            responses=["hi"],
+            mode="gui_android",
+            target_profile="p",
+            metadata={"device_serial": "A"},
+        ),
+        batch_id="b",
+    )
+
+    assert seen_paths == [shot]
 
 
 async def test_same_response_whitelisted_skips(monkeypatch):

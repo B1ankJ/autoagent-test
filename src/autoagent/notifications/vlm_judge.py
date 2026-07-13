@@ -57,6 +57,32 @@ class JudgementResult:
     latency_ms: int = 0
 
 
+def describe_judgement_error(error: str) -> str:
+    """Human-readable (Chinese) explanation for a JudgementResult.error code.
+
+    `no_screenshots` / `no_readable_screenshots` mean the VLM was never even
+    called — the caller couldn't find a screenshot file to send. That's a
+    local filesystem/glob issue, not a VLM outage, and alert text used to
+    call both cases "VLM 不可用" which sent people debugging the wrong
+    system. Everything else here is a genuine call failure.
+    """
+    if error == "no_screenshots":
+        return "未找到可判断的截图(sample 目录下没有 after_result_* 文件),与 VLM 服务本身无关"
+    if error == "no_readable_screenshots":
+        return "截图文件存在但读取失败(权限或文件损坏),与 VLM 服务本身无关"
+    if error == "timeout":
+        return "调用 VLM 超时"
+    if error == "auth":
+        return "VLM 鉴权失败,请检查 api_key"
+    if error.startswith("status:"):
+        return f"VLM 返回异常状态码 {error.split(':', 1)[1]}"
+    if error.startswith("http:"):
+        return f"VLM 网络请求失败({error.split(':', 1)[1]})"
+    if error.startswith("response_shape:"):
+        return "VLM 返回内容格式异常,无法解析判断结果"
+    return error
+
+
 def _image_block(path: Path) -> dict:
     b64 = base64.b64encode(path.read_bytes()).decode("ascii")
     return {
