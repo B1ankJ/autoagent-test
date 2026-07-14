@@ -407,7 +407,7 @@ export default function Builder() {
       })) ?? []
   const sessionArtifactScreens =
     session?.artifacts
-      .filter((artifact) => artifact.endsWith('.png'))
+      .filter((artifact) => artifact.endsWith('.png') || artifact.endsWith('.jpg'))
       .map((artifact) => ({
         step: inferScreenStep(artifact),
         label: screenLabelFromPath(artifact),

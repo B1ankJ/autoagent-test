@@ -723,27 +723,42 @@ def _dump_draft_profile_yaml(draft_profile: dict) -> str:
     return yaml.safe_dump(draft_profile, sort_keys=False, allow_unicode=True)
 
 
+# (source stem in the sample's logs dir, destination label under
+# validate_<label>) pairs copied from a validation sample's logs into the
+# builder session's artifact dir. Runtime screenshots write as .jpg
+# (ScreenshotStore.write_screenshot JPEG-transcodes everything); .png is kept
+# as a fallback for any legacy sample dir still holding raw PNGs.
+_VALIDATION_SCREEN_SOURCES = [
+    ("before_input_1", "before_input"),
+    ("after_input_1", "after_input"),
+    ("after_send_1", "after_send"),
+    ("after_result_1", "after_result"),
+    ("on_error", "on_error"),
+]
+_SCREEN_MEDIA_TYPES = {".jpg": "image/jpeg", ".png": "image/png"}
+
+
 def _runtime_screens_for_validation(
     session: ProfileBuilderSessionView,
 ) -> list[ProfileBuilderRuntimeScreen]:
     artifact_dir = Path(session.artifact_dir)
-    names = [
-        "validate_before_input.png",
-        "validate_after_input.png",
-        "validate_after_send.png",
-        "validate_after_result.png",
-        "validate_on_error.png",
-    ]
     screens = []
-    for name in names:
-        path = artifact_dir / name
-        if not path.exists():
+    for _source_stem, dest_label in _VALIDATION_SCREEN_SOURCES:
+        path = next(
+            (
+                p
+                for ext in (".jpg", ".png")
+                if (p := artifact_dir / f"validate_{dest_label}{ext}").exists()
+            ),
+            None,
+        )
+        if path is None:
             continue
         screens.append(
             ProfileBuilderRuntimeScreen(
                 step="connectivity",
-                label=path.stem,
-                path=name,
+                label=f"validate_{dest_label}",
+                path=path.name,
                 taken_at=datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc),
             )
         )
@@ -760,18 +775,18 @@ def _collect_validation_screens_from_logs(
     if not source_dir.exists():
         return _runtime_screens_for_validation(session)
     artifact_dir = Path(session.artifact_dir)
-    copies = [
-        ("before_input_1.png", "validate_before_input.png"),
-        ("after_input_1.png", "validate_after_input.png"),
-        ("after_send_1.png", "validate_after_send.png"),
-        ("after_result_1.png", "validate_after_result.png"),
-        ("on_error.png", "validate_on_error.png"),
-    ]
-    for source_name, target_name in copies:
-        source_path = source_dir / source_name
-        if not source_path.exists():
+    for source_stem, dest_label in _VALIDATION_SCREEN_SOURCES:
+        source_path = next(
+            (
+                p
+                for ext in (".jpg", ".png")
+                if (p := source_dir / f"{source_stem}{ext}").exists()
+            ),
+            None,
+        )
+        if source_path is None:
             continue
-        shutil.copy2(source_path, artifact_dir / target_name)
+        shutil.copy2(source_path, artifact_dir / f"validate_{dest_label}{source_path.suffix}")
     return _runtime_screens_for_validation(session)
 
 
@@ -1042,7 +1057,7 @@ async def download_session_artifact(session_id: str, name: str) -> FileResponse:
         raise HTTPException(status_code=400, detail="path traversal blocked") from exc
     if not target.is_file():
         raise HTTPException(status_code=404, detail="artifact not found")
-    media_type = "image/png" if target.suffix == ".png" else "application/octet-stream"
+    media_type = _SCREEN_MEDIA_TYPES.get(target.suffix, "application/octet-stream")
     return FileResponse(target, media_type=media_type)
 
 

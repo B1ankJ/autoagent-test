@@ -1248,13 +1248,15 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
     async def _run_sync(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
         logs_dir = artifact_dir / "validate_logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
+        # Real runtime screenshots write as .jpg (ScreenshotStore JPEG-
+        # transcodes everything) — match that, not the legacy .png shape.
         for name in (
-            "before_input_1.png",
-            "after_input_1.png",
-            "after_send_1.png",
-            "after_result_1.png",
+            "before_input_1.jpg",
+            "after_input_1.jpg",
+            "after_send_1.jpg",
+            "after_result_1.jpg",
         ):
-            (logs_dir / name).write_bytes(b"png")
+            (logs_dir / name).write_bytes(b"jpeg")
         return SampleResult(
             id=sample.id,
             status="done",
@@ -1284,8 +1286,17 @@ async def test_profile_builder_validate_updates_runtime_and_screens(client, monk
     assert body["connectivity"]["result_summary"] == "pong"
     assert len(body["connectivity"]["screens"]) >= 1
     assert {screen["path"] for screen in body["connectivity"]["screens"]} >= {
-        "validate_before_input.png",
-        "validate_after_input.png",
-        "validate_after_send.png",
-        "validate_after_result.png",
+        "validate_before_input.jpg",
+        "validate_after_input.jpg",
+        "validate_after_send.jpg",
+        "validate_after_result.jpg",
     }
+
+    # The download route must serve the copied .jpg with the right
+    # Content-Type, not fall through to application/octet-stream.
+    download = await client.get(
+        f"/api/v1/profile-builder/sessions/{session['id']}/artifacts/validate_after_result.jpg",
+        headers=headers,
+    )
+    assert download.status_code == 200
+    assert download.headers["content-type"] == "image/jpeg"
