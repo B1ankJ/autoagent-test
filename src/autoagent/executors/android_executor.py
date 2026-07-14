@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import re
+import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,15 @@ _LOADING_RETRY_MAX = 5
 # the run records an empty response, no fallback to ui_tree / ocr extraction.
 _VLM_MAX_ATTEMPTS = 3
 _VLM_RETRY_BACKOFF_SEC = 0.5
+# Copy-button tap → clipboard check: a single fixed-delay read races apps
+# whose copy action populates the clipboard slightly late (toast-triggered
+# copies, Android 10+ clipboard-access latency, a loaded device) — that
+# produced false "miss" verdicts which sent the caller on to tap a
+# *different* coordinate while the correct tap's copy was still in flight,
+# sometimes overwriting it. Poll instead: same total budget, but return as
+# soon as the clipboard has something.
+_CLIPBOARD_POLL_BUDGET_SEC = 1.0
+_CLIPBOARD_POLL_INTERVAL_SEC = 0.12
 _LOADING_RETRY_SEC = 3.0
 _LOADING_INDICATOR_PATTERNS = (
     "正在思考",
@@ -78,6 +88,25 @@ def _clip_log_text(value: str | None, max_chars: int = 240) -> str | None:
     if len(compact) <= max_chars:
         return compact
     return f"{compact[:max_chars]}..."
+
+
+async def _poll_clipboard(
+    device: Any,
+    *,
+    budget_sec: float = _CLIPBOARD_POLL_BUDGET_SEC,
+    interval_sec: float = _CLIPBOARD_POLL_INTERVAL_SEC,
+) -> str:
+    """Poll the device clipboard for up to budget_sec, returning as soon as
+    it's non-empty (stripped). Returns "" if nothing showed up in time."""
+    deadline = time.monotonic() + budget_sec
+    while True:
+        text = (await asyncio.to_thread(lambda: device.clipboard or "")).strip()
+        if text:
+            return text
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return ""
+        await asyncio.sleep(min(interval_sec, remaining))
 
 
 class _SampleLogger:
@@ -333,12 +362,9 @@ class AndroidExecutor(Executor):
                                 except Exception:
                                     pass
                                 await asyncio.to_thread(device.click, dx, dy)
-                                await asyncio.sleep(0.5)
-                                cached_clipboard = await asyncio.to_thread(
-                                    lambda: device.clipboard or ""
-                                )
-                                if cached_clipboard.strip():
-                                    vlm_clipboard = cached_clipboard.strip()
+                                cached_clipboard = await _poll_clipboard(device)
+                                if cached_clipboard:
+                                    vlm_clipboard = cached_clipboard
                                     sample_log.info(
                                         "android sample %s prompt %s vlm copy-button "
                                         "default_coords hit #%d/%d: coords=(%d,%d) chars=%d",
@@ -408,12 +434,9 @@ class AndroidExecutor(Executor):
                                     vlm_res.coords[0],
                                     vlm_res.coords[1],
                                 )
-                                await asyncio.sleep(0.5)
-                                clipboard_text = await asyncio.to_thread(
-                                    lambda: device.clipboard or ""
-                                )
-                                if clipboard_text.strip():
-                                    vlm_clipboard = clipboard_text.strip()
+                                clipboard_text = await _poll_clipboard(device)
+                                if clipboard_text:
+                                    vlm_clipboard = clipboard_text
                                     break
                                 vlm_last_error = "empty_clipboard"
                             if vlm_attempt < _VLM_MAX_ATTEMPTS - 1:
