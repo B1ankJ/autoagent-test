@@ -1,4 +1,13 @@
-from autoagent.executors.copy_button_vlm import _extract_coords
+import pytest
+
+from autoagent.executors.copy_button_vlm import (
+    _DIALOG_DETECTION_CLAUSE,
+    CopyButtonLocateResult,
+    _extract_coords,
+    _extract_dialog_coords,
+    locate_copy_button_via_vlm,
+)
+from autoagent.profiles.schemas import CopyButtonVLMConfig
 
 
 def test_clean_json():
@@ -67,3 +76,110 @@ def test_empty():
 
 def test_garbage():
     assert _extract_coords("the cat sat on the mat") == (None, "parse")
+
+
+# --- Blocking auth/consent dialog detection (detect_auth_dialog=True) ---
+
+
+def test_extract_dialog_coords_clean_json():
+    content = '{"blocking_dialog": true, "dialog_x": 360, "dialog_y": 752}'
+    assert _extract_dialog_coords(content) == (360, 752)
+
+
+def test_extract_dialog_coords_ignores_normal_copy_button_response():
+    assert _extract_dialog_coords('{"found": true, "x": 100, "y": 200}') is None
+
+
+def test_extract_dialog_coords_regex_fallback_for_messy_response():
+    content = 'Sure, blocking_dialog: true, dialog_x=360, dialog_y=752'
+    assert _extract_dialog_coords(content) == (360, 752)
+
+
+def test_extract_dialog_coords_missing_xy_returns_none():
+    assert _extract_dialog_coords('{"blocking_dialog": true}') is None
+
+
+def _vlm_config(**overrides) -> CopyButtonVLMConfig:
+    base = {"base_url": "https://x", "model": "m", "api_key": "k"}
+    base.update(overrides)
+    return CopyButtonVLMConfig(**base)
+
+
+async def _fake_post_json(monkeypatch, content: str):
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": content}}]}
+
+        @property
+        def text(self):
+            return content
+
+    async def _post(**kwargs):
+        return _Resp()
+
+    monkeypatch.setattr(
+        "autoagent.executors.copy_button_vlm.post_json_with_retry", _post
+    )
+
+
+async def test_locate_copy_button_returns_dialog_coords_when_detect_auth_dialog_on(
+    monkeypatch,
+):
+    await _fake_post_json(
+        monkeypatch, '{"blocking_dialog": true, "dialog_x": 360, "dialog_y": 752}'
+    )
+    config = _vlm_config(detect_auth_dialog=True)
+    result = await locate_copy_button_via_vlm(b"png-bytes", config)
+    assert result == CopyButtonLocateResult(
+        None, result.raw_response, result.latency_ms, dialog_coords=(360, 752)
+    )
+
+
+async def test_locate_copy_button_ignores_dialog_field_when_detect_auth_dialog_off(
+    monkeypatch,
+):
+    # Even if a response happens to contain blocking_dialog, a profile that
+    # never opted in should never get dialog_coords back.
+    await _fake_post_json(
+        monkeypatch, '{"blocking_dialog": true, "dialog_x": 360, "dialog_y": 752}'
+    )
+    config = _vlm_config(detect_auth_dialog=False)
+    result = await locate_copy_button_via_vlm(b"png-bytes", config)
+    assert result.dialog_coords is None
+
+
+async def test_locate_copy_button_still_finds_button_when_no_dialog(monkeypatch):
+    await _fake_post_json(monkeypatch, '{"found": true, "x": 10, "y": 20}')
+    config = _vlm_config(detect_auth_dialog=True)
+    result = await locate_copy_button_via_vlm(b"png-bytes", config)
+    assert result.coords == (10, 20)
+    assert result.dialog_coords is None
+
+
+@pytest.mark.parametrize("detect", [True, False])
+async def test_prompt_only_gains_dialog_clause_when_opted_in(monkeypatch, detect):
+    captured = {}
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"found": false}'}}]}
+
+        @property
+        def text(self):
+            return '{"found": false}'
+
+    async def _post(**kwargs):
+        captured["body"] = kwargs["json"]
+        return _Resp()
+
+    monkeypatch.setattr(
+        "autoagent.executors.copy_button_vlm.post_json_with_retry", _post
+    )
+    config = _vlm_config(detect_auth_dialog=detect)
+    await locate_copy_button_via_vlm(b"png-bytes", config)
+    prompt_text = captured["body"]["messages"][0]["content"][0]["text"]
+    assert (_DIALOG_DETECTION_CLAUSE in prompt_text) is detect

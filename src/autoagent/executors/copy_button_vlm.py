@@ -34,6 +34,11 @@ _NOT_FOUND_RE = re.compile(
     r'"found"\s*:\s*false|找不到|未找到|不存在|no\s+(?:copy\s+)?button',
     re.IGNORECASE,
 )
+_BLOCKING_DIALOG_RE = re.compile(r'["\']?blocking_dialog["\']?\s*:\s*true', re.IGNORECASE)
+_DIALOG_XY_RE = re.compile(
+    r'["\']?dialog_x["\']?\s*[:=]\s*(-?\d+).{0,40}?["\']?dialog_y["\']?\s*[:=]\s*(-?\d+)',
+    re.DOTALL | re.IGNORECASE,
+)
 
 
 def _extract_coords(content: str) -> tuple[tuple[int, int] | None, str | None]:
@@ -112,6 +117,29 @@ def _coerce_xy(value: Any) -> tuple[int, int] | None:
             return None
     return None
 
+
+def _extract_dialog_coords(content: str) -> tuple[int, int] | None:
+    """Best-effort parse of the optional blocking_dialog/dialog_x/dialog_y
+    fields (only sent/expected when detect_auth_dialog is on)."""
+    if not content or not _BLOCKING_DIALOG_RE.search(content):
+        return None
+    try:
+        m = _BRACE_RE.search(content)
+        parsed = json.loads(m.group(0)) if m else None
+        if isinstance(parsed, dict) and parsed.get("blocking_dialog") is True:
+            coords = _coerce_xy(
+                {"x": parsed.get("dialog_x"), "y": parsed.get("dialog_y")}
+            )
+            if coords is not None:
+                return coords
+    except (ValueError, TypeError):
+        pass
+    m = _DIALOG_XY_RE.search(content)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return None
+
+
 _DEFAULT_PROMPT = (
     "请在这张 Android 截图中找到最新一条 AI 回复下方的“复制”按钮。"
     "它可能呈现为：(1) 文字“复制”或“Copy”；"
@@ -124,6 +152,18 @@ _DEFAULT_PROMPT = (
     "坐标基于截图原始像素，左上角为 (0, 0)，应指向按钮的中心。"
 )
 
+# Prepended to the prompt only when detect_auth_dialog is on. Kept separate
+# from _DEFAULT_PROMPT (and from a custom config.prompt) so existing profiles
+# that don't opt in never see a changed prompt.
+_DIALOG_DETECTION_CLAUSE = (
+    "在寻找复制按钮之前，先检查当前截图是否被一个**阻挡对话的授权/同意弹窗**遮挡"
+    "（例如“请确认以下信息”“同意协议”“请授权”这类卡片，通常带一个醒目的确认按钮，"
+    "如“同意协议”“同意并继续”“允许”）——这种弹窗不是复制按钮，也不代表复制按钮不存在，"
+    "只是暂时被挡住了。如果存在这种弹窗，请只返回 "
+    "{\"blocking_dialog\": true, \"dialog_x\": 确认按钮横坐标, \"dialog_y\": 确认按钮纵坐标}，"
+    "不要在这种情况下寻找复制按钮。如果没有这种弹窗，忽略以上内容，按下面的规则正常寻找复制按钮。\n\n"
+)
+
 
 @dataclass
 class CopyButtonLocateResult:
@@ -131,6 +171,11 @@ class CopyButtonLocateResult:
     raw_response: str
     latency_ms: int
     error: str | None = None
+    # Set instead of `coords` when detect_auth_dialog is on and the VLM
+    # reports a blocking consent/authorization dialog rather than a copy
+    # button. The caller should tap this, wait, and retry — not treat it as
+    # a miss.
+    dialog_coords: tuple[int, int] | None = None
 
 
 async def locate_copy_button_via_vlm(
@@ -141,6 +186,8 @@ async def locate_copy_button_via_vlm(
 
     b64 = base64.b64encode(screenshot_png).decode("ascii")
     prompt = config.prompt or _DEFAULT_PROMPT
+    if config.detect_auth_dialog:
+        prompt = _DIALOG_DETECTION_CLAUSE + prompt
     body = {
         "model": config.model,
         "temperature": 0,
@@ -191,6 +238,11 @@ async def locate_copy_button_via_vlm(
     except (KeyError, IndexError, TypeError, ValueError) as e:
         _log.warning("vlm copy-button response shape unexpected: %s", e)
         return CopyButtonLocateResult(None, raw, latency_ms, error="response_shape")
+
+    if config.detect_auth_dialog:
+        dialog_coords = _extract_dialog_coords(content or "")
+        if dialog_coords is not None:
+            return CopyButtonLocateResult(None, raw, latency_ms, dialog_coords=dialog_coords)
 
     coords, not_found_reason = _extract_coords(content or "")
     if coords is not None:

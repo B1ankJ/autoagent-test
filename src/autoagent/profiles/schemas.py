@@ -169,6 +169,17 @@ class CopyButtonVLMConfig(BaseModel):
     # Useful when the page is still settling after the failed taps and the
     # immediate XML dump would catch a transient state.
     retry_wait_sec: float = 0.0
+    # Some apps show a blocking consent/authorization card mid-conversation
+    # (e.g. "请确认以下信息...同意协议") that covers the actual reply — the
+    # copy button either isn't there yet or is hidden behind it. When on, the
+    # VLM prompt also asks it to report this dialog's accept-button
+    # coordinates instead of searching for a copy button; the executor taps
+    # it, waits dialog_dismiss_wait_sec, and retries locating the copy button
+    # on a fresh screenshot instead of burning a retry on a screen the copy
+    # button was never going to be found on. Off by default — existing
+    # profiles don't get a prompt/behavior change unless they opt in.
+    detect_auth_dialog: bool = False
+    dialog_dismiss_wait_sec: float = 2.0
 
     @field_validator("default_coords", mode="before")
     @classmethod

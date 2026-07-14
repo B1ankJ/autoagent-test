@@ -407,15 +407,39 @@ class AndroidExecutor(Executor):
                             )
                             sample_log.info(
                                 "android sample %s prompt %s vlm copy-button "
-                                "attempt %d/%d: coords=%s latency_ms=%s error=%s",
+                                "attempt %d/%d: coords=%s dialog_coords=%s "
+                                "latency_ms=%s error=%s",
                                 sample.id,
                                 idx,
                                 vlm_attempt + 1,
                                 _VLM_MAX_ATTEMPTS,
                                 vlm_res.coords,
+                                vlm_res.dialog_coords,
                                 vlm_res.latency_ms,
                                 vlm_res.error,
                             )
+                            if vlm_res.dialog_coords is not None:
+                                # A blocking consent/auth dialog, not a miss —
+                                # dismiss it and retry on a fresh screenshot
+                                # instead of burning this attempt on a screen
+                                # the copy button was never going to be on.
+                                sample_log.info(
+                                    "android sample %s prompt %s vlm copy-button "
+                                    "dismissing blocking dialog at %s, waiting %.1fs",
+                                    sample.id,
+                                    idx,
+                                    vlm_res.dialog_coords,
+                                    vlm_cfg.dialog_dismiss_wait_sec,
+                                )
+                                await asyncio.to_thread(
+                                    device.click,
+                                    vlm_res.dialog_coords[0],
+                                    vlm_res.dialog_coords[1],
+                                )
+                                vlm_last_error = "blocking_dialog_dismissed"
+                                if vlm_cfg.dialog_dismiss_wait_sec > 0:
+                                    await asyncio.sleep(vlm_cfg.dialog_dismiss_wait_sec)
+                                continue
                             if vlm_res.coords is None:
                                 vlm_last_error = vlm_res.error or "no_coords"
                             else:
