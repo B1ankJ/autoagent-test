@@ -33,6 +33,12 @@ class Batch(Base):
     # Index because every list/count/stats query orders by it desc;
     # without one SQLite full-scans as the batches table grows.
     created_at = Column(DateTime, server_default=func.now(), index=True)
+    # Verbatim JSON of the originally-submitted Sample list (id, prompts,
+    # new_session, timeout_sec, retry, dry_run, callback_url, metadata — the
+    # full request, not just what SampleResult persists post-execution).
+    # Written once at submission time so /replay can resubmit an identical
+    # batch; NULL for batches created before this existed.
+    samples_request_json = Column(Text, nullable=True)
 
 
 class Sample(Base):

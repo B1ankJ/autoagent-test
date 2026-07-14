@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -143,6 +144,13 @@ class BatchScheduler:
             target_profile_default=target_profile_default,
         )
         self._states[batch_id] = state
+        # Persisted verbatim so /replay can resubmit an identical batch later
+        # — SampleResult (what execution actually writes to the DB) doesn't
+        # carry request-only fields like new_session/timeout_sec/retry/
+        # dry_run/callback_url, so this is the only faithful record of them.
+        samples_request_json = json.dumps(
+            [s.model_dump(mode="json") for s in samples], ensure_ascii=False
+        )
         await create_batch(
             batch_id=batch_id,
             name=name,
@@ -150,6 +158,7 @@ class BatchScheduler:
             concurrency=state.concurrency,
             total=len(samples),
             target_profile_default=target_profile_default,
+            samples_request_json=samples_request_json,
         )
         self._tasks[batch_id] = asyncio.create_task(self._run(batch_id, state))
         return batch_id

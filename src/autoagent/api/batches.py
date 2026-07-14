@@ -412,6 +412,43 @@ async def rerun(batch_id: str, status: str = "failed") -> BatchCreatedResponse:
     return BatchCreatedResponse(batch_id=new_id)
 
 
+@router.post("/{batch_id}/replay", response_model=BatchCreatedResponse, status_code=201)
+async def replay(batch_id: str) -> BatchCreatedResponse:
+    """Resubmit `batch_id` with an identical Sample list to the one originally
+    submitted — every field (new_session/timeout_sec/retry/dry_run/
+    callback_url/metadata), not just prompts/mode/target_profile like
+    `/rerun`. Requires the batch to have been created after replay support
+    shipped (samples_request_json populated); older batches don't have this
+    recorded and should use /rerun instead.
+    """
+    original = await get_batch(batch_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail="batch not found")
+    if not original.samples_request_json:
+        raise HTTPException(
+            status_code=400,
+            detail="this batch predates replay support and has no recorded "
+            "request to replay; use /rerun instead",
+        )
+    try:
+        raw_samples = json.loads(original.samples_request_json)
+        samples = [Sample.model_validate(s) for s in raw_samples]
+    except (ValueError, TypeError) as e:
+        raise HTTPException(
+            status_code=500, detail=f"stored replay request is corrupt: {e}"
+        ) from e
+
+    sch = get_scheduler()
+    new_id = await sch.submit(
+        name=f"{original.name} (replay)",
+        mode=original.mode,  # type: ignore[arg-type]
+        concurrency=original.concurrency,
+        samples=samples,
+        target_profile_default=original.target_profile_default,
+    )
+    return BatchCreatedResponse(batch_id=new_id)
+
+
 @router.post("/{batch_id}/cancel", status_code=202)
 async def cancel(batch_id: str) -> dict:
     sch = get_scheduler()

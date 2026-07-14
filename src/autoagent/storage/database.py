@@ -63,6 +63,12 @@ async def init_db() -> None:
                 await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_responses_json TEXT"))
             if "llm_errors_json" not in sample_columns:
                 await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_errors_json TEXT"))
+            result = await conn.execute(text("PRAGMA table_info(batches)"))
+            batch_columns = {row[1] for row in result.fetchall()}
+            if "samples_request_json" not in batch_columns:
+                await conn.execute(
+                    text("ALTER TABLE batches ADD COLUMN samples_request_json TEXT")
+                )
             # Index on batches.created_at so list/count/stats ORDER BY
             # doesn't full-scan the table. create_all() adds it for fresh
             # DBs; this covers upgrades of existing dev/prod databases.

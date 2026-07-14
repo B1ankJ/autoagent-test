@@ -3,6 +3,7 @@ import {
   BellFilled,
   BellOutlined,
   ExperimentOutlined,
+  HistoryOutlined,
   RedoOutlined,
 } from '@ant-design/icons'
 import {
@@ -26,6 +27,7 @@ import {
   statusIsTerminal,
   useBatchStream,
   useCancelBatch,
+  useReplayBatch,
   useRerunBatch,
 } from '../../api/batches'
 import { DownloadButton } from '../../components/DownloadButton'
@@ -60,6 +62,7 @@ export function BatchDetail() {
   const { data, isLoading } = useBatchStream(id)
   const cancel = useCancelBatch()
   const rerun = useRerunBatch()
+  const replay = useReplayBatch()
   const { message } = App.useApp()
   const [filter, setFilter] = useState<SampleFilter>('all')
   const [search, setSearch] = useState('')
@@ -136,6 +139,16 @@ export function BatchDetail() {
     try {
       const result = await rerun.mutateAsync({ id: data.batch_id, status: which })
       message.success('已创建重跑批次')
+      navigate(`/batches/${result.batch_id}`)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const onReplay = async () => {
+    try {
+      const result = await replay.mutateAsync(data.batch_id)
+      message.success('已创建重放批次(配置与原批次完全一致)')
       navigate(`/batches/${result.batch_id}`)
     } catch (error) {
       message.error((error as Error).message)
@@ -249,7 +262,7 @@ export function BatchDetail() {
             ) : null}
             {statusIsTerminal(data.status) ? (
               <Dropdown.Button
-                loading={rerun.isPending}
+                loading={rerun.isPending || replay.isPending}
                 icon={<RedoOutlined />}
                 onClick={() => onRerun('failed')}
                 disabled={data.failed === 0}
@@ -265,6 +278,13 @@ export function BatchDetail() {
                       key: 'all',
                       label: `重跑全部 (${data.total})`,
                       onClick: () => onRerun('all'),
+                    },
+                    { type: 'divider' as const },
+                    {
+                      key: 'replay',
+                      icon: <HistoryOutlined />,
+                      label: '完整重放(与原批次配置完全一致)',
+                      onClick: onReplay,
                     },
                   ],
                 }}

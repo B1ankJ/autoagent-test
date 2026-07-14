@@ -260,6 +260,21 @@ export function useRerunBatch() {
   })
 }
 
+/** Resubmits a batch with the exact original Sample list (new_session/
+ * timeout_sec/retry/dry_run/callback_url included, not just prompts/mode/
+ * target_profile like rerun). 400s if the batch predates replay support. */
+export function useReplayBatch() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await client.post<BatchCreatedResponse>(`/batches/${id}/replay`)
+      return response.data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['batches'] }),
+  })
+}
+
 export function statusIsTerminal(status: BatchStatus): boolean {
   return status === 'done' || status === 'failed' || status === 'cancelled'
 }

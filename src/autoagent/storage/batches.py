@@ -22,6 +22,7 @@ async def create_batch(
     concurrency: int,
     total: int,
     target_profile_default: str | None,
+    samples_request_json: str | None = None,
 ) -> None:
     sm = get_sessionmaker()
     async with sm() as s:
@@ -35,6 +36,7 @@ async def create_batch(
                 target_profile_default=target_profile_default,
                 status="queued",
                 created_at=datetime.now(timezone.utc),
+                samples_request_json=samples_request_json,
             )
         )
         await s.commit()
