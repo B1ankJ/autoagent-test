@@ -11,6 +11,7 @@ from autoagent.openai_compat.chat_completions import (
     mode_for_profile,
     parse_chat_completions_request,
     resolve_profile,
+    select_effective_response,
     select_message_content,
 )
 from autoagent.openai_compat.schemas import ChatCompletionsRequest
@@ -184,6 +185,48 @@ def test_select_message_content_falls_back_when_llm_error_slot_missing():
     )
 
     assert select_message_content(result, _web_profile_with_llm()) == "static result"
+
+
+def test_select_message_content_ignores_llm_data_when_profile_disables_it():
+    # api profile has no llm_response_enabled() at all — matches the
+    # `getattr(..., lambda: False)` fallback in select_message_content.
+    result = SampleResult(
+        id="s3",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["static result"],
+        llm_responses=["llm result"],
+        llm_errors=[None],
+        mode="api",
+        target_profile="p_api",
+    )
+
+    assert select_message_content(result, _api_profile()) == "static result"
+
+
+# --- select_effective_response: shared by select_message_content and the
+# batch-list preview (api/batches.py::_single_sample_preview), so both agree
+# on what "the response" is for a sample. ---
+
+
+def test_select_effective_response_prefers_llm_when_successful():
+    assert select_effective_response(["raw"], ["llm"], [None]) == "llm"
+
+
+def test_select_effective_response_falls_back_on_llm_error():
+    assert select_effective_response(["raw"], [""], ["auth"]) == "raw"
+
+
+def test_select_effective_response_falls_back_when_llm_lists_empty():
+    assert select_effective_response(["raw"], [], []) == "raw"
+
+
+def test_select_effective_response_falls_back_when_llm_text_empty():
+    assert select_effective_response(["raw"], [""], [None]) == "raw"
+
+
+def test_select_effective_response_empty_when_no_responses_at_all():
+    assert select_effective_response([], [], []) == ""
 
 
 def test_non_text_message_content_is_rejected_by_compat_layer():

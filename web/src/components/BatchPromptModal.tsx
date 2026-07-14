@@ -1,7 +1,9 @@
 import { Alert, Card, Collapse, Empty, Modal, Space, Tag, Typography } from 'antd'
 import { useBatch } from '../api/batches'
+import { ResponseComparison } from './ResponseComparison'
 import { StatusTag } from './StatusTag'
 import type { Sample } from '../types/api'
+import { hasLLMExtractionData } from '../utils/llmExtraction'
 
 interface Props {
   batchId: string | null
@@ -76,6 +78,10 @@ function SampleBody({ sample }: { sample: Sample }) {
   const prompts = sample.prompts_sent ?? []
   const responses = sample.responses ?? []
   const rounds = Math.max(prompts.length, responses.length, 1)
+  // Same priority as select_message_content (what /v1/chat/completions
+  // actually returns): show the LLM-reviewed response, not just the raw
+  // extraction, when LLM extraction is configured for this sample.
+  const llmEnabled = hasLLMExtractionData(sample.llm_responses, sample.llm_errors)
 
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -96,12 +102,12 @@ function SampleBody({ sample }: { sample: Sample }) {
           <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
             Response
           </div>
-          <Typography.Paragraph
-            style={{ whiteSpace: 'pre-wrap', margin: 0 }}
-            copyable={!!responses[i]}
-          >
-            {responses[i] || <Typography.Text type="secondary">(无响应)</Typography.Text>}
-          </Typography.Paragraph>
+          <ResponseComparison
+            ruleResponse={responses[i]}
+            llmResponse={sample.llm_responses?.[i]}
+            llmError={sample.llm_errors?.[i]}
+            llmEnabled={llmEnabled}
+          />
         </Card>
       ))}
     </Space>

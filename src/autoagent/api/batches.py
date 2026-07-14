@@ -37,6 +37,7 @@ from autoagent.models.api import (
     Sample,
     ScreenshotInfo,
 )
+from autoagent.openai_compat.chat_completions import select_effective_response
 from autoagent.storage.batches import (
     batch_profiles_and_devices,
     count_batches_by_status,
@@ -234,11 +235,14 @@ async def _single_sample_preview(batch_id: str) -> tuple[str | None, str | None]
     if prompt is None:
         # No usable prompt → don't bother surfacing the response either.
         return None, None
-    response_raw = (sample.responses or [None])[0]
-    if isinstance(response_raw, str):
-        response = _truncate(response_raw)  # may be ""
-    else:
-        response = ""  # treat absent / non-string as empty for anomaly purposes
+    # Same priority as select_message_content (what /v1/chat/completions
+    # actually returns): prefer the LLM-reviewed response when extraction
+    # ran and succeeded. Previewing responses[0] unconditionally used to
+    # show the raw extraction even when the real answer was the LLM one.
+    response_raw = select_effective_response(
+        sample.responses, sample.llm_responses, sample.llm_errors
+    )
+    response = _truncate(response_raw) if response_raw else ""
     return prompt, response
 
 

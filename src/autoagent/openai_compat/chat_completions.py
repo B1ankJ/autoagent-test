@@ -218,14 +218,30 @@ def build_sample_from_request(body: ChatCompletionsRequest, profile: Profile) ->
     )
 
 
-def select_message_content(result: SampleResult, profile: Profile) -> str:
-    llm_enabled = bool(getattr(profile, "llm_response_enabled", lambda: False)())
-    if llm_enabled and result.llm_responses and result.llm_errors:
-        first_error = result.llm_errors[0]
-        first_llm = result.llm_responses[0]
+def select_effective_response(
+    responses: list[str],
+    llm_responses: list[str],
+    llm_errors: list[str | None],
+) -> str:
+    """The response content this system actually stands behind for the first
+    prompt: the LLM-reviewed extraction when it ran and succeeded, otherwise
+    the raw extraction. Anything that previews/labels "the response" for a
+    sample (API replies, batch-list previews, empty-response detection)
+    should go through this so they agree with each other.
+    """
+    if llm_responses and llm_errors:
+        first_error = llm_errors[0]
+        first_llm = llm_responses[0]
         if first_error is None and first_llm:
             return first_llm
-    return result.responses[0] if result.responses else ""
+    return responses[0] if responses else ""
+
+
+def select_message_content(result: SampleResult, profile: Profile) -> str:
+    llm_enabled = bool(getattr(profile, "llm_response_enabled", lambda: False)())
+    if not llm_enabled:
+        return result.responses[0] if result.responses else ""
+    return select_effective_response(result.responses, result.llm_responses, result.llm_errors)
 
 
 def build_chat_completion_response(
