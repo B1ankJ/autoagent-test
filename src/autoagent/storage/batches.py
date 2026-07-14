@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, desc, func, or_, select
+from sqlalchemy import and_, delete, desc, func, or_, select
 
 from autoagent.models.db import Batch, Sample
 from autoagent.storage.database import get_sessionmaker
@@ -55,10 +55,33 @@ def _device_serial_match(serial: str):
     return func.json_extract(Sample.metadata_json, "$.device_serial") == serial
 
 
-def _is_empty_response_clause():
-    """SQL clause matching sample rows whose response is effectively empty.
+def _has_effective_llm_response_clause():
+    """True when llm_responses[0] would win under select_effective_response
+    (LLM extraction ran, produced non-empty text, and reported no error).
 
-    Covers the shapes observed in this DB:
+    json_extract on a NULL/'[]'/'[""]' column safely yields SQL NULL / ''
+    for a missing index 0, so this clause is False (not error) for samples
+    that never had LLM extraction configured at all.
+    """
+    llm_response_0 = func.json_extract(Sample.llm_responses_json, "$[0]")
+    llm_error_0 = func.json_extract(Sample.llm_errors_json, "$[0]")
+    return and_(
+        llm_error_0.is_(None),
+        llm_response_0.is_not(None),
+        llm_response_0 != "",
+    )
+
+
+def _is_empty_response_clause():
+    """SQL clause matching sample rows whose *effective* response is empty.
+
+    Mirrors select_effective_response (openai_compat/chat_completions.py):
+    a sample isn't "empty" just because the raw extraction came back blank
+    if LLM review recovered real text — that's what /v1/chat/completions
+    would actually have returned, so it shouldn't trip the empty-response
+    anomaly filter either.
+
+    Raw-empty shapes covered:
       NULL              → missing column
       "[]"              → wrote responses=[] (executor never appended)
       '[""]'            → wrote responses=[""] (e.g. copy_button_vlm gave up)
@@ -66,13 +89,14 @@ def _is_empty_response_clause():
     First-empty in multi-prompt covers OpenAI-compat single-prompt batches
     where most empty-response anomalies show up.
     """
-    return or_(
+    raw_empty = or_(
         Sample.responses_json.is_(None),
         Sample.responses_json == "[]",
         Sample.responses_json == '[""]',
         Sample.responses_json.like('["", %'),
         Sample.responses_json.like('["",%'),
     )
+    return and_(raw_empty, ~_has_effective_llm_response_clause())
 
 
 async def list_batches(
