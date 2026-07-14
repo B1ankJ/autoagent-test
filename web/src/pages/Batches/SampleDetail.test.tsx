@@ -94,6 +94,51 @@ describe('SampleDetail', () => {
     expect(downloadSampleLogs).toHaveBeenCalledWith('b1', 's1')
   })
 
+  it('shows an error toast when the log download fails', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Batch 1',
+        mode: 'gui_pc_web',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 2,
+        samples: [
+          {
+            id: 's1',
+            prompts: ['hello'],
+            mode: 'gui_pc_web',
+            target_profile: 'web_demo',
+            status: 'done',
+            responses: ['world'],
+            metadata: { action_replay_available: true },
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([])
+    downloadSampleLogs.mockRejectedValueOnce(new Error('Missing bearer token'))
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1/samples/s1' },
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /下载日志包/i })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /下载日志包/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Missing bearer token')).toBeInTheDocument()
+    })
+  })
+
   it('renders tap targets and metadata summaries for android samples', async () => {
     useBatchStream.mockReturnValue({
       data: {

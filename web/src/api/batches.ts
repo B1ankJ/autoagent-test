@@ -8,6 +8,7 @@ import {
   BatchSummary,
 } from '../types/api'
 import { client } from './client'
+import { parseContentDisposition, triggerDownload } from '../utils/download'
 export { useBatchStream } from '../hooks/useBatchStream'
 
 interface BatchQueryFilters {
@@ -279,10 +280,18 @@ export function statusIsTerminal(status: BatchStatus): boolean {
   return status === 'done' || status === 'failed' || status === 'cancelled'
 }
 
-export function downloadSampleLogs(batchId: string, sampleId: string) {
-  window.open(
-    `/api/v1/batches/${batchId}/samples/${encodeURIComponent(sampleId)}/logs.zip`,
-    '_blank',
-    'noopener,noreferrer',
+/**
+ * This route requires a bearer token, so it can't be a plain window.open —
+ * browser navigations can't carry an Authorization header. Fetch through
+ * the authenticated client as a blob and trigger the download client-side,
+ * same as DownloadButton does for the batch-level results zip.
+ */
+export async function downloadSampleLogs(batchId: string, sampleId: string): Promise<void> {
+  const response = await client.get(
+    `/batches/${batchId}/samples/${encodeURIComponent(sampleId)}/logs.zip`,
+    { responseType: 'blob' },
   )
+  const filename =
+    parseContentDisposition(response.headers['content-disposition']) ?? `${sampleId}.zip`
+  triggerDownload(response.data as Blob, filename)
 }

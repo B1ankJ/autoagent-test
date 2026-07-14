@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
-import { useCallback, useEffect, useMemo } from 'react'
+import { App, Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
@@ -65,6 +65,8 @@ function metadataSummary(metadata: Record<string, unknown> | undefined) {
 export function SampleDetail() {
   const { id, sid } = useParams()
   const navigate = useNavigate()
+  const { message } = App.useApp()
+  const [downloadingLogs, setDownloadingLogs] = useState(false)
   const { data } = useBatchStream(id)
   const decodedSid = decodeURIComponent(sid ?? '')
   const sample = data?.samples.find((item) => item.id === decodedSid)
@@ -188,7 +190,17 @@ export function SampleDetail() {
             {replayAvailable ? (
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() => downloadSampleLogs(data.batch_id, sample.id)}
+                loading={downloadingLogs}
+                onClick={async () => {
+                  setDownloadingLogs(true)
+                  try {
+                    await downloadSampleLogs(data.batch_id, sample.id)
+                  } catch (error) {
+                    message.error((error as Error).message)
+                  } finally {
+                    setDownloadingLogs(false)
+                  }
+                }}
                 title="zip 包含 actions.jsonl + 截图 + XML + executor.log 等全部产物"
               >
                 下载日志包
