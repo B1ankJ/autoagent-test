@@ -187,6 +187,14 @@ class DingTalkNotificationConfig(BaseModel):
     # Optional @-mentions on alert (mobile numbers / "all").
     at_mobiles: list[str] = Field(default_factory=list)
     at_all: bool = False
+    # Base URL of this AutoAgent deployment (e.g. https://autoagent.example.com),
+    # used to turn the "涉及 sample" references in alerts into clickable links
+    # to that sample's detail page (which has the screenshots). DingTalk custom
+    # -robot webhooks can't embed authenticated images directly — the client
+    # fetches image URLs itself with no way to carry a token — so we link out
+    # to the already-authenticated web UI instead. Empty = plain text refs,
+    # same as before.
+    app_base_url: str = ""
 
 
 class WhitelistEntry(BaseModel):

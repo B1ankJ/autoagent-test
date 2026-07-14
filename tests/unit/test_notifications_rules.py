@@ -57,6 +57,34 @@ async def test_streak_fires_then_resets(monkeypatch):
     assert len(sent) == 1
 
 
+async def test_empty_streak_alert_links_to_sample_when_app_base_url_set(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 1,
+        "app_base_url": "https://autoagent.example.com/",
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(_make_sample(serial="dev1", response=""), batch_id="b")
+    assert len(sent) == 1
+    assert "[`b` / `s1`](https://autoagent.example.com/batches/b/samples/s1)" in sent[0]["text"]
+
+
+async def test_empty_streak_alert_plain_text_when_no_app_base_url(monkeypatch):
+    sent: list[dict] = []
+    cfg = {"enabled": True, "webhook_url": "x", "empty_response_threshold": 1}
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(_make_sample(serial="dev1", response=""), batch_id="b")
+    assert len(sent) == 1
+    assert "](https://" not in sent[0]["text"]
+    assert "`b` / `s1`" in sent[0]["text"]
+
+
 async def test_non_empty_resets_streak(monkeypatch):
     sent: list[dict] = []
     cfg = {"enabled": True, "webhook_url": "x", "empty_response_threshold": 3}
@@ -349,6 +377,31 @@ async def test_same_response_alerts_on_vlm_failure(monkeypatch):
     # not just echo the raw error code.
     assert "调用 VLM 超时" in sent[0]["text"]
     assert "error=timeout" in sent[0]["text"]
+
+
+async def test_same_response_alert_links_to_samples_when_app_base_url_set(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 2,
+        "app_base_url": "https://autoagent.example.com",
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(2):
+        await rules.on_sample_result(_make_sample(serial="A", response="hi"), batch_id="b")
+    assert len(sent) == 1
+    assert "[`b` / `s1`](https://autoagent.example.com/batches/b/samples/s1)" in sent[0]["text"]
 
 
 async def test_same_response_finds_jpg_screenshots(monkeypatch, tmp_path):

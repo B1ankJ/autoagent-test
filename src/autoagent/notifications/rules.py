@@ -371,6 +371,21 @@ async def _maybe_auto_reinit(config: dict[str, Any], serial: str, profile_name: 
         return False
 
 
+def _sample_ref_md(app_base_url: str, batch_id: str, sample_id: str) -> str:
+    """Render a (batch_id, sample_id) ref for alert markdown.
+
+    Links to the sample's detail page (screenshots + response) when
+    app_base_url is configured; otherwise plain code text, same as before —
+    DingTalk custom-robot webhooks have no authenticated-image support, so
+    linking to the already-logged-in web UI is the only way to hand someone
+    the screenshot without leaking a token into the chat.
+    """
+    if app_base_url:
+        url = f"{app_base_url.rstrip('/')}/batches/{batch_id}/samples/{sample_id}"
+        return f"[`{batch_id}` / `{sample_id}`]({url})"
+    return f"`{batch_id}` / `{sample_id}`"
+
+
 async def _fire_same_response_alert(
     *,
     config: dict[str, Any],
@@ -385,7 +400,8 @@ async def _fire_same_response_alert(
     excerpt = response.replace("\n", " ")
     if len(excerpt) > 160:
         excerpt = excerpt[:160] + "…"
-    samples_md = "\n".join(f"  - `{b}` / `{s}`" for b, s in refs)
+    app_base_url = str(config.get("app_base_url") or "").strip()
+    samples_md = "\n".join(f"  - {_sample_ref_md(app_base_url, b, s)}" for b, s in refs)
     verdict = (
         "VLM 判断当前页面**不是正常聊天页**"
         if normal is False
@@ -439,12 +455,13 @@ async def _fire_empty_streak_alert(
     if result.prompts_sent:
         first = result.prompts_sent[0] if isinstance(result.prompts_sent[0], str) else ""
         prompt_excerpt = (first[:120] + ("…" if len(first) > 120 else "")).replace("\n", " ")
+    app_base_url = str(config.get("app_base_url") or "").strip()
+    sample_ref = _sample_ref_md(app_base_url, batch_id, result.id)
     text = (
         f"### ⚠️ 设备连续 {count} 次响应为空\n\n"
         f"- **设备**: `{serial}`\n"
         f"- **Profile**: `{result.target_profile}`\n"
-        f"- **最新 batch**: `{batch_id}`\n"
-        f"- **最新 sample**: `{result.id}`\n"
+        f"- **最新样本**: {sample_ref}\n"
         f"- **最新 prompt**: {prompt_excerpt or '_(空)_'}\n\n"
         "可能是设备卡死 / 自动化点到了奇怪的页面,需要人工介入排查。"
     )

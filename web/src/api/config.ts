@@ -58,6 +58,7 @@ export interface DingTalkConfig {
   same_response_auto_reinit: boolean
   at_mobiles: string[]
   at_all: boolean
+  app_base_url: string
 }
 
 export interface WhitelistEntry {

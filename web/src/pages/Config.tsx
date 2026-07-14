@@ -341,6 +341,13 @@ export function ConfigPage() {
             <Input.Password placeholder="SEC..." />
           </Form.Item>
           <Form.Item
+            name="app_base_url"
+            label="AutoAgent 访问地址(可选)"
+            extra="填了以后,告警消息里的 sample 引用会变成可点击链接,直接跳到该 sample 详情页(含截图)。钉钉自定义机器人不支持带鉴权的图片直传,所以走链接而不是内嵌图。留空则仍显示为纯文本。"
+          >
+            <Input placeholder="https://autoagent.example.com" />
+          </Form.Item>
+          <Form.Item
             name="empty_response_threshold"
             label="连续空响应阈值"
             extra="规则 1:同一设备连续多少次空响应触发通知"
