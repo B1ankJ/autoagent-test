@@ -7,8 +7,10 @@
 - **多种执行模式**：API 调用、Playwright Web GUI、Android uiautomator2 GUI、AI Agent PC/Android 自主操作
 - **批量测试**：JSONL/JSON/CSV 文件上传，并发调度，结果实时流式更新（SSE）
 - **Profile 系统**：YAML 配置文件定义目标应用，支持 Android Profile Builder 向导
-- **设备管理**：Android 设备池，ADB Keyboard 一键安装/切换
+- **设备管理**：Android 设备池、ADB Keyboard 一键安装/切换、设备画面实时直播与远程操作
 - **结果分析**：截图索引、动作日志、LLM 回复提取、JSONL 结果下载
+- **告警通知**：钉钉机器人告警（设备离线、疑似卡死/同响应异常）
+- **运维**：批次自动清理与归档、支持一键自更新（自托管场景可选开启）
 
 ## 快速开始
 
@@ -276,6 +278,28 @@ Android 模式需要连接物理设备或模拟器。`install.sh` 已自动安�
 4. 生成草稿，逐项 Review 候选
 5. 连通性验证后保存
 
+### 设备画面直播
+
+`Devices` 页面点击设备行的**查看画面**可打开实时画面弹窗：后端通过 `adb exec-out screenrecord` 推流 H264，前端用浏览器原生 WebCodecs 解码渲染（需 Chrome 94+），支持点击、滑动、输入文本、系统按键（返回/Home/最近任务）远程操作设备，用于调试 profile 或直接排查设备状态，无需 `scrcpy` 等外部工具。
+
+## 告警通知（钉钉）
+
+`Config → 通知` 页面可配置钉钉自定义机器人 webhook，开启后有两条独立规则：
+
+1. **设备离线告警**：设备从在线变为离线/丢失时报警，恢复在线时再报一次；计划内重启（如设备初始化流程触发的重启）不会误报。
+2. **同响应异常告警**：同一 (device, profile) 连续 N 次返回完全相同的响应时，调用全局 VLM 判断截图是否仍是正常的对话页面——不正常才报警（正常则加入白名单，避免固定文案反复误报）；可选在报警后自动对该设备重跑 profile 的初始化流程。
+
+支持 @手机号 / @所有人，以及把报警中的 sample 引用变成可点击的 Web UI 链接（需配置 `app_base_url`）。白名单可在同一页面查看和移除。
+
+## 批次维护
+
+`Config → 默认值` 页面可配置：
+
+- `log_retention_days`：后台任务每 24 小时清理超过该天数的截图/日志/Profile Builder 产物（0 = 关闭）
+- `archive_retention_days`：批次被清理前先打包为 `data/archive/<batch>.zip`（结果 + 日志 + DB 快照），0 = 不归档、直接删除
+
+等价的手动 CLI 见下方「日志清理」。
+
 ## Agent 模式
 
 Agent 模式使用视觉 AI 模型（需 OpenAI-compatible 视觉 API）自主操控界面：
@@ -312,12 +336,22 @@ OpenAPI 文档：`http://localhost:8000/docs`
 | POST | `/api/v1/batches` | 创建批次（JSON） |
 | POST | `/api/v1/batches/upload` | 创建批次（文件） |
 | GET | `/api/v1/batches/{id}` | 批次详情 |
+| GET | `/api/v1/batches/{id}/events` | 批次进度 SSE 流 |
 | GET | `/api/v1/batches/{id}/results` | 下载 JSONL 结果 |
 | POST | `/api/v1/batches/{id}/cancel` | 取消批次 |
+| POST | `/api/v1/batches/{id}/rerun` | 用默认配置重跑失败/全部样本 |
+| POST | `/api/v1/batches/{id}/replay` | 用原始提交配置逐字重放 |
 | GET | `/api/v1/profiles` | Profile 列表 |
 | GET/PUT/DELETE | `/api/v1/profiles/{name}` | Profile CRUD |
 | GET | `/api/v1/devices` | Android 设备列表 |
+| GET | `/api/v1/devices/{serial}/stream` | 设备画面直播（WebSocket） |
+| POST | `/api/v1/devices/{serial}/input` | 远程操作设备（点击/滑动/输入/按键） |
 | GET/PUT | `/api/v1/config/vlm` | VLM 配置 |
+| GET/PUT | `/api/v1/config/defaults` | 默认值 + 日志/归档保留策略 |
+| GET/PUT | `/api/v1/config/notifications` | 钉钉告警配置 |
+| GET | `/api/v1/config/notifications/whitelist` | 同响应白名单 |
+| POST | `/api/v1/system/update/check` \| `/apply` | 检查/执行自更新（需先开启 `self_update_enabled`） |
+| POST | `/v1/chat/completions` | OpenAI-compatible 单次测试（见上文） |
 
 ## 开发
 
@@ -348,19 +382,32 @@ python3.11 scripts/cleanup_runtime_artifacts.py --all --apply     # 全清
 
 ```
 src/autoagent/
-  api/          FastAPI 路由（auth、profiles、tests、batches、config、devices）
-  auth/         JWT + 密码哈希 + FastAPI deps
-  config/       Pydantic Settings（env 配置）
-  executors/    执行器：API、Web、Android、Agent PC/Android
-  profiles/     Profile schema（discriminated union）+ YAML 注册表
-  scheduler/    BatchScheduler（异步，设备池）
-  storage/      SQLAlchemy CRUD（SQLite + aiosqlite）
-  webhooks/     Webhook 回调（指数退避）
-  main.py       FastAPI app + lifespan
+  api/            FastAPI 路由（auth、profiles、tests、batches、config、devices、device_stream、
+                  media、system、openai_compat、profile_builder）
+  auth/           JWT + 密码哈希 + 长期 Bearer key（bearer.py）+ FastAPI deps
+  config/         Pydantic Settings（env 配置）
+  devices/        adb 封装、设备池（并发安全的设备占用/释放）、在线状态监控、设备初始化
+  events/         进程内异步事件总线（批次 SSE 进度）
+  executors/      执行器：API、Web、Android、Agent PC/Android，及配套的截图、OCR、回复提取、
+                  Profile Builder 生成、agent_core 运行时等支撑模块
+  loaders/        JSONL/JSON/CSV 批量文件加载
+  maintenance/    定时运行时清理 + 批次自动保留/归档
+  models/         Pydantic API schema + SQLAlchemy ORM
+  notifications/  钉钉 webhook 发送 + 告警规则（同响应异常、设备离线）+ 白名单
+  openai_compat/  `/v1/chat/completions` 的请求/响应模型与映射逻辑
+  profiles/       Profile schema（discriminated union）+ YAML 注册表
+  results/        每批次一个 JSONL 结果文件（线程安全追加写）
+  scheduler/      BatchScheduler（异步，设备池）
+  services/       内部接口与 OpenAI 兼容接口共用的业务逻辑
+  storage/        SQLAlchemy CRUD（SQLite + aiosqlite）
+  system/         自更新（git pull + uv sync + pnpm build + 平滑重启）
+  utils/          环境变量展开、HTTP 重试、日志配置
+  webhooks/       Webhook 回调（指数退避）
+  main.py         FastAPI app + lifespan
 tests/
-  unit/         单元测试
-  integration/  集成测试（httpx AsyncClient）
-web/            React + TypeScript + AntD 5（Vite）
+  unit/           单元测试
+  integration/    集成测试（httpx AsyncClient）
+web/              React + TypeScript + AntD 5（Vite）
 ```
 
 ## 许可

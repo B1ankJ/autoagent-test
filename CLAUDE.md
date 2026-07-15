@@ -18,6 +18,11 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Post-Plan 4 fixes (2026-04-27):** `WebExecutor` session persistence — browser now reused across samples within a batch (`new_session=false` skips re-navigation; `new_session=true` runs `new_session_action` or reloads in-place; error invalidates session for clean retry). `WebBrowserConfig` gains `channel` field (default `"chromium"`, use `"chrome"` for system Chrome with user_data_dir). Profile registry now skips invalid YAMLs with a warning instead of crashing `/api/v1/profiles`. Backend fast suite 308 passed.
 - **Plan 5 — Polish (packaging, backups, Docker, security hardening):** not started. Has pre-accumulated task backlog — see "Deferred work" below.
 - **Plan 6 — Agent Executor (agent_pc + agent_android):** complete in repo (2026-05-06). Added `agent_pc` and `agent_android` modes with shared `agent_core` loop, screenshot-based response extraction, executor registration, and Android device-pool scheduling support. Verification: fast backend suite `363 passed, 1 skipped, 18 deselected`; targeted new-mode suite `19 passed`. Source of truth: `docs/superpowers/plans/2026-05-06-agent-executor.md`.
+- **Agent runtime unification (2026-05-06, ongoing hardening):** `agent_core` was split into focused modules (`parser.py`, `result.py`, `runtime.py`, `handlers/`, `devices/`) derived from `apa_llm`/`Open-AutoGLM`, behind the same `AgentPcExecutor`/`AgentAndroidExecutor` boundary. Notable behavior: text-only conversation context is preserved across steps; `element`/`start`/`end` coordinates use a 0-1000 relative contract converted to pixels via `screen_width`/`screen_height`; PC `Type` uses clipboard-copy + paste shortcut instead of `pyautogui.typewrite()` for reliable non-ASCII input; a multimodal screenshot-based observer gates `finish(...)` after send-like actions and verifies `Type` actually landed in the input box before allowing `Press(enter)` to proceed (guards against duplicate/premature sends). Source of truth: `docs/superpowers/plans/2026-05-06-agent-runtime-unification.md`.
+- **Install script (2026-05-07):** `install.sh` (OS detection + system deps: Python 3.11, Node.js, adb, uv, pnpm via Homebrew/apt+deadsnakes/dnf) calls `scripts/setup.py` (Python-level: `uv sync`, `pnpm build`, `playwright install chromium`, interactive `.env` generation).
+- **OpenAI chat completions compat (2026-05-10):** `POST /v1/chat/completions` (non-streaming) lets OpenAI SDK clients drive the existing sync-test pipeline. `model` maps to `target_profile`; only the last `user` message is used; `stream=true` unsupported; AutoAgent extension fields (`new_session`, `timeout_sec`, `retry`, `dry_run`) go in `extra_body`. Shared execution logic lives in `services/sync_tests.py`, used by both `/api/v1/tests/sync` and `/v1/chat/completions`.
+- **Static API key auth (2026-05-10):** optional `STATIC_API_KEY` env var provides one long-lived Bearer key that works across `/api/v1/*` and `/v1/chat/completions` alongside JWT, via a shared bearer-resolution layer in `auth/bearer.py` (`hmac.compare_digest`; authenticates as `admin`).
+- **Device screen streaming (2026-05-15):** Devices page can open a modal with live H264-over-WebSocket screen streaming (`adb exec-out screenrecord`) plus tap/swipe/text/system-key interaction, via `api/device_stream.py` (backend) and `useDeviceStream` + `DeviceStreamModal` (frontend, WebCodecs `VideoDecoder`).
 
 ## Deferred work for Plan 5
 
@@ -32,23 +37,45 @@ Recorded in auto-memory (`project_plan5_security.md`). Summary:
 
 ```
 src/autoagent/
-  api/          FastAPI routers: auth, profiles, tests, batches, config, devices
-  auth/         JWT + password hashing + FastAPI deps
-  config/       Pydantic Settings (env-backed)
-  executors/    base Executor + API (OpenAI-compatible) executor
-  loaders/      JSONL/JSON/CSV batch file loaders
-  models/       Pydantic API schemas + SQLAlchemy ORM
-  profiles/     profile Pydantic discriminated union + YAML registry
-  results/      per-batch JSONL result writer (thread-safe)
-  scheduler/    async BatchScheduler with per-batch concurrency
-  storage/      async SQLAlchemy CRUD (batches, samples, users, kv config)
-  system/       self-update (git pull + uv sync + pnpm build + detached run.sh restart) + hourly fetch loop
-  webhooks/     async webhook sender with exponential backoff
-  main.py       FastAPI app + lifespan (DB init + admin bootstrap + CORS)
+  api/            FastAPI routers: auth, profiles, tests, batches, config, devices, device_stream,
+                  media, system, openai_compat, profile_builder, web_profile_builder
+  auth/           JWT + password hashing + static API key (bearer.py) + FastAPI deps
+  config/         Pydantic Settings (env-backed)
+  devices/        adb wrapper, device pool (concurrency-safe checkout for gui_android/agent_android),
+                  monitor (online/offline polling), initializer/init_jobs, expected_state (planned
+                  reboot suppression)
+  events/         in-process async event bus (per-batch SSE progress)
+  executors/      base Executor + api/web/android/agent_pc/agent_android executors, plus support
+                  modules: action_runner, ocr, scroll_stitcher, complete_detector, response
+                  extraction (ui-tree/OCR/LLM/copy-button-VLM), profile_builder_* generation,
+                  agent_core (agent_pc/agent_android's shared loop — see agent runtime unification
+                  below; entry point is `agent_loop.py::AgentLoop`, now a thin wrapper around
+                  `runtime.py::AgentRuntime` + `parser.py`/`result.py`; `handlers/{pc,android}.py`
+                  are the per-platform action handlers)
+  loaders/        JSONL/JSON/CSV batch file loaders
+  maintenance/    scheduled runtime cleanup (logs/profile-builder artifacts) + batch retention
+                  (prunes/archives terminal batches past a retention window)
+  models/         Pydantic API schemas + SQLAlchemy ORM
+  notifications/  DingTalk webhook sender + rules (e.g. same-response streak detection via VLM
+                  judge) + per-profile response whitelist + device state-change alerts
+  openai_compat/  request/response schemas + mapping logic for `/v1/chat/completions`
+  profiles/       profile Pydantic discriminated union + YAML registry
+  results/        per-batch JSONL result writer (thread-safe)
+  scheduler/      async BatchScheduler with per-batch concurrency
+  services/       shared business logic reused across internal + OpenAI-compat routes
+                  (sync_tests.py)
+  storage/        async SQLAlchemy CRUD (batches, samples, users, devices, kv config)
+  system/         self-update (git pull + uv sync + pnpm build + detached run.sh restart) + hourly
+                  fetch loop
+  utils/          env var expansion, HTTP retry helper, logging setup
+  webhooks/       async webhook sender with exponential backoff
+  main.py         FastAPI app + lifespan (DB init + admin bootstrap + CORS + maintenance scheduler)
 tests/
-  unit/         14 unit test files
-  integration/  7 integration test files (httpx AsyncClient against the app)
+  unit/           ~90 unit test files
+  integration/    ~25 integration test files (httpx AsyncClient against the app)
 docs/superpowers/{specs,plans}/   Design specs and implementation plans
+scripts/          setup.py (installer, called by install.sh), cleanup_runtime_artifacts.py (CLI
+                  retention tool), openai_compat_smoke.py
 ```
 
 ## Frontend (Plan 2)
@@ -100,10 +127,18 @@ docs/superpowers/{specs,plans}/   Design specs and implementation plans
 - **Screenshots:** Web executor screenshots are stored under `<logs_root>/<batch_id>/<sample_id>/NNN_<label>.png`. Milestone screenshots are always captured; intermediate per-action screenshots depend on `verbose_logs`.
 - **SSE progress:** `GET /api/v1/batches/{id}/events` is the live progress stream. Frontend `useBatchStream` reconciles updates via `seq`; WebSocket is not used.
 - **Self-update:** `src/autoagent/system/updater.py` pulls `origin/main`, runs `uv sync` only when `pyproject.toml`/`uv.lock` changed, `pnpm build`s, then spawns a detached `run.sh restart --no-build` (new session) — all build steps run while the old process still serves, so a broken pull/build aborts with zero downtime. Endpoints `POST /api/v1/system/update/{check,apply}` + `GET /status`; gated behind `DefaultsConfig.self_update_enabled` (off by default, admin-only) — it is RCE-by-design. `apply` returns 409 with `active_batches` when batches are running; UI re-calls with `force=true`. `/health` returns `commit` so the UI can poll for the restart to land. Hourly `git fetch` loop (`system/update_scheduler.py`) keeps `origin/main` fresh so `/status` needs no network; nav shows a dot on Config when behind.
+- **STATIC_API_KEY:** optional env var (unset by default). When set, `auth/bearer.py` accepts it as a Bearer token (constant-time compare) on every bearer-protected route — `/api/v1/*` and `/v1/chat/completions` — authenticating as `admin`, alongside normal JWT auth. Lets external scripts/SDKs skip the login step.
+- **OpenAI-compat endpoint:** `POST /v1/chat/completions` is a non-streaming shim over the existing sync-test pipeline (`services/sync_tests.py`). `model` → `target_profile`; only the last `user` message is read; `stream=true` is rejected; AutoAgent-specific fields (`new_session`, `timeout_sec`, `retry`, `dry_run`) are passed via the OpenAI SDK's `extra_body` (or top-level JSON keys with raw `curl`). Prefers `llm_responses` over static `responses` when a profile has LLM response extraction enabled.
+- **Installer:** `install.sh` (OS detection + system packages: Python 3.11, Node.js, adb, uv, pnpm via Homebrew/apt+deadsnakes/dnf) delegates all Python-level setup to `scripts/setup.py` (`uv sync`, `pnpm build`, `playwright install chromium`, interactive `.env` generation with generated secrets).
+- **Batch retention/archiving:** `maintenance/scheduler.py` runs a periodic (~24h) job reading `log_retention_days` from `DefaultsConfig` at each tick (no restart needed to change it). `maintenance/batch_retention.py` deletes terminal (done/failed/cancelled) batches — DB rows + results JSONL + logs dir — older than the retention window; if `archive_retention_days > 0`, each batch is zipped to `data/archive/<batch>.zip` before deletion so an over-aggressive window is recoverable. This is distinct from `scripts/cleanup_runtime_artifacts.py`, the manual CLI tool for the same class of cleanup.
+- **Device pool:** `devices/pool.py`'s `DevicePool` gives `gui_android`/`agent_android` scheduling a per-serial `asyncio.Lock` checkout (raises `DeviceBusy`/`DeviceDisabled`) so concurrent batches never double-drive the same physical device.
+- **Notifications:** `notifications/dingtalk.py` sends DingTalk custom-robot webhook alerts. Two triggers: device online→offline/missing transitions (and back), and an `empty_response_streak` rule — N consecutive same-response samples from one device fire an alert (VLM-judged via `vlm_judge.py` to rule out a legitimately static reply), suppressible per-profile via a persisted whitelist (`whitelist.py`).
+- **"Effective response" semantics:** `select_effective_response()` (`openai_compat/chat_completions.py`) is the single definition of "what response did this sample actually produce" — it prefers `llm_responses[0]` over raw `responses` when LLM review ran, produced non-empty text, and reported no error; otherwise falls back to raw. Any code that displays or filters on "the response" (batch list preview, `empty_response_only` filter in `storage/batches.py::_is_empty_response_clause`, `/v1/chat/completions`) must mirror this exact condition or it'll drift out of sync with what the API actually returns — this happened twice (2026-07-14 fixes) before both call sites were aligned with the SQL-level `_has_effective_llm_response_clause()`.
 
 ## Common commands
 
 ```bash
+bash install.sh                        # one-shot install: system deps + uv sync + pnpm build + playwright + .env
 python3.11 -m pytest -q                # run all tests
 python3.11 -m pytest -q -m "not playwright"   # skip real-browser tests
 python3.11 -m pytest -q -m "not playwright and not android and not slow"   # fast backend suite
@@ -126,6 +161,7 @@ cd web && pnpm lint                    # frontend lint
 Environment for running:
 - **Defaults** (dev): `ADMIN_USERNAME=admin`, `ADMIN_PASSWORD=admin123456`, `JWT_SECRET=dev-secret-key-32-chars-minimum-length`. These are built into `src/autoagent/config/settings.py` for convenience; override via `.env` or env vars in production.
 - **Optional**: `CORS_ORIGINS` (comma-separated). Default empty → `CORSMiddleware` not mounted (SPA ships same-origin). Set only for cross-origin dev setups, e.g. `CORS_ORIGINS=http://localhost:5173`.
+- **Optional**: `STATIC_API_KEY` — unset by default; when set, provides a long-lived Bearer key alongside JWT (see Conventions).
 
 ADB Keyboard APK is bundled at `src/autoagent/fixtures/ADBKeyboard.apk` (17 KB). The `/devices` page has one-click "Install ADB Keyboard" and toggle "Enable/Disable IME" buttons.
 
@@ -135,6 +171,7 @@ ADB Keyboard APK is bundled at `src/autoagent/fixtures/ADBKeyboard.apk` (17 KB).
 2. Consult `docs/superpowers/specs/2026-04-21-agent-ai-testing-tool-design.md` for architecture intent.
 3. Match existing code style — most modules are small and single-purpose; prefer adding a new module over growing an existing one past ~200 lines.
 4. Plan 5 work should start with the "secrets + auth hardening" task (see "Deferred work").
-5. If working on Plan 4 Android/Profile Builder, read `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md` before debugging or retesting.
+5. If working on Android/Profile Builder, read `docs/superpowers/plans/2026-04-24-android-profile-builder-handoff.md` before debugging or retesting.
 6. If working on LLM extraction behavior, also read `docs/superpowers/specs/2026-04-25-llm-response-extraction-design.md`.
-7. Plan 2 is complete and tagged `web-ui-v0.2.0`; the active implementation branch is Plan 4 until final Android verification and tagging complete.
+7. If working on the `agent_pc`/`agent_android` runtime, read `docs/superpowers/plans/2026-05-06-agent-runtime-unification.md` for the current coordinate contract and observer-guardrail behavior before changing `executors/agent_core/`.
+8. Plans 1-4 and 6 are complete and tagged; Plan 5 (packaging/security hardening) has not started. Everything since Plan 6 (agent runtime unification, install script, OpenAI compat, static API key, device streaming, and small batches/`copy_button_vlm` fixes) has landed directly on `main` without its own numbered plan — check `git log` for anything more recent than this file.
