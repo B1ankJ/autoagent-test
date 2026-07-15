@@ -1,9 +1,8 @@
 import { Alert, Card, Collapse, Empty, Modal, Space, Tag, Typography } from 'antd'
 import { useBatch } from '../api/batches'
-import { ResponseComparison } from './ResponseComparison'
 import { StatusTag } from './StatusTag'
 import type { Sample } from '../types/api'
-import { hasLLMExtractionData } from '../utils/llmExtraction'
+import { hasLLMExtractionData, selectEffectiveResponseText } from '../utils/llmExtraction'
 
 interface Props {
   batchId: string | null
@@ -80,7 +79,9 @@ function SampleBody({ sample }: { sample: Sample }) {
   const rounds = Math.max(prompts.length, responses.length, 1)
   // Same priority as select_message_content (what /v1/chat/completions
   // actually returns): show the LLM-reviewed response, not just the raw
-  // extraction, when LLM extraction is configured for this sample.
+  // extraction, when LLM extraction is configured for this sample — but as
+  // a single value, not a rule/LLM side-by-side comparison (that lives in
+  // the full SampleDetail page; this is the compact quick-look).
   const llmEnabled = hasLLMExtractionData(sample.llm_responses, sample.llm_errors)
 
   return (
@@ -88,28 +89,36 @@ function SampleBody({ sample }: { sample: Sample }) {
       {sample.error ? (
         <Alert type="error" showIcon message="Error" description={sample.error} />
       ) : null}
-      {Array.from({ length: rounds }, (_, i) => (
-        <Card key={i} size="small" title={`第 ${i + 1} 轮`}>
-          <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
-            Prompt
-          </div>
-          <Typography.Paragraph
-            style={{ whiteSpace: 'pre-wrap', margin: 0, marginBottom: 12 }}
-            copyable={!!prompts[i]}
-          >
-            {prompts[i] ?? <Typography.Text type="secondary">(空)</Typography.Text>}
-          </Typography.Paragraph>
-          <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
-            Response
-          </div>
-          <ResponseComparison
-            ruleResponse={responses[i]}
-            llmResponse={sample.llm_responses?.[i]}
-            llmError={sample.llm_errors?.[i]}
-            llmEnabled={llmEnabled}
-          />
-        </Card>
-      ))}
+      {Array.from({ length: rounds }, (_, i) => {
+        const response = selectEffectiveResponseText({
+          ruleResponse: responses[i],
+          llmResponse: sample.llm_responses?.[i],
+          llmError: sample.llm_errors?.[i],
+          llmEnabled,
+        })
+        return (
+          <Card key={i} size="small" title={`第 ${i + 1} 轮`}>
+            <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
+              Prompt
+            </div>
+            <Typography.Paragraph
+              style={{ whiteSpace: 'pre-wrap', margin: 0, marginBottom: 12 }}
+              copyable={!!prompts[i]}
+            >
+              {prompts[i] ?? <Typography.Text type="secondary">(空)</Typography.Text>}
+            </Typography.Paragraph>
+            <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
+              Response
+            </div>
+            <Typography.Paragraph
+              style={{ whiteSpace: 'pre-wrap', margin: 0 }}
+              copyable={!!response}
+            >
+              {response || <Typography.Text type="secondary">(无响应)</Typography.Text>}
+            </Typography.Paragraph>
+          </Card>
+        )
+      })}
     </Space>
   )
 }

@@ -1,23 +1,11 @@
 import { Alert, Card, Col, Row, Space, Tag, Typography } from 'antd'
+import { pickActuallyReturned } from '../utils/llmExtraction'
 
 interface ResponseComparisonProps {
   ruleResponse?: string
   llmResponse?: string | null
   llmError?: string | null
   llmEnabled: boolean
-}
-
-// Mirror of openai_compat.chat_completions.select_message_content:
-// LLM wins only when enabled, no error, AND the text is non-empty.
-function pickActuallyReturned({
-  llmEnabled,
-  llmResponse,
-  llmError,
-}: Omit<ResponseComparisonProps, 'ruleResponse'>): 'rule' | 'llm' {
-  if (llmEnabled && !llmError && llmResponse && llmResponse.trim()) {
-    return 'llm'
-  }
-  return 'rule'
 }
 
 function ReturnedTag() {
