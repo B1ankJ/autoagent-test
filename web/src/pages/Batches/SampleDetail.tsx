@@ -8,6 +8,7 @@ import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
+import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
@@ -67,7 +68,7 @@ export function SampleDetail() {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const [downloadingLogs, setDownloadingLogs] = useState(false)
-  const { data } = useBatchStream(id)
+  const { data, isError, error, refetch } = useBatchStream(id)
   const decodedSid = decodeURIComponent(sid ?? '')
   const sample = data?.samples.find((item) => item.id === decodedSid)
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
@@ -122,6 +123,20 @@ export function SampleDetail() {
       <span>/ Sample</span>
     </Space>
   )
+
+  if (isError) {
+    return (
+      <div>
+        <PageHeader eyebrow={breadcrumb} title="加载失败" />
+        <ErrorState
+          title="Sample 加载失败"
+          description="可能是网络问题或批次已被删除。"
+          detail={(error as Error)?.message}
+          onRetry={() => refetch()}
+        />
+      </div>
+    )
+  }
 
   if (!data) {
     return (
@@ -326,7 +341,22 @@ export function SampleDetail() {
       ) : null}
 
       {sample.metadata ? (
-        <Card size="small" title="Metadata">
+        <Card
+          size="small"
+          title="Metadata"
+          extra={
+            <Typography.Text
+              className="aa-mono"
+              style={{ fontSize: 12 }}
+              copyable={{
+                text: JSON.stringify(sample.metadata, null, 2),
+                tooltips: ['复制 JSON', '已复制'],
+              }}
+            >
+              复制 JSON
+            </Typography.Text>
+          }
+        >
           <Descriptions
             column={2}
             size="small"

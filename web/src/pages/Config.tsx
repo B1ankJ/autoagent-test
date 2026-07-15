@@ -152,6 +152,20 @@ export function ConfigPage() {
             label: 'VLM',
             children: (
       <Card title="VLM" size="small">
+        {vlm.isError ? (
+          <Alert
+            style={{ marginBottom: 12 }}
+            type="error"
+            showIcon
+            message="配置加载失败"
+            description={(vlm.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => vlm.refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
         <Form
           form={vlmForm}
           layout="vertical"
@@ -198,6 +212,20 @@ export function ConfigPage() {
             label: '运行默认',
             children: (
       <Card title="Global Defaults" size="small">
+        {defaults.isError ? (
+          <Alert
+            style={{ marginBottom: 12 }}
+            type="error"
+            showIcon
+            message="配置加载失败"
+            description={(defaults.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => defaults.refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
         <Form
           form={defaultsForm}
           layout="vertical"
@@ -305,6 +333,20 @@ export function ConfigPage() {
             label: '钉钉通知',
             children: (
       <Card title="钉钉通知" size="small">
+        {notifications.isError ? (
+          <Alert
+            style={{ marginBottom: 12 }}
+            type="error"
+            showIcon
+            message="配置加载失败"
+            description={(notifications.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => notifications.refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
         <Alert
           style={{ marginBottom: 12 }}
           type="info"
@@ -421,7 +463,19 @@ export function ConfigPage() {
           showIcon
           message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里。后续同样的响应不再触发判断/告警。"
         />
-        {whitelist.data && whitelist.data.length > 0 ? (
+        {whitelist.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="白名单加载失败"
+            description={(whitelist.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => whitelist.refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : whitelist.data && whitelist.data.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {whitelist.data.map((entry, idx) => (
               <div

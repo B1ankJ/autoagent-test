@@ -45,7 +45,10 @@ function renderLLMBody({
 
   if (llmResponse && llmResponse.trim()) {
     return (
-      <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
+      <Typography.Paragraph
+        style={{ whiteSpace: 'pre-wrap' }}
+        copyable={{ text: llmResponse, tooltips: ['复制', '已复制'] }}
+      >
         {llmResponse}
       </Typography.Paragraph>
     )
@@ -80,7 +83,10 @@ export function ResponseComparison({
             </Space>
           }
         >
-          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+          <Typography.Paragraph
+            style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}
+            copyable={ruleResponse ? { text: ruleResponse, tooltips: ['复制', '已复制'] } : false}
+          >
             {ruleResponse || '(主链路未产出文本)'}
           </Typography.Paragraph>
         </Card>

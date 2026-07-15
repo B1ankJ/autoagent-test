@@ -16,13 +16,14 @@ import { DeviceBindingModal } from '../../components/DeviceBindingModal'
 import { DeviceInitModal } from '../../components/DeviceInitModal'
 import { ModeTag } from '../../components/ModeTag'
 import { EmptyState } from '../../components/states/EmptyState'
+import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { ProfileSummary } from '../../types/api'
 
 export function ProfileList() {
   const navigate = useNavigate()
-  const { data, isLoading } = useProfiles()
+  const { data, isLoading, isError, error, refetch } = useProfiles()
   const removeProfile = useDeleteProfile()
   const { message } = App.useApp()
   // Which android profile's device-binding modal is open (name), + its
@@ -184,7 +185,14 @@ export function ProfileList() {
           </Space>
         }
       />
-      {isLoading ? (
+      {isError ? (
+        <ErrorState
+          title="Profile 列表加载失败"
+          description="可能是网络问题或后端暂时不可用。"
+          detail={(error as Error)?.message}
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
         <PageSkeleton table rows={3} />
       ) : (
         <Tabs

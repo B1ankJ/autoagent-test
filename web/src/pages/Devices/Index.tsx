@@ -20,6 +20,7 @@ import {
 import { DeviceStreamCard } from '../../components/DeviceStreamCard'
 import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { EmptyState } from '../../components/states/EmptyState'
+import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { Device } from '../../types/api'
 
@@ -93,7 +94,14 @@ export function DevicesPage() {
           </Space>
         }
       />
-      {rows.length === 0 && !devices.isLoading ? (
+      {devices.isError ? (
+        <ErrorState
+          title="设备列表加载失败"
+          description="可能是网络问题或后端暂时不可用。"
+          detail={(devices.error as Error)?.message}
+          onRetry={() => devices.refetch()}
+        />
+      ) : rows.length === 0 && !devices.isLoading ? (
         <EmptyState
           icon={<MobileOutlined />}
           title="没有可用设备"

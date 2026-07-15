@@ -1,6 +1,6 @@
-import { EyeInvisibleOutlined, PictureOutlined } from '@ant-design/icons'
+import { EyeInvisibleOutlined, PictureOutlined, WarningOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Image, Skeleton, Typography } from 'antd'
+import { Button, Image, Skeleton, Typography } from 'antd'
 import { listScreenshots, screenshotUrl } from '../api/screenshots'
 
 interface Props {
@@ -42,6 +42,27 @@ export function ScreenshotStrip({ batchId, sampleId }: Props) {
         {[0, 1, 2].map((i) => (
           <Skeleton.Image active key={i} style={{ width: THUMB_W, height: THUMB_H }} />
         ))}
+      </div>
+    )
+  }
+
+  if (screenshots.isError) {
+    return (
+      <div
+        style={{
+          padding: '20px 0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          color: 'var(--aa-amber)',
+          fontSize: 13,
+        }}
+      >
+        <WarningOutlined />
+        截图加载失败
+        <Button size="small" onClick={() => screenshots.refetch()}>
+          重试
+        </Button>
       </div>
     )
   }

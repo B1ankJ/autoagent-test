@@ -41,6 +41,7 @@ import {
 import { RunningThumbGrid } from '../../components/RunningThumbGrid'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
+import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { Sample } from '../../types/api'
@@ -60,7 +61,7 @@ function formatEta(ms: number): string {
 export function BatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { data, isLoading } = useBatchStream(id)
+  const { data, isLoading, isError, error, refetch } = useBatchStream(id)
   const cancel = useCancelBatch()
   const rerun = useRerunBatch()
   const replay = useReplayBatch()
@@ -97,9 +98,26 @@ export function BatchDetail() {
       if (!q) return true
       if (s.id.toLowerCase().includes(q)) return true
       if (s.error && s.error.toLowerCase().includes(q)) return true
+      if ((s.prompts_sent ?? s.prompts)?.some((p) => p.toLowerCase().includes(q))) return true
+      if (s.responses?.some((r) => r.toLowerCase().includes(q))) return true
+      if (s.llm_responses?.some((r) => r?.toLowerCase().includes(q))) return true
       return false
     })
   }, [allSamples, filter, search])
+
+  if (isError) {
+    return (
+      <div>
+        <PageHeader eyebrow="任务 / 批次" title="加载失败" />
+        <ErrorState
+          title="批次加载失败"
+          description="可能是网络问题或批次已被删除。"
+          detail={(error as Error)?.message}
+          onRetry={() => refetch()}
+        />
+      </div>
+    )
+  }
 
   if (isLoading || !data) {
     return (
@@ -386,7 +404,7 @@ export function BatchDetail() {
               ]}
             />
             <Input.Search
-              placeholder="搜索 sample id 或 error"
+              placeholder="搜索 sample id / error / prompt / response"
               allowClear
               value={search}
               onChange={(e) => setSearch(e.target.value)}
