@@ -102,4 +102,50 @@ describe('BatchDetail', () => {
 
     await waitFor(() => expect(replayMutateAsync).toHaveBeenCalledWith('b1'))
   })
+
+  it('keeps the dropdown caret usable even when there are no failed samples', async () => {
+    // Regression: a top-level `disabled` on Dropdown.Button used to grey out
+    // the caret too, making 重跑全部/完整重放 unreachable whenever a batch
+    // finished with zero failures (the common case).
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Test',
+        mode: 'api',
+        status: 'done',
+        total: 3,
+        done: 3,
+        failed: 0,
+        concurrency: 1,
+        samples: [],
+        seq: 4,
+      },
+      isLoading: false,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
+    const replayMutateAsync = vi.fn().mockResolvedValue({ batch_id: 'b2' })
+    useReplayBatch.mockReturnValue({ mutateAsync: replayMutateAsync, isPending: false })
+
+    const { container } = renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id" element={<BatchDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1' },
+    )
+    await waitFor(() => expect(screen.getByText('Test')).toBeInTheDocument())
+
+    const primaryButton = screen.getByRole('button', { name: /重跑失败/i })
+    expect(primaryButton).toBeDisabled()
+
+    const caret = container.querySelector<HTMLButtonElement>(
+      '.ant-dropdown-button .ant-btn-icon-only',
+    )
+    expect(caret).not.toBeNull()
+    expect(caret).not.toBeDisabled()
+
+    await userEvent.click(caret as HTMLButtonElement)
+    await userEvent.click(await screen.findByText('完整重放(与原批次配置完全一致)'))
+
+    await waitFor(() => expect(replayMutateAsync).toHaveBeenCalledWith('b1'))
+  })
 })

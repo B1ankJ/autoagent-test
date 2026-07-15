@@ -21,7 +21,8 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useMemo, useState } from 'react'
+import { cloneElement, useMemo, useState } from 'react'
+import type { ReactElement } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   statusIsTerminal,
@@ -265,7 +266,16 @@ export function BatchDetail() {
                 loading={rerun.isPending || replay.isPending}
                 icon={<RedoOutlined />}
                 onClick={() => onRerun('failed')}
-                disabled={data.failed === 0}
+                // Only the primary "重跑失败" action depends on there being
+                // failed samples — 重跑全部/完整重放 don't. A top-level
+                // `disabled` would grey out the caret too, making the menu
+                // unreachable whenever failed === 0 (the common case for a
+                // fully successful batch). buttonsRender scopes disabled to
+                // just the left button.
+                buttonsRender={([leftButton, rightButton]) => [
+                  cloneElement(leftButton as ReactElement, { disabled: data.failed === 0 }),
+                  rightButton,
+                ]}
                 menu={{
                   items: [
                     {
