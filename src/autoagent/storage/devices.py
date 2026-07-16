@@ -39,8 +39,14 @@ async def upsert_discovered_device(
         if row is None:
             row = Device(serial=serial)
             s.add(row)
-        row.model = model
-        row.android_version = android_version
+        row.model = model if model is not None else row.model
+        # android_version comes from a getprop probe that's skipped/fails on
+        # a busy or momentarily-offline device, and some callers (IME toggle
+        # routes) don't re-query it at all — None means "unknown this round",
+        # not "clear it", so a transient miss doesn't wipe out a known value.
+        row.android_version = (
+            android_version if android_version is not None else row.android_version
+        )
         row.adb_keyboard_installed = adb_keyboard_installed
         row.adb_keyboard_enabled = adb_keyboard_enabled
         row.online = online

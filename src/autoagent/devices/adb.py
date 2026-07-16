@@ -5,6 +5,7 @@ import re as _re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 _log = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _run_adb(
     return proc
 
 
-def _safe_meta_call(func, serial: str, *args) -> bool | None:
+def _safe_meta_call(func, serial: str, *args) -> Any | None:
     """Return the result of a metadata probe, or None if the device errors.
 
     One flaky wifi device shouldn't invalidate the enumeration of every
@@ -75,7 +76,7 @@ def list_devices() -> list[AdbDevice]:
                 serial=serial,
                 online=online,
                 model=kv.get("model"),
-                android_version=None,
+                android_version=(_safe_meta_call(get_android_version, serial) if online else None),
                 adb_keyboard_installed=(
                     _safe_meta_call(is_package_installed, serial, "com.android.adbkeyboard")
                     if online
@@ -155,6 +156,10 @@ def is_ime_enabled(serial: str, ime_id: str) -> bool:
     return ime_id in shell(serial, "ime", "list", "-s")
 
 
+def get_android_version(serial: str) -> str:
+    return shell(serial, "getprop", "ro.build.version.release").strip()
+
+
 def get_current_ime(serial: str) -> str | None:
     current = shell(serial, "settings", "get", "secure", "default_input_method").strip()
     return None if not current or current == "null" else current
@@ -203,7 +208,7 @@ def get_screen_resolution(serial: str, target_width: int = 0) -> tuple[int, int]
     return target_width - target_width % 2, scaled_h - scaled_h % 2
 
 
-_SHELL_SPECIAL = set('&|;<>()$`\\"\'')
+_SHELL_SPECIAL = set("&|;<>()$`\\\"'")
 
 
 def _escape_text_for_adb(text: str) -> str:
@@ -226,8 +231,15 @@ def run_input_command(serial: str, cmd: dict) -> None:
         _run_adb("-s", serial, "shell", "input", "tap", str(cmd["x"]), str(cmd["y"]))
     elif t == "swipe":
         _run_adb(
-            "-s", serial, "shell", "input", "swipe",
-            str(cmd["x1"]), str(cmd["y1"]), str(cmd["x2"]), str(cmd["y2"]),
+            "-s",
+            serial,
+            "shell",
+            "input",
+            "swipe",
+            str(cmd["x1"]),
+            str(cmd["y1"]),
+            str(cmd["x2"]),
+            str(cmd["y2"]),
             str(cmd.get("duration_ms", 300)),
         )
     elif t == "text":
