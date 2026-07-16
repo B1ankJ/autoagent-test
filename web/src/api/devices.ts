@@ -20,6 +20,37 @@ export function useRefreshDevices() {
   })
 }
 
+// Backend already had /connect and /disconnect (they flip Device.enabled,
+// which gates DevicePool scheduling for gui_android/agent_android) but no
+// frontend ever called them — enable/disable was unreachable from the UI.
+export function useConnectDevice() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) =>
+      (await client.post<Device>(`/devices/${encodeURIComponent(serial)}/connect`)).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}
+
+export function useDisconnectDevice() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (serial: string) =>
+      (await client.post<Device>(`/devices/${encodeURIComponent(serial)}/disconnect`)).data,
+    onSuccess: (row) => {
+      queryClient.setQueryData<Device[]>(['devices'], (prev = []) =>
+        prev.map((device) => (device.serial === row.serial ? row : device)),
+      )
+    },
+  })
+}
+
 export function useDeleteDevice() {
   const queryClient = useQueryClient()
 

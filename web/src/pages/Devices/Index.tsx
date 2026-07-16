@@ -2,6 +2,8 @@ import {
   AppstoreOutlined,
   DeleteOutlined,
   MobileOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'
@@ -9,9 +11,11 @@ import { App, Button, Col, Popconfirm, Row, Segmented, Space, Table, Tag, Typogr
 import { useState } from 'react'
 
 import {
+  useConnectDevice,
   useDeleteDevice,
   useDevices,
   useDisableIme,
+  useDisconnectDevice,
   useEnableIme,
   useInstallAdbKeyboard,
   useRefreshDevices,
@@ -33,12 +37,17 @@ export function DevicesPage() {
   const installAdbKeyboard = useInstallAdbKeyboard()
   const enableIme = useEnableIme()
   const disableIme = useDisableIme()
+  const connectDevice = useConnectDevice()
+  const disconnectDevice = useDisconnectDevice()
   const updateLabel = useUpdateDeviceLabel()
   const deleteDevice = useDeleteDevice()
   const { message } = App.useApp()
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
+  const [selectedSerials, setSelectedSerials] = useState<string[]>([])
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
-    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(VIEW_STORAGE_KEY) : null
+    const stored =
+      typeof window !== 'undefined' ? window.localStorage.getItem(VIEW_STORAGE_KEY) : null
     return stored === 'cards' ? 'cards' : 'table'
   })
   const setViewMode = (next: ViewMode) => {
@@ -57,6 +66,41 @@ export function DevicesPage() {
       message.success(trimmed ? '别名已更新' : '别名已清空')
     } catch (e) {
       message.error((e as Error).message)
+    }
+  }
+
+  const onToggleEnabled = async (row: Device) => {
+    try {
+      if (row.enabled) {
+        await disconnectDevice.mutateAsync(row.serial)
+        message.success('已禁用')
+      } else {
+        await connectDevice.mutateAsync(row.serial)
+        message.success('已启用')
+      }
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
+  // Bulk ops over the checkbox selection — same pattern as Batches List:
+  // run the existing single-device endpoints in parallel, report how many
+  // succeeded.
+  const runBulk = async (
+    verb: '启用' | '禁用' | '删除',
+    fn: (serial: string) => Promise<unknown>,
+  ) => {
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(selectedSerials.map((serial) => fn(serial)))
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      message[failed ? 'warning' : 'success'](
+        `已${verb} ${ok} 台设备${failed ? `,${failed} 台失败` : ''}`,
+      )
+      setSelectedSerials([])
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -126,152 +170,201 @@ export function DevicesPage() {
           ))}
         </Row>
       ) : (
-        <Table<Device>
-          rowKey="serial"
-          size="small"
-          loading={devices.isLoading}
-          dataSource={rows}
-          pagination={false}
-          columns={[
-            {
-              title: 'Serial',
-              dataIndex: 'serial',
-              render: (value: string) => <span className="aa-mono">{value}</span>,
-            },
-            {
-              title: '别名',
-              render: (_, row) => (
-                <Typography.Text
-                  type={row.label ? undefined : 'secondary'}
-                  editable={{
-                    text: row.label ?? '',
-                    tooltip: '点击编辑别名',
-                    onChange: (next) => {
-                      if ((next ?? '') === (row.label ?? '')) return
-                      onLabelChange(row.serial, next ?? '')
-                    },
-                  }}
-                >
-                  {row.label ?? '点击设置'}
-                </Typography.Text>
-              ),
-            },
-            {
-              title: '型号',
-              dataIndex: 'model',
-              render: (value?: string) =>
-                value ? <span className="aa-mono aa-muted">{value}</span> : '-',
-            },
-            {
-              title: 'Android',
-              dataIndex: 'android_version',
-              width: 88,
-            },
-            {
-              title: '状态',
-              width: 170,
-              render: (_, row) => (
-                <Space size={4}>
-                  <Tag color={row.online ? 'green' : 'default'}>
-                    {row.online ? 'online' : 'offline'}
-                  </Tag>
-                  <Tag color={row.enabled ? 'blue' : 'red'}>
-                    {row.enabled ? 'enabled' : 'disabled'}
-                  </Tag>
-                </Space>
-              ),
-            },
-            {
-              title: 'ADB Keyboard',
-              width: 220,
-              render: (_, row) => (
-                <Space size={4} wrap>
-                  <Tag color={row.adb_keyboard_installed ? 'green' : 'default'}>
-                    {row.adb_keyboard_installed === null
-                      ? 'install unknown'
-                      : row.adb_keyboard_installed
-                        ? 'installed'
-                        : 'not installed'}
-                  </Tag>
-                  <Tag color={row.adb_keyboard_enabled ? 'blue' : 'default'}>
-                    {row.adb_keyboard_enabled === null
-                      ? 'ime unknown'
-                      : row.adb_keyboard_enabled
-                        ? 'ime enabled'
-                        : 'ime disabled'}
-                  </Tag>
-                </Space>
-              ),
-            },
-            {
-              title: '操作',
-              render: (_, row) => (
-                <Space size={4} wrap>
-                  <Button
-                    size="small"
-                    disabled={!row.online}
-                    onClick={() => setStreamSerial(row.serial)}
-                  >
-                    查看画面
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!row.online || row.adb_keyboard_installed === true}
-                    loading={installAdbKeyboard.isPending}
-                    onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
-                  >
-                    Install ADB Keyboard
-                  </Button>
-                  {row.adb_keyboard_installed &&
-                    (row.adb_keyboard_enabled ? (
-                      <Button
-                        size="small"
-                        loading={disableIme.isPending}
-                        onClick={() => disableIme.mutateAsync(row.serial)}
-                      >
-                        Disable IME
-                      </Button>
-                    ) : (
-                      <Button
-                        size="small"
-                        type="primary"
-                        loading={enableIme.isPending}
-                        onClick={() => enableIme.mutateAsync(row.serial)}
-                      >
-                        Enable IME
-                      </Button>
-                    ))}
-                  <Popconfirm
-                    title="删除该设备记录"
-                    description={
-                      row.online
-                        ? '设备当前在线,删除后下次刷新会重新出现。确定删除?'
-                        : '从列表移除这条离线设备记录。'
-                    }
-                    okText="删除"
-                    okButtonProps={{ danger: true }}
-                    cancelText="取消"
-                    onConfirm={async () => {
-                      try {
-                        await deleteDevice.mutateAsync(row.serial)
-                        message.success('已删除')
-                      } catch (e) {
-                        message.error((e as Error).message)
-                      }
+        <>
+          {selectedSerials.length > 0 ? (
+            <Space style={{ marginBottom: 12 }}>
+              <Typography.Text type="secondary">已选 {selectedSerials.length} 台</Typography.Text>
+              <Button
+                size="small"
+                icon={<PlayCircleOutlined />}
+                loading={bulkBusy}
+                onClick={() => runBulk('启用', (serial) => connectDevice.mutateAsync(serial))}
+              >
+                批量启用
+              </Button>
+              <Button
+                size="small"
+                icon={<PauseCircleOutlined />}
+                loading={bulkBusy}
+                onClick={() => runBulk('禁用', (serial) => disconnectDevice.mutateAsync(serial))}
+              >
+                批量禁用
+              </Button>
+              <Popconfirm
+                title="批量删除设备记录"
+                description="在线设备下次刷新会重新出现;离线设备记录会彻底移除。确定删除?"
+                okText="删除"
+                okButtonProps={{ danger: true }}
+                cancelText="取消"
+                onConfirm={() => runBulk('删除', (serial) => deleteDevice.mutateAsync(serial))}
+              >
+                <Button size="small" danger icon={<DeleteOutlined />} loading={bulkBusy}>
+                  批量删除
+                </Button>
+              </Popconfirm>
+              <a style={{ fontSize: 12 }} onClick={() => setSelectedSerials([])}>
+                清除选择
+              </a>
+            </Space>
+          ) : null}
+          <Table<Device>
+            rowKey="serial"
+            size="small"
+            loading={devices.isLoading}
+            dataSource={rows}
+            pagination={false}
+            rowSelection={{
+              selectedRowKeys: selectedSerials,
+              onChange: (keys) => setSelectedSerials(keys as string[]),
+              preserveSelectedRowKeys: true,
+            }}
+            columns={[
+              {
+                title: 'Serial',
+                dataIndex: 'serial',
+                render: (value: string) => <span className="aa-mono">{value}</span>,
+              },
+              {
+                title: '别名',
+                render: (_, row) => (
+                  <Typography.Text
+                    type={row.label ? undefined : 'secondary'}
+                    editable={{
+                      text: row.label ?? '',
+                      tooltip: '点击编辑别名',
+                      onChange: (next) => {
+                        if ((next ?? '') === (row.label ?? '')) return
+                        onLabelChange(row.serial, next ?? '')
+                      },
                     }}
                   >
+                    {row.label ?? '点击设置'}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: '型号',
+                dataIndex: 'model',
+                render: (value?: string) =>
+                  value ? <span className="aa-mono aa-muted">{value}</span> : '-',
+              },
+              {
+                title: 'Android',
+                dataIndex: 'android_version',
+                width: 88,
+              },
+              {
+                title: '状态',
+                width: 170,
+                render: (_, row) => (
+                  <Space size={4}>
+                    <Tag color={row.online ? 'green' : 'default'}>
+                      {row.online ? 'online' : 'offline'}
+                    </Tag>
+                    <Tag color={row.enabled ? 'blue' : 'red'}>
+                      {row.enabled ? 'enabled' : 'disabled'}
+                    </Tag>
+                  </Space>
+                ),
+              },
+              {
+                title: 'ADB Keyboard',
+                width: 220,
+                render: (_, row) => (
+                  <Space size={4} wrap>
+                    <Tag color={row.adb_keyboard_installed ? 'green' : 'default'}>
+                      {row.adb_keyboard_installed === null
+                        ? 'install unknown'
+                        : row.adb_keyboard_installed
+                          ? 'installed'
+                          : 'not installed'}
+                    </Tag>
+                    <Tag color={row.adb_keyboard_enabled ? 'blue' : 'default'}>
+                      {row.adb_keyboard_enabled === null
+                        ? 'ime unknown'
+                        : row.adb_keyboard_enabled
+                          ? 'ime enabled'
+                          : 'ime disabled'}
+                    </Tag>
+                  </Space>
+                ),
+              },
+              {
+                title: '操作',
+                render: (_, row) => (
+                  <Space size={4} wrap>
                     <Button
                       size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      title="删除设备记录"
-                    />
-                  </Popconfirm>
-                </Space>
-              ),
-            },
-          ]}
-        />
+                      disabled={!row.online}
+                      onClick={() => setStreamSerial(row.serial)}
+                    >
+                      查看画面
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={!row.online || row.adb_keyboard_installed === true}
+                      loading={installAdbKeyboard.isPending}
+                      onClick={() => installAdbKeyboard.mutateAsync(row.serial)}
+                    >
+                      Install ADB Keyboard
+                    </Button>
+                    <Button
+                      size="small"
+                      icon={row.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                      loading={connectDevice.isPending || disconnectDevice.isPending}
+                      onClick={() => onToggleEnabled(row)}
+                      title={
+                        row.enabled ? '禁用后该设备不再参与批次调度' : '启用后该设备可被批次调度'
+                      }
+                    >
+                      {row.enabled ? '禁用' : '启用'}
+                    </Button>
+                    {row.adb_keyboard_installed &&
+                      (row.adb_keyboard_enabled ? (
+                        <Button
+                          size="small"
+                          loading={disableIme.isPending}
+                          onClick={() => disableIme.mutateAsync(row.serial)}
+                        >
+                          Disable IME
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="primary"
+                          loading={enableIme.isPending}
+                          onClick={() => enableIme.mutateAsync(row.serial)}
+                        >
+                          Enable IME
+                        </Button>
+                      ))}
+                    <Popconfirm
+                      title="删除该设备记录"
+                      description={
+                        row.online
+                          ? '设备当前在线,删除后下次刷新会重新出现。确定删除?'
+                          : '从列表移除这条离线设备记录。'
+                      }
+                      okText="删除"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                      onConfirm={async () => {
+                        try {
+                          await deleteDevice.mutateAsync(row.serial)
+                          message.success('已删除')
+                        } catch (e) {
+                          message.error((e as Error).message)
+                        }
+                      }}
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />} title="删除设备记录" />
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </>
       )}
     </div>
   )
