@@ -69,11 +69,23 @@ async def init_db() -> None:
                 await conn.execute(
                     text("ALTER TABLE batches ADD COLUMN samples_request_json TEXT")
                 )
-            # Index on batches.created_at so list/count/stats ORDER BY
-            # doesn't full-scan the table. create_all() adds it for fresh
-            # DBs; this covers upgrades of existing dev/prod databases.
+            # Indexes so list/count/stats/retention queries don't full-scan
+            # as batches/samples accumulate — create_all() adds these for
+            # fresh DBs; this covers upgrades of existing dev/prod databases.
             await conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_batches_created_at ON batches (created_at)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_batches_status ON batches (status)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_samples_status ON samples (status)")
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_samples_target_profile "
+                    "ON samples (target_profile)"
+                )
             )
             # Backfill: prompts_sent_json used to be written with ensure_ascii
             # (default), so non-ASCII prompts were stored as \uXXXX escapes and

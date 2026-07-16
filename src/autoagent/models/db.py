@@ -18,8 +18,10 @@ class Batch(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     mode = Column(String, nullable=False)
+    # Indexed: count_batches_by_status GROUP BYs it, and list/stats queries
+    # filter on it (e.g. the retention-prune "terminal batches" scan).
     status = Column(
-        String, nullable=False, default="queued"
+        String, nullable=False, default="queued", index=True
     )  # queued|running|done|failed|cancelled
     concurrency = Column(Integer, nullable=False, default=1)
     total = Column(Integer, nullable=False, default=0)
@@ -45,8 +47,11 @@ class Sample(Base):
     __tablename__ = "samples"
     batch_id = Column(String, primary_key=True)
     id = Column(String, primary_key=True)
+    # Indexed: the empty_response_only / status filters join+filter Sample
+    # across the whole table (not scoped to one batch_id) when applied
+    # batch-wide, e.g. from the dashboard stats query.
     status = Column(
-        String, nullable=False, default="queued"
+        String, nullable=False, default="queued", index=True
     )  # queued|running|done|failed|timeout|extraction_failed|cancelled
     prompts_sent_json = Column(Text, nullable=True)
     responses_json = Column(Text, nullable=True)
@@ -55,7 +60,9 @@ class Sample(Base):
     duration_ms = Column(Integer, nullable=True)
     attempt_count = Column(Integer, nullable=False, default=0)
     mode = Column(String, nullable=False)
-    target_profile = Column(String, nullable=False)
+    # Indexed: list_batches/count_batches_by_status filter on it whenever
+    # target_profile is supplied.
+    target_profile = Column(String, nullable=False, index=True)
     metadata_json = Column(Text, nullable=True)
     error = Column(Text, nullable=True)
     logs_dir = Column(String, nullable=True)
