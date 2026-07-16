@@ -215,3 +215,13 @@ async def test_list_batches(client, httpx_mock: HTTPXMock):
     r = await client.get("/api/v1/batches", headers=h)
     assert r.status_code == 200
     assert len(r.json()) >= 1
+
+
+async def test_list_batches_rejects_limit_above_cap(client):
+    h = await _login(client)
+    r = await client.get("/api/v1/batches", params={"limit": 201}, headers=h)
+    assert r.status_code == 422
+    r = await client.get("/api/v1/batches", params={"limit": 200}, headers=h)
+    assert r.status_code == 200
+    r = await client.get("/api/v1/batches", params={"offset": -1}, headers=h)
+    assert r.status_code == 422

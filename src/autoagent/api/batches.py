@@ -15,6 +15,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
 )
 from fastapi.responses import FileResponse
@@ -248,8 +249,11 @@ async def _single_sample_preview(batch_id: str) -> tuple[str | None, str | None]
 
 @router.get("", response_model=list[BatchSummary])
 async def list_all(
-    limit: int = 50,
-    offset: int = 0,
+    # 200 matches the UI's own largest page-size option (List.tsx
+    # pageSizeOptions) — capped so a crafted/huge limit can't force a
+    # multi-thousand-row scan + per-row preview/profile aggregation.
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     q: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
