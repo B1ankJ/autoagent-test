@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import jwt as pyjwt
 import pytest
+from pydantic import SecretStr
 
 from autoagent.auth import bearer as mod
 
@@ -9,7 +11,9 @@ def test_resolve_bearer_subject_accepts_static_api_key(monkeypatch):
     monkeypatch.setattr(
         mod,
         "get_settings",
-        lambda: type("S", (), {"static_api_key": "permanent-key", "admin_username": "admin"})(),
+        lambda: type(
+            "S", (), {"static_api_key": SecretStr("permanent-key"), "admin_username": "admin"}
+        )(),
     )
 
     subject = mod.resolve_bearer_subject("permanent-key")
@@ -21,7 +25,9 @@ def test_resolve_bearer_subject_falls_back_to_jwt(monkeypatch):
     monkeypatch.setattr(
         mod,
         "get_settings",
-        lambda: type("S", (), {"static_api_key": "permanent-key", "admin_username": "admin"})(),
+        lambda: type(
+            "S", (), {"static_api_key": SecretStr("permanent-key"), "admin_username": "admin"}
+        )(),
     )
     monkeypatch.setattr(
         mod,
@@ -52,11 +58,13 @@ def test_resolve_bearer_subject_rejects_invalid_token(monkeypatch):
     monkeypatch.setattr(
         mod,
         "get_settings",
-        lambda: type("S", (), {"static_api_key": "permanent-key", "admin_username": "admin"})(),
+        lambda: type(
+            "S", (), {"static_api_key": SecretStr("permanent-key"), "admin_username": "admin"}
+        )(),
     )
 
     def _raise(_token: str):
-        raise RuntimeError("bad jwt")
+        raise pyjwt.InvalidTokenError("bad jwt")
 
     monkeypatch.setattr(mod, "decode_token", _raise)
 
@@ -64,3 +72,21 @@ def test_resolve_bearer_subject_rejects_invalid_token(monkeypatch):
         mod.resolve_bearer_subject("wrong-token")
 
     assert exc.value.reason == "invalid"
+
+
+def test_resolve_bearer_subject_does_not_swallow_unexpected_errors(monkeypatch):
+    # Only jwt.PyJWTError should be converted to BearerAuthError — a bug
+    # inside decode_token shouldn't be silently reported as "bad token".
+    monkeypatch.setattr(
+        mod,
+        "get_settings",
+        lambda: type("S", (), {"static_api_key": None, "admin_username": "admin"})(),
+    )
+
+    def _raise(_token: str):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(mod, "decode_token", _raise)
+
+    with pytest.raises(RuntimeError):
+        mod.resolve_bearer_subject("wrong-token")

@@ -40,7 +40,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     existing = await get_user(settings.admin_username)
     if existing is None:
-        await upsert_user(settings.admin_username, hash_password(settings.admin_password))
+        await upsert_user(
+            settings.admin_username, hash_password(settings.admin_password.get_secret_value())
+        )
         log.info("bootstrapped admin user %s", settings.admin_username)
     else:
         log.info("admin user %s already exists", settings.admin_username)

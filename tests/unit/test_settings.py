@@ -9,7 +9,7 @@ def test_settings_loads_from_env(monkeypatch):
     get_settings.cache_clear()
     s = get_settings()
     assert s.admin_username == "root"
-    assert s.admin_password == "pw"
+    assert s.admin_password.get_secret_value() == "pw"
     assert s.default_api_timeout_sec == 90
 
 
@@ -19,4 +19,4 @@ def test_missing_jwt_secret_uses_dev_default(monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "b")
     get_settings.cache_clear()
     s = get_settings()
-    assert s.jwt_secret == "dev-secret-key-32-chars-minimum-length"
+    assert s.jwt_secret.get_secret_value() == "dev-secret-key-32-chars-minimum-length"

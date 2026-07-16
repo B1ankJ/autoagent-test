@@ -34,3 +34,25 @@ async def test_login_bad_password(client):
 async def test_login_unknown_user(client):
     r = await client.post("/api/v1/auth/login", json={"username": "nobody", "password": "x"})
     assert r.status_code == 401
+
+
+async def test_login_runs_password_check_even_for_unknown_user(client, monkeypatch):
+    # Timing side-channel guard: an unknown username must not short-circuit
+    # past the bcrypt check — otherwise an attacker can enumerate valid
+    # usernames by how much slower a known-user response is than an
+    # unknown-user one.
+    from autoagent.api import auth as auth_module
+
+    calls: list[str] = []
+    original = auth_module.verify_password
+
+    def spy(plaintext, hashed):
+        calls.append(hashed)
+        return original(plaintext, hashed)
+
+    monkeypatch.setattr(auth_module, "verify_password", spy)
+
+    r = await client.post("/api/v1/auth/login", json={"username": "nobody", "password": "x"})
+
+    assert r.status_code == 401
+    assert calls == [auth_module._DUMMY_HASH]

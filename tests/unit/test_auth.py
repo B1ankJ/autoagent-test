@@ -34,6 +34,8 @@ def test_jwt_round_trip():
     payload = decode_token(token)
     assert payload["sub"] == "alice"
     assert "exp" in payload
+    assert payload["aud"] == "autoagent-api"
+    assert payload["iss"] == "autoagent"
 
 
 def test_jwt_expired_rejected(monkeypatch):
@@ -44,3 +46,42 @@ def test_jwt_expired_rejected(monkeypatch):
     token = create_access_token("alice")
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_token(token)
+
+
+def test_jwt_wrong_audience_rejected():
+    import autoagent.auth.jwt as jwt_mod
+
+    # A token minted for a different service (or without our aud/iss claims,
+    # e.g. one issued before this hardening) must not verify — scopes our
+    # tokens to this API even if jwt_secret were reused elsewhere.
+    foreign = jwt.encode(
+        {"sub": "alice", "aud": "someone-elses-api", "iss": "autoagent"},
+        jwt_mod._secret(),
+        algorithm=jwt_mod.ALG,
+    )
+    with pytest.raises(jwt.InvalidAudienceError):
+        decode_token(foreign)
+
+
+def test_jwt_missing_issuer_rejected():
+    import autoagent.auth.jwt as jwt_mod
+
+    no_issuer = jwt.encode(
+        {"sub": "alice", "aud": "autoagent-api"},
+        jwt_mod._secret(),
+        algorithm=jwt_mod.ALG,
+    )
+    with pytest.raises(jwt.MissingRequiredClaimError):
+        decode_token(no_issuer)
+
+
+def test_jwt_tolerates_small_clock_skew(monkeypatch):
+    import autoagent.auth.jwt as jwt_mod
+
+    # Token "expired" 10s ago — inside LEEWAY_SEC (30s), so a verifying host
+    # whose clock is slightly behind the issuing host should still accept it
+    # instead of hard-failing on a technically-expired-but-fresh-enough token.
+    monkeypatch.setattr(jwt_mod, "_expiry_hours", lambda: -10 / 3600)
+    token = create_access_token("alice")
+    payload = decode_token(token)
+    assert payload["sub"] == "alice"
