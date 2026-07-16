@@ -1,12 +1,12 @@
 import {
   Alert,
+  App,
   Button,
   Card,
   Checkbox,
   Col,
   Form,
   Input,
-  message,
   Radio,
   Row,
   Select,
@@ -55,6 +55,7 @@ const REQUIRED_FIELDS: PickField[] = ['input', 'send', 'response']
 
 export default function WebBuilder() {
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [pickingField, setPickingField] = useState<PickField | null>(null)
   const [sendType, setSendType] = useState<'keyboard' | 'click'>('keyboard')
