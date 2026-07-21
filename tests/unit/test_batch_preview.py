@@ -27,58 +27,52 @@ async def _make_batch_with_sample(batch_id: str, result: SampleResult) -> None:
 
 async def test_preview_prefers_llm_response_when_it_succeeded():
     await init_db()
-    await _make_batch_with_sample(
-        "b_llm_ok",
-        SampleResult(
-            id="s1",
-            status="done",
-            prompts_sent=["hi"],
-            responses=["raw extraction"],
-            llm_responses=["llm-reviewed answer"],
-            llm_errors=[None],
-            mode="gui_android",
-            target_profile="p",
-        ),
+    result = SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["raw extraction"],
+        llm_responses=["llm-reviewed answer"],
+        llm_errors=[None],
+        mode="gui_android",
+        target_profile="p",
     )
-    prompt, response = await _single_sample_preview("b_llm_ok")
+    await _make_batch_with_sample("b_llm_ok", result)
+    prompt, response = _single_sample_preview(result)
     assert prompt == "hi"
     assert response == "llm-reviewed answer"
 
 
 async def test_preview_falls_back_to_raw_when_llm_failed():
     await init_db()
-    await _make_batch_with_sample(
-        "b_llm_failed",
-        SampleResult(
-            id="s1",
-            status="done",
-            prompts_sent=["hi"],
-            responses=["raw extraction"],
-            llm_responses=[""],
-            llm_errors=["auth"],
-            mode="gui_android",
-            target_profile="p",
-        ),
+    result = SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["raw extraction"],
+        llm_responses=[""],
+        llm_errors=["auth"],
+        mode="gui_android",
+        target_profile="p",
     )
-    prompt, response = await _single_sample_preview("b_llm_failed")
+    await _make_batch_with_sample("b_llm_failed", result)
+    prompt, response = _single_sample_preview(result)
     assert prompt == "hi"
     assert response == "raw extraction"
 
 
 async def test_preview_falls_back_to_raw_when_llm_extraction_never_ran():
     await init_db()
-    await _make_batch_with_sample(
-        "b_no_llm",
-        SampleResult(
-            id="s1",
-            status="done",
-            prompts_sent=["hi"],
-            responses=["raw extraction"],
-            mode="api",
-            target_profile="p",
-        ),
+    result = SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=["raw extraction"],
+        mode="api",
+        target_profile="p",
     )
-    prompt, response = await _single_sample_preview("b_no_llm")
+    await _make_batch_with_sample("b_no_llm", result)
+    prompt, response = _single_sample_preview(result)
     assert prompt == "hi"
     assert response == "raw extraction"
 
@@ -87,17 +81,21 @@ async def test_preview_empty_string_still_flags_true_anomaly():
     # Both raw and LLM extraction produced nothing — this really is the
     # "responded with empty" anomaly the frontend flags, not a preview bug.
     await init_db()
-    await _make_batch_with_sample(
-        "b_truly_empty",
-        SampleResult(
-            id="s1",
-            status="done",
-            prompts_sent=["hi"],
-            responses=[""],
-            mode="api",
-            target_profile="p",
-        ),
+    result = SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=[""],
+        mode="api",
+        target_profile="p",
     )
-    prompt, response = await _single_sample_preview("b_truly_empty")
+    await _make_batch_with_sample("b_truly_empty", result)
+    prompt, response = _single_sample_preview(result)
     assert prompt == "hi"
     assert response == ""
+
+
+async def test_preview_none_sample_returns_none():
+    prompt, response = _single_sample_preview(None)
+    assert prompt is None
+    assert response is None

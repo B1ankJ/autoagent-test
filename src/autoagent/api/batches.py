@@ -36,6 +36,7 @@ from autoagent.models.api import (
     BatchSummary,
     Mode,
     Sample,
+    SampleResult,
     ScreenshotInfo,
 )
 from autoagent.openai_compat.chat_completions import select_effective_response
@@ -47,7 +48,7 @@ from autoagent.storage.batches import (
     list_batches,
     update_batch_status,
 )
-from autoagent.storage.samples import list_samples_for_batch
+from autoagent.storage.samples import list_samples_for_batch, list_samples_for_batches
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
 # Accept both .png (legacy batches) and .jpg (current, JPEG-compressed).
@@ -219,18 +220,16 @@ def _truncate(text: str) -> str:
     return clean
 
 
-async def _single_sample_preview(batch_id: str) -> tuple[str | None, str | None]:
-    """Return (prompt, response) previews for a single-sample batch.
+def _single_sample_preview(sample: SampleResult | None) -> tuple[str | None, str | None]:
+    """Return (prompt, response) previews for a single-sample batch's sample.
 
     Each element is:
       - None  → not applicable (no sample, or prompt absent)
       - str   → truncated text (empty string means "ran but produced nothing"
                 — the frontend uses that to flag an anomaly)
     """
-    samples = await list_samples_for_batch(batch_id)
-    if not samples:
+    if sample is None:
         return None, None
-    sample = samples[0]
     prompt_raw = (sample.prompts_sent or [None])[0]
     prompt = _truncate(prompt_raw) if isinstance(prompt_raw, str) and prompt_raw.strip() else None
     if prompt is None:
@@ -271,12 +270,17 @@ async def list_all(
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
     )
-    # One aggregate query for the whole page's profiles + devices.
+    # One aggregate query for the whole page's profiles + devices, and one
+    # more for single-sample batches' previews — avoids N+1 per-batch
+    # queries when a page is full of ad-hoc single-sample (api mode) runs.
     pd_map = await batch_profiles_and_devices([r.id for r in rows])
+    single_ids = [r.id for r in rows if r.total == 1]
+    samples_map = await list_samples_for_batches(single_ids)
     summaries: list[BatchSummary] = []
     for r in rows:
         if r.total == 1:
-            preview, response = await _single_sample_preview(r.id)
+            sample = next(iter(samples_map.get(r.id, [])), None)
+            preview, response = _single_sample_preview(sample)
         else:
             preview, response = None, None
         profiles, devices = pd_map.get(r.id, ([], []))

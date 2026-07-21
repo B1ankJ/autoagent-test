@@ -67,3 +67,19 @@ async def list_samples_for_batch(batch_id: str) -> list[SampleResult]:
     async with sm() as s:
         r = await s.execute(select(SampleRow).where(SampleRow.batch_id == batch_id))
         return [_row_to_result(row) for row in r.scalars().all()]
+
+
+async def list_samples_for_batches(batch_ids: list[str]) -> dict[str, list[SampleResult]]:
+    """Samples for many batches in a single query, grouped by batch_id.
+
+    Batches with no samples are absent from the map.
+    """
+    if not batch_ids:
+        return {}
+    sm = get_sessionmaker()
+    out: dict[str, list[SampleResult]] = {}
+    async with sm() as s:
+        r = await s.execute(select(SampleRow).where(SampleRow.batch_id.in_(batch_ids)))
+        for row in r.scalars().all():
+            out.setdefault(row.batch_id, []).append(_row_to_result(row))
+    return out
