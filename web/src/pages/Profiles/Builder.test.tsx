@@ -527,7 +527,11 @@ describe('Builder', () => {
     expect(screen.getByText('Connectivity Test Result')).toBeInTheDocument()
     expect(screen.getByText('pong')).toBeInTheDocument()
     expect(screen.getByText('llm pong')).toBeInTheDocument()
-  })
+  }, 20000)
+  // ^ this test drives a long sequential flow (session → 2 captures →
+  // draft → review → save → connectivity test), each a real userEvent
+  // interaction. It comfortably clears the default 5s timeout locally but
+  // not on GitHub Actions' slower shared runners (~3x slower here).
 
   it('loads manual editing evidence screenshots from review items', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
