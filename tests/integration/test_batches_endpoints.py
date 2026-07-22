@@ -184,6 +184,18 @@ async def test_file_upload_batch(client, httpx_mock: HTTPXMock, tmp_path):
     assert final["done"] == 1
 
 
+async def test_file_upload_rejects_oversized_file(client, monkeypatch):
+    import autoagent.api.batches as batches_mod
+
+    monkeypatch.setattr(batches_mod, "_MAX_UPLOAD_BYTES", 10)
+    h = await _login(client)
+    jsonl = '{"id":"t1","prompts":["a"],"mode":"api","target_profile":"p_api"}\n'
+    files = {"file": ("b.jsonl", jsonl, "application/x-ndjson")}
+    data = {"name": "upl-big", "mode": "api", "concurrency": "1"}
+    r = await client.post("/api/v1/batches/upload", files=files, data=data, headers=h)
+    assert r.status_code == 413
+
+
 async def test_mode_mismatch_rejected(client):
     h = await _login(client)
     body = {

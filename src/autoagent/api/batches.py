@@ -151,6 +151,9 @@ async def create_batch_json(body: BatchCreateJSON) -> BatchCreatedResponse:
     return BatchCreatedResponse(batch_id=batch_id)
 
 
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # batch prompt files never legitimately get near this
+
+
 @router.post("/upload", response_model=BatchCreatedResponse, status_code=201)
 async def create_batch_file(
     name: str = Form(...),
@@ -159,6 +162,14 @@ async def create_batch_file(
     target_profile_default: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> BatchCreatedResponse:
+    # file.size reflects the full upload (Starlette's multipart parser has
+    # already buffered it by the time the handler runs) — reject oversized
+    # uploads before we make it worse with our own full read()+decode().
+    if file.size is not None and file.size > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file too large: {file.size} bytes (max {_MAX_UPLOAD_BYTES})",
+        )
     try:
         text = (await file.read()).decode("utf-8")
         samples = _parse_file(file.filename or "batch.jsonl", text)
