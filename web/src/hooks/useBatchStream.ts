@@ -31,7 +31,11 @@ export function useBatchStream(id: string | undefined) {
   })
 
   useEffect(() => {
-    if (!id || !query.data) return
+    // Gate on isSuccess, not data: every SSE event calls setQueryData,
+    // which produces a new `data` reference. Depending on `data` here would
+    // re-run this effect (abort + reconnect) on every single event —
+    // isSuccess flips false→true once on initial load and then stays put.
+    if (!id || !query.isSuccess) return
 
     const token = localStorage.getItem('autoagent_token') ?? ''
     const abort = new AbortController()
@@ -77,7 +81,7 @@ export function useBatchStream(id: string | undefined) {
 
     run().catch(() => {})
     return () => abort.abort()
-  }, [id, query.data, queryClient])
+  }, [id, query.isSuccess, queryClient])
 
   return query
 }

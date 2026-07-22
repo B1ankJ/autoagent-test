@@ -87,6 +87,24 @@ describe('useBatchStream', () => {
     expect(result.current.data?.done).not.toBe(99)
   })
 
+  it('keeps a single SSE connection open across multiple events', async () => {
+    // Regression test: the effect used to depend on `query.data`, which
+    // every event mutates via setQueryData — reopening /events on each
+    // event instead of reusing one connection.
+    readerFrames = [
+      'data: {"seq":1,"kind":"batch_progress","payload":{"done":1,"failed":0,"total":3},"ts":"t"}\n\n',
+      'data: {"seq":2,"kind":"batch_progress","payload":{"done":2,"failed":0,"total":3},"ts":"t"}\n\n',
+      'data: {"seq":3,"kind":"batch_done","payload":{"status":"done"},"ts":"t"}\n\n',
+    ]
+    const { result } = renderHook(() => useBatchStream('b1'), {
+      wrapper: ({ children }) => withProvider(children),
+    })
+    await waitFor(() => expect(result.current.data?.status).toBe('done'))
+
+    const eventsCalls = fetchCalls.filter((url) => url.endsWith('/events'))
+    expect(eventsCalls).toHaveLength(1)
+  })
+
   it('applies sample_update device fields', () => {
     const next = applyEvent(
       {
