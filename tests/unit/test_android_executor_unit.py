@@ -18,6 +18,17 @@ from autoagent.profiles.schemas import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_ensure_screen_awake(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ensure_screen_awake shells out to a real `adb` binary. It fails soft
+    # (empty stdout, no exception) when adb exists but the device doesn't —
+    # which is why this only ever broke in CI, not on a dev machine with
+    # adb on PATH — but raises FileNotFoundError when adb isn't installed
+    # at all, which every other executor dependency in these tests already
+    # mocks around.
+    monkeypatch.setattr("autoagent.executors.android_executor.ensure_screen_awake", lambda _s: None)
+
+
 @pytest.mark.asyncio
 async def test_execute_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     device = MagicMock()
