@@ -1,9 +1,20 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from autoagent.auth import login_throttle
 from autoagent.auth.passwords import hash_password
 from autoagent.storage.database import init_db
 from autoagent.storage.users import upsert_user
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_throttle():
+    # Throttle state is a process-global in-memory dict — isolate tests
+    # from each other (and from any other test file's failed-login calls)
+    # regardless of execution order.
+    login_throttle.reset()
+    yield
+    login_throttle.reset()
 
 
 @pytest.fixture
@@ -56,3 +67,31 @@ async def test_login_runs_password_check_even_for_unknown_user(client, monkeypat
 
     assert r.status_code == 401
     assert calls == [auth_module._DUMMY_HASH]
+
+
+async def test_login_locks_out_after_repeated_failures(client):
+    for _ in range(login_throttle.MAX_ATTEMPTS):
+        r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
+        assert r.status_code == 401
+
+    # Locked out now — even the correct password is rejected until it clears.
+    r = await client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+    )
+    assert r.status_code == 429
+
+
+async def test_login_success_clears_prior_failures(client):
+    for _ in range(login_throttle.MAX_ATTEMPTS - 1):
+        r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
+        assert r.status_code == 401
+
+    r = await client.post(
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin_pw_1234"}
+    )
+    assert r.status_code == 200
+
+    # Failure count reset by the success above, so this single new failure
+    # alone must not trip the lockout.
+    r = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
+    assert r.status_code == 401
