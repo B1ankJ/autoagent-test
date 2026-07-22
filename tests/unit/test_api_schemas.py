@@ -4,8 +4,8 @@ from pydantic import ValidationError
 from autoagent.models.api import (
     BatchCreateJSON,
     BatchSummary,
-    ProfileBuilderNewSessionConfigRequest,
     ProfileBuilderDraftResponse,
+    ProfileBuilderNewSessionConfigRequest,
     ProfileBuilderNewSessionStep,
     ProfileBuilderSessionView,
     ProfileBuilderTapPoint,

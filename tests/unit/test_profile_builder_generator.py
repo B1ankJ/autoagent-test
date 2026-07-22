@@ -2,8 +2,8 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from autoagent.executors.profile_builder_generator import (
-    apply_review_decisions,
     _has_llm_config,
+    apply_review_decisions,
     maybe_generate_llm_draft,
     merge_llm_draft,
     resolve_smart_draft,

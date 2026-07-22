@@ -55,6 +55,31 @@ extend-safe-fixes = []
 [tool.ruff.lint.extend-per-file-ignores]
 "src/autoagent/api/*.py" = ["B008"]
 "src/autoagent/auth/deps.py" = ["B008"]
+# Pre-existing >100-col lines that predate `ruff check` actually being run
+# repo-wide in CI (it was only ever spot-checked against touched files).
+# ruff format doesn't autofix E501, and reflowing these — several are long
+# XML/HTML test fixture literals — is the same deferred mass-reformat task
+# CI already doesn't gate on for `ruff format --check`. New code in these
+# files should still stay under 100 cols; this isn't a green light to add
+# more.
+"src/autoagent/api/batches.py" = ["E501"]
+"src/autoagent/api/profile_builder.py" = ["E501"]
+"src/autoagent/api/web_profile_builder.py" = ["E501"]
+"src/autoagent/executors/profile_builder_generator.py" = ["E501"]
+"src/autoagent/executors/profile_builder_new_session.py" = ["E501"]
+"tests/integration/test_profile_builder_endpoints.py" = ["E501"]
+# F811/F401: this file imports `client` plus two autouse fixtures from
+# test_profile_builder_endpoints.py to reuse them (standard cross-file
+# pytest fixture sharing) — pyflakes can't see that pytest's fixture
+# discovery needs these names bound in this module even though nothing
+# calls them by name directly (client is injected per test function,
+# matching F811; the autouse ones fire for every test in this module
+# purely by being importable here, matching F401).
+"tests/integration/test_profile_builder_new_session_endpoints.py" = ["E501", "F811", "F401"]
+"tests/unit/test_android_executor_unit.py" = ["E501"]
+"tests/unit/test_profile_builder_candidates.py" = ["E501"]
+"tests/unit/test_response_extractor_ui_tree.py" = ["E501"]
+"tests/unit/test_web_executor_unit.py" = ["E501"]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -464,7 +464,7 @@ async def test_capture_new_session_step_recapture_archives_previous_artifacts(
         xml_path = session_dir / "new_session_step_0.xml"
         screenshot_path = session_dir / "new_session_step_0.png"
         xml_path.write_text(f"<hierarchy round='{capture_round['value']}'/>", encoding="utf-8")
-        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode("utf-8"))
+        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode())
         return CapturedState(
             step=step,
             package="com.aliyun.tongyi",
@@ -539,7 +539,7 @@ async def test_capture_new_session_step_recapture_archives_same_second_without_c
         xml_path = session_dir / "new_session_step_0.xml"
         screenshot_path = session_dir / "new_session_step_0.png"
         xml_path.write_text(f"<hierarchy round='{capture_round['value']}'/>", encoding="utf-8")
-        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode("utf-8"))
+        screenshot_path.write_bytes(f"png-{capture_round['value']}".encode())
         return CapturedState(
             step=step,
             package="com.aliyun.tongyi",
