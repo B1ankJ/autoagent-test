@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '../../test/test-utils'
 import Builder from './Builder'
@@ -108,17 +108,6 @@ vi.mock('../../api/config', () => ({
 }))
 
 describe('Builder', () => {
-  beforeAll(() => {
-    // This file's heavier flows (session → captures → draft → review →
-    // save → connectivity test, each a real userEvent interaction) run
-    // roughly 3x slower on GitHub Actions' shared runners than locally.
-    // Several individual tests are marginal against vitest's default
-    // 5000ms timeout there despite passing comfortably on a dev machine —
-    // raise it file-wide rather than bumping whichever one test happens
-    // to tip over on a given run.
-    vi.setConfig({ testTimeout: 20000 })
-  })
-
   afterEach(() => {
     vi.clearAllMocks()
     fetchArtifactBlobUrlMock.mockImplementation(async (_sessionId: string, name: string) => `blob:${name}`)

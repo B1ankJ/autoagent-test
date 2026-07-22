@@ -44,5 +44,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Default (5000ms) is too tight for Builder.test.tsx's heaviest flows
+    // on GitHub Actions' shared runners (~3x slower than local) — a
+    // vi.setConfig({ testTimeout }) call in that file's beforeAll did not
+    // reliably apply (still hit the 5000ms default in CI), so set it here
+    // instead, where it's read once at startup with no ordering ambiguity.
+    testTimeout: 20000,
   },
 })
