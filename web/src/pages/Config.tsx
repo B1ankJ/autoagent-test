@@ -16,10 +16,12 @@ import { useEffect, useState } from 'react'
 import {
   DingTalkConfig,
   LLMCheckResult,
+  useBackupList,
   useDefaults,
   useNotifications,
   usePreviewLogsCleanup,
   useRemoveWhitelist,
+  useRunBackup,
   useRunLogsCleanup,
   useSaveDefaults,
   useSaveNotifications,
@@ -69,6 +71,8 @@ export function ConfigPage() {
   const removeWhitelist = useRemoveWhitelist()
   const previewLogsCleanup = usePreviewLogsCleanup()
   const runLogsCleanup = useRunLogsCleanup()
+  const backupList = useBackupList()
+  const runBackup = useRunBackup()
   const [vlmForm] = Form.useForm<VLMConfig>()
   const [defaultsForm] = Form.useForm<GlobalDefaults>()
   const [notifyForm] = Form.useForm<DingTalkConfig>()
@@ -268,6 +272,20 @@ export function ConfigPage() {
             <InputNumber min={0} max={365} />
           </Form.Item>
           <Form.Item
+            name="backup_retention_days"
+            label="备份保留天数"
+            extra="0 = 关闭自动备份。> 0:定期(见下方间隔)把 SQLite 数据库(在线备份,WAL 安全)+ profiles/*.yaml 打包到 data/backups/<时间戳>.zip,备份包本身保留该天数。不含 results/logs——它们已有独立的保留/归档策略。"
+          >
+            <InputNumber min={0} max={365} />
+          </Form.Item>
+          <Form.Item
+            name="backup_interval_hours"
+            label="备份间隔(小时)"
+            extra="自动备份任务的运行间隔,仅在备份保留天数 > 0 时生效。"
+          >
+            <InputNumber min={1} max={168} />
+          </Form.Item>
+          <Form.Item
             name="self_update_enabled"
             label="启用自更新"
             valuePropName="checked"
@@ -323,7 +341,52 @@ export function ConfigPage() {
                 立即清理
               </Button>
             </Popconfirm>
+            <Button
+              onClick={async () => {
+                try {
+                  const r = await runBackup.mutateAsync()
+                  message.success(
+                    r.path
+                      ? `已备份到 ${r.path.split('/').pop()}(${humanBytes(r.bytes_written)}），清理过期备份 ${r.pruned} 个`
+                      : '未找到数据库文件,跳过备份',
+                  )
+                } catch (e) {
+                  message.error((e as Error).message)
+                }
+              }}
+              loading={runBackup.isPending}
+            >
+              立即备份
+            </Button>
           </Space>
+          {backupList.data && backupList.data.length > 0 ? (
+            <div style={{ marginTop: 12 }}>
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 12, display: 'block', marginBottom: 6 }}
+              >
+                已有备份({backupList.data.length})
+              </Typography.Text>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+                {backupList.data.map((b) => (
+                  <div
+                    key={b.name}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      padding: '4px 8px',
+                      border: '1px solid var(--aa-border, #eee)',
+                      borderRadius: 4,
+                    }}
+                  >
+                    <span className="aa-mono">{b.name}</span>
+                    <span className="aa-muted">{humanBytes(b.bytes)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </Form>
       </Card>
             ),

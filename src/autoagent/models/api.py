@@ -160,6 +160,17 @@ class DefaultsConfig(BaseModel):
     # origin/main and restart the service in place. This is RCE-by-design
     # (whoever controls the remote controls the box), so it stays opt-in.
     self_update_enabled: bool = False
+    # 0 disables. Positive = a background task periodically zips the SQLite
+    # DB (via sqlite's online backup API, safe under WAL) + data/profiles
+    # into data/backups/<timestamp>.zip, keeping backups for this many
+    # days. Deliberately narrow scope: results JSONL/logs/archived batches
+    # already have their own retention+archive story (log_retention_days /
+    # archive_retention_days above) — this covers just the small, critical,
+    # hard-to-regenerate core (queryable DB state + hand-authored profile
+    # YAML).
+    backup_retention_days: int = 14
+    # How often the backup job runs, independent of backup_retention_days.
+    backup_interval_hours: int = 24
 
 
 class DingTalkNotificationConfig(BaseModel):

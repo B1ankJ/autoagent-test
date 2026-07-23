@@ -23,7 +23,7 @@ from autoagent.api.tests import router as tests_router
 from autoagent.api.web_profile_builder import router as web_profile_builder_router
 from autoagent.auth.passwords import hash_password
 from autoagent.config.settings import get_settings
-from autoagent.maintenance.scheduler import run_retention_loop
+from autoagent.maintenance.scheduler import run_backup_loop, run_retention_loop
 from autoagent.storage.batches import recover_orphaned_batches
 from autoagent.storage.database import init_db
 from autoagent.storage.users import get_user, upsert_user
@@ -54,8 +54,9 @@ async def lifespan(app: FastAPI):
         log.info("recovered %d orphaned batch(es) → cancelled", recovered)
     monitor_task = asyncio.create_task(get_device_monitor().run())
     retention_task = asyncio.create_task(run_retention_loop())
+    backup_task = asyncio.create_task(run_backup_loop())
     update_task = asyncio.create_task(run_update_fetch_loop())
-    background_tasks = (monitor_task, retention_task, update_task)
+    background_tasks = (monitor_task, retention_task, backup_task, update_task)
     try:
         yield
     finally:

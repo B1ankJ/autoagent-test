@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from autoagent.config.settings import get_settings
+from autoagent.maintenance.backup import run_backup
 from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import DefaultsConfig
@@ -19,6 +20,7 @@ _log = logging.getLogger(__name__)
 
 _STARTUP_DELAY_SEC = 600.0  # 10 min
 _INTERVAL_SEC = 24 * 3600.0
+_BACKUP_STARTUP_DELAY_SEC = 300.0  # 5 min — sooner, and independent of the retention loop
 
 
 async def _current_days() -> tuple[int, int]:
@@ -78,5 +80,48 @@ async def run_retention_loop() -> None:
             _log.exception("log retention tick failed")
         try:
             await asyncio.sleep(_INTERVAL_SEC)
+        except asyncio.CancelledError:
+            return
+
+
+async def _current_backup_config() -> tuple[int, int]:
+    v = await get_config("defaults")
+    cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
+    return cfg.backup_retention_days, cfg.backup_interval_hours
+
+
+async def _backup_tick_once() -> None:
+    retention_days, _interval_hours = await _current_backup_config()
+    if retention_days <= 0:
+        return
+    settings = get_settings()
+    report = await run_backup(data_root=settings.data_root, retention_days=retention_days)
+    _log.info(
+        "backup tick: wrote=%s bytes=%d pruned=%d",
+        report.path,
+        report.bytes_written,
+        report.pruned,
+    )
+
+
+async def run_backup_loop() -> None:
+    """Long-running task: initial delay, then tick every backup_interval_hours.
+
+    Reads backup_retention_days/backup_interval_hours from DefaultsConfig on
+    each tick, same as the retention loop — no restart needed to change
+    either.
+    """
+    try:
+        await asyncio.sleep(_BACKUP_STARTUP_DELAY_SEC)
+    except asyncio.CancelledError:
+        return
+    while True:
+        try:
+            await _backup_tick_once()
+        except Exception:  # noqa: BLE001
+            _log.exception("backup tick failed")
+        _, interval_hours = await _current_backup_config()
+        try:
+            await asyncio.sleep(max(interval_hours, 1) * 3600.0)
         except asyncio.CancelledError:
             return

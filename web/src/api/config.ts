@@ -140,6 +140,33 @@ export function useRunLogsCleanup() {
   })
 }
 
+export interface BackupInfo {
+  name: string
+  bytes: number
+  created_at: string
+}
+
+export interface BackupRunResult {
+  path: string | null
+  bytes_written: number
+  pruned: number
+}
+
+export function useBackupList() {
+  return useQuery({
+    queryKey: ['config', 'backup', 'list'],
+    queryFn: async () => (await client.get<BackupInfo[]>('/config/backup/list')).data,
+  })
+}
+
+export function useRunBackup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => (await client.post<BackupRunResult>('/config/backup/run')).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'backup', 'list'] }),
+  })
+}
+
 export function useRemoveWhitelist() {
   const queryClient = useQueryClient()
   return useMutation({

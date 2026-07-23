@@ -22,6 +22,8 @@ vi.mock('../api/config', () => ({
   useRemoveWhitelist: () => ({ isPending: false, mutateAsync: vi.fn() }),
   usePreviewLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRunLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useBackupList: () => ({ data: [] }),
+  useRunBackup: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }))
 
 describe('ConfigPage', () => {

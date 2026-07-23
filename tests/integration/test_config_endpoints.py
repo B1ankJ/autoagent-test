@@ -1,3 +1,6 @@
+import os
+import time
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -39,6 +42,8 @@ async def test_defaults_roundtrip(client):
         "log_retention_days": 7,
         "archive_retention_days": 0,
         "self_update_enabled": False,
+        "backup_retention_days": 14,
+        "backup_interval_hours": 24,
     }
     r = await client.put("/api/v1/config/defaults", json=new_vals, headers=h)
     assert r.status_code == 200
@@ -71,3 +76,61 @@ async def test_devices_stub(client):
     r = await client.get("/api/v1/devices", headers=h)
     assert r.status_code == 200
     assert r.json() == []
+
+
+async def test_backup_run_and_list(client):
+    # conftest's autouse _env_defaults already points DATA_ROOT at an
+    # isolated tmp_path, and the client fixture's init_db() already created
+    # db.sqlite there.
+    h = await _h(client)
+    r = await client.get("/api/v1/config/backup/list", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []
+
+    r = await client.post("/api/v1/config/backup/run", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["path"] is not None
+    assert body["bytes_written"] > 0
+
+    r = await client.get("/api/v1/config/backup/list", headers=h)
+    assert r.status_code == 200
+    listed = r.json()
+    assert len(listed) == 1
+    assert listed[0]["name"] == Path(body["path"]).name
+    assert listed[0]["bytes"] == body["bytes_written"]
+
+
+async def test_backup_run_respects_zero_retention_by_not_pruning(client):
+    from autoagent.config.settings import get_settings
+
+    h = await _h(client)
+    await client.put(
+        "/api/v1/config/defaults",
+        json={
+            "api_timeout_sec": 60,
+            "gui_timeout_sec": 180,
+            "retry": 2,
+            "concurrency": 1,
+            "verbose_logs": True,
+            "log_retention_days": 7,
+            "archive_retention_days": 0,
+            "self_update_enabled": False,
+            "backup_retention_days": 0,
+            "backup_interval_hours": 24,
+        },
+        headers=h,
+    )
+
+    # A stale zip that would be pruned under any positive retention window.
+    backups_dir = get_settings().data_root / "backups"
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    stale = backups_dir / "stale.zip"
+    stale.write_bytes(b"x")
+    old = time.time() - 3600 * 24 * 365
+    os.utime(stale, (old, old))
+
+    r = await client.post("/api/v1/config/backup/run", headers=h)
+    assert r.status_code == 200
+    assert r.json()["pruned"] == 0
+    assert stale.exists()

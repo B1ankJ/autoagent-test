@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.executors.llm_checker import check_llm_api
+from autoagent.maintenance.backup import list_backups, run_backup
 from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import (
@@ -168,6 +169,31 @@ async def run_logs_cleanup(days: int | None = None) -> dict:
         "batches_pruned": batch_report.batches,
         "batches_archived": batch_report.archived,
         "retention_days": retention,
+    }
+
+
+@router.get("/backup/list")
+async def get_backup_list() -> list[dict]:
+    return list_backups(get_settings().data_root)
+
+
+@router.post("/backup/run")
+async def run_backup_now() -> dict:
+    """Write a backup now regardless of whether the scheduled job is enabled.
+
+    Pruning still respects the saved backup_retention_days (0 = keep
+    forever) — manually triggering a backup shouldn't surprise-delete old
+    ones a user deliberately chose to keep.
+    """
+    v = await get_config("defaults")
+    cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
+    report = await run_backup(
+        data_root=get_settings().data_root, retention_days=cfg.backup_retention_days
+    )
+    return {
+        "path": report.path,
+        "bytes_written": report.bytes_written,
+        "pruned": report.pruned,
     }
 
 
