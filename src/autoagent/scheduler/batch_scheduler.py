@@ -254,6 +254,8 @@ class BatchScheduler:
                                 timeout_sec=settings.device_acquire_timeout_sec,
                                 cancel_event=state.cancel_event,
                                 allowed_serials=pool_set,
+                                session_id=sample.session_id,
+                                new_session=sample.new_session,
                             ) as serial:
                                 ctx.device_serial = serial
                                 ctx.action_replay_path = (

@@ -103,6 +103,7 @@ def test_build_sample_uses_last_user_message():
                 {"role": "user", "content": "last"},
             ],
             "new_session": True,
+            "session_id": "conv-1",
             "timeout_sec": 123,
             "retry": 1,
             "dry_run": True,
@@ -116,10 +117,24 @@ def test_build_sample_uses_last_user_message():
     assert sample.target_profile == "p_api"
     assert sample.mode == "api"
     assert sample.new_session is True
+    assert sample.session_id == "conv-1"
     assert sample.timeout_sec == 123
     assert sample.retry == 1
     assert sample.dry_run is True
     assert sample.metadata == {"tag": "sdk"}
+
+
+def test_build_sample_session_id_defaults_to_none():
+    body = ChatCompletionsRequest.model_validate(
+        {
+            "model": "p_api",
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+    )
+
+    sample = build_sample_from_request(body, _api_profile())
+
+    assert sample.session_id is None
 
 
 def test_build_sample_accepts_assistant_as_last_message():

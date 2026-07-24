@@ -31,6 +31,15 @@ class Sample(BaseModel):
     dry_run: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
     callback_url: str | None = None
+    # Opt-in multi-turn-across-requests support for gui_android/agent_android:
+    # when set, DevicePool pins this caller-chosen id to whichever device
+    # new_session=True lands on, and new_session=False requests with the
+    # same session_id are forced onto that exact device instead of "any
+    # free device in the profile's pool" — so a conversation split across
+    # separate /tests/sync or /v1/chat/completions calls stays on one
+    # physical device. None (the default) leaves device selection entirely
+    # unaffected — see devices/pool.py.
+    session_id: str | None = None
 
 
 class SampleResult(BaseModel):

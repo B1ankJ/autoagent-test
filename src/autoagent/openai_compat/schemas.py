@@ -20,6 +20,7 @@ class ChatCompletionsRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     stream: bool = False
     new_session: bool = False
+    session_id: str | None = None
     timeout_sec: int | None = Field(default=None, gt=0)
     retry: int = Field(default=2, ge=0)
     dry_run: bool = False

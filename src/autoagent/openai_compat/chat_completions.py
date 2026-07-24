@@ -211,6 +211,7 @@ def build_sample_from_request(body: ChatCompletionsRequest, profile: Profile) ->
         mode=mode_for_profile(profile),
         target_profile=body.model,
         new_session=body.new_session,
+        session_id=body.session_id,
         timeout_sec=body.timeout_sec,
         retry=body.retry,
         dry_run=body.dry_run,

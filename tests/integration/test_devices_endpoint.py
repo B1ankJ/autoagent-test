@@ -96,3 +96,19 @@ async def test_delete_device(client):
     # Deleting again 404s.
     r = await client.delete("/api/v1/devices/stale-1", headers=h)
     assert r.status_code == 404
+
+
+async def test_release_session_endpoint(client):
+    from autoagent.api._deps import get_device_pool
+
+    h = await _h(client)
+    r = await client.post("/api/v1/devices/sessions/never-existed/release", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"session_id": "never-existed", "released": False}
+
+    pool = get_device_pool()
+    pool._remember_pin("conv-1", "emulator-5554")
+    r = await client.post("/api/v1/devices/sessions/conv-1/release", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"session_id": "conv-1", "released": True}
+    assert pool._lookup_pin("conv-1") is None

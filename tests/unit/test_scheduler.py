@@ -84,10 +84,14 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
             cancel_event=None,
             *,
             allowed_serials: set[str] | None = None,
+            session_id: str | None = None,
+            new_session: bool = False,
         ):
             seen["preferred"] = preferred
             seen["timeout_sec"] = timeout_sec
             seen["allowed_serials"] = allowed_serials
+            seen["session_id"] = session_id
+            seen["new_session"] = new_session
             yield "emulator-5554"
 
     await init_db()
@@ -96,7 +100,14 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
         profile_lookup=lambda _name: type("P", (), {"serial": None})(),
         device_pool=FakePool(),
     )
-    sample = Sample(id="s1", prompts=["x"], mode="agent_android", target_profile="p")
+    sample = Sample(
+        id="s1",
+        prompts=["x"],
+        mode="agent_android",
+        target_profile="p",
+        session_id="conv-1",
+        new_session=True,
+    )
 
     batch_id = await scheduler.submit(
         name="b",
@@ -108,6 +119,8 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
 
     assert seen["device_serial"] == "emulator-5554"
     assert seen["preferred"] is None
+    assert seen["session_id"] == "conv-1"
+    assert seen["new_session"] is True
 
 
 def test_resolve_concurrency_capped_by_bound_pool():

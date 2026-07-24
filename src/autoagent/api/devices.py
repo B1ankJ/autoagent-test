@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from autoagent.api._deps import get_device_monitor
+from autoagent.api._deps import get_device_monitor, get_device_pool
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.devices.adb import (
@@ -122,6 +122,19 @@ async def enable_ime_route(serial: str) -> DeviceInfo:
         online=True,
         seen_at=datetime.now(timezone.utc),
     )
+
+
+@router.post("/sessions/{session_id}/release")
+async def release_device_session(session_id: str) -> dict:
+    """Free a session's pinned device (see Sample.session_id) immediately.
+
+    Call this once a multi-turn conversation actually ends so its device
+    isn't held reserved for the full inactivity TTL. Safe to call even if
+    the session was never pinned or already expired/released — that's not
+    an error, just a no-op reported via `released: false`.
+    """
+    released = get_device_pool().release_session(session_id)
+    return {"session_id": session_id, "released": released}
 
 
 @router.post("/{serial}/disable-ime", response_model=DeviceInfo)
