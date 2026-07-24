@@ -35,6 +35,7 @@ Source of truth: `docs/superpowers/plans/` and `docs/superpowers/specs/`. Update
 - **Upload size limit (2026-07-22):** `POST /api/v1/batches/upload` called `file.read()`/`.decode()` with no size check — a large upload (accidental or not) would get fully materialized in process memory, with no reverse-proxy body-size limit in front of this single-process service to catch it first. Now rejects uploads over 50MB (`_MAX_UPLOAD_BYTES` in `api/batches.py`) using `UploadFile.size`, which Starlette's multipart parser has already populated by the time the handler runs.
 - **Login lockout (2026-07-22):** `POST /api/v1/auth/login` had no brute-force protection — notable because `CLAUDE.md` documents a well-known default admin password (`admin123456`) for dev convenience, and bcrypt's per-attempt cost alone isn't a real deterrent. Added `auth/login_throttle.py`: an in-memory, per-username failure counter (5 failures → 15min lockout, `429`), bounded to 10k tracked usernames with oldest-eviction (same pattern as `media.py`'s thumbnail cache) so flooding distinct usernames can't grow it unboundedly. Tracking keys off the raw submitted username regardless of whether the account exists, so the lockout signal doesn't reopen the username-enumeration side channel the dummy-hash timing fix closed. Single-process/in-memory by design — resets on restart, doesn't share state across workers.
 - **Data backup (2026-07-23, starts closing out Plan 5's backup item):** `data/` had no backup story at all — a disk failure or `rm -rf data/` was unrecoverable. Added `maintenance/backup.py`: a periodic job (mirrors `batch_retention.py`'s pattern) that zips the SQLite DB + `data/profiles/*.yaml` into `data/backups/<timestamp>.zip`. The DB is copied via sqlite3's online backup API (`Connection.backup`), not a raw file copy — this project runs SQLite in WAL mode, so a plain copy can miss committed data still sitting in the `-wal` file and produce a torn snapshot. Deliberately excludes results JSONL/logs/archived batches/browser_profiles/profile_builder artifacts — results are mostly a queryable subset of what's in the DB, and logs/archives already have their own retention+archive-before-delete story; backing them up again here would just duplicate that at real disk cost. Controlled by two new `DefaultsConfig` fields (`backup_retention_days`, default 14, 0 disables; `backup_interval_hours`, default 24) surfaced on the Config page alongside a "立即备份" manual-trigger button and a list of existing backups. `run_backup_loop()` wired into `main.py`'s lifespan background tasks. No restore UI by design — restoring is a rare, high-stakes admin action better done deliberately (unzip, stop the service, replace `data/db.sqlite`, restart) than exposed as a self-service button; see "Restoring from a backup" under Conventions.
+- **DB migrations moved to Alembic (2026-07-23):** `storage/database.py::init_db()` used to hand-roll every schema change as a `PRAGMA table_info` + conditional `ALTER TABLE`/`CREATE INDEX IF NOT EXISTS` check, all re-run unconditionally on every single boot forever — including an unindexed full-table `LIKE` scan of `samples` (`_backfill_prompts_ensure_ascii`) for a data-fix that's been a no-op for any row written after that fix originally landed. Replaced with real Alembic migrations under `alembic/versions/` (baseline schema + the backfill as a one-time data migration). `init_db()` now branches three ways: a fresh DB (every pytest run, any new install) gets the schema via `Base.metadata.create_all()` directly — fast, no migration replay — then is stamped to head; a pre-existing DB with no `alembic_version` table gets stamped to *baseline* then upgraded normally, so the backfill still actually runs once for it; an already-managed DB just gets `upgrade head`. Verified against a real pre-Alembic DB (created via the old code path) that stamping doesn't error re-creating existing tables/columns and the backfill correctly fires exactly once. Full fast suite timing is unchanged (~182s) — the fresh-DB fast path avoids paying migration-replay overhead on the hundreds of per-test DB creations. Caught one real bug along the way: Alembic's generated `env.py` calls `logging.config.fileConfig()` by default, which disables every pre-existing logger not listed in `alembic.ini` — since `init_db()` now runs this on every boot, it was silently breaking the app's own logging (`utils/logging.py`) each time; removed that call (see Conventions).
 
 ## Deferred work for Plan 5
 
@@ -43,6 +44,9 @@ Docker/packaging are still not started (no scope agreed yet). Backups are now co
 ## Layout
 
 ```
+alembic/          DB schema migrations (versions/) + env.py (async engine, target_metadata =
+                  models/db.py's Base.metadata). alembic.ini's sqlalchemy.url is left unset —
+                  env.py fills it in from Settings.data_root at runtime.
 src/autoagent/
   api/            FastAPI routers: auth, profiles, tests, batches, config, devices, device_stream,
                   media, system, openai_compat, profile_builder, web_profile_builder
@@ -61,7 +65,7 @@ src/autoagent/
                   are the per-platform action handlers)
   loaders/        JSONL/JSON/CSV batch file loaders
   maintenance/    scheduled runtime cleanup (logs/profile-builder artifacts) + batch retention
-                  (prunes/archives terminal batches past a retention window)
+                  (prunes/archives terminal batches past a retention window) + DB/profiles backup
   models/         Pydantic API schemas + SQLAlchemy ORM
   notifications/  DingTalk webhook sender + rules (e.g. same-response streak detection via VLM
                   judge) + per-profile response whitelist + device state-change alerts
@@ -95,12 +99,14 @@ scripts/          setup.py (installer, called by install.sh), cleanup_runtime_ar
 
 ## Conventions
 
-- **Python interpreter:** always use `python3.11` (not `python3`). Only 3.11 has the project's dependencies installed. This applies to `pytest`, `ruff`, `uvicorn`, and anything importing `autoagent`.
+- **Python interpreter:** prefer `uv run <tool>` (`uv run pytest`, `uv run ruff check .`, `uv run uvicorn ...`) over a bare `python3.11 -m <tool>`. They can silently diverge — CI (and `uv.lock`) pin exact tool versions via the project's `uv`-managed venv, while a global `python3.11 -m ruff`/`pytest` picks up whatever's pip-installed system-wide, which drifted to an older `ruff` that missed 86 real lint errors `uv run ruff check .` caught (2026-07-22 CI investigation, see below). If you do need `python3.11 -m X` for some reason, verify it's resolving to `.venv`, not a system/global install.
 - **Tests:** `pytest-asyncio` in `asyncio_mode = "auto"`. Tests live under `tests/unit/` and `tests/integration/`. `pythonpath = ["src"]` is set in `pyproject.toml`.
-- **Lint/format:** `ruff` with `line-length=100`, rules `E F I W B UP`. FastAPI routers have per-file-ignore for B008 (`Depends`/`Form`/`File` in defaults are idiomatic). Run `python3.11 -m ruff check .` and `python3.11 -m ruff format .`.
+- **Lint/format:** `ruff` with `line-length=100`, rules `E F I W B UP`. FastAPI routers have per-file-ignore for B008 (`Depends`/`Form`/`File` in defaults are idiomatic). Run `uv run ruff check .` and `uv run ruff format .`.
 - **Exception chaining:** use `raise HTTPException(...) from e` when re-raising inside `except` (B904). Don't broaden handlers just to silence lint — narrow the `except` type instead.
 - **Secrets in configs:** `admin_password`/`jwt_secret`/`static_api_key` on `Settings` are `pydantic.SecretStr` — access via `.get_secret_value()`, never compare/log the field directly. `repr(settings)`/`str(settings)` print `**********` for these, so it's safe to log the settings object itself, just not an individual unwrapped secret.
 - **Result format:** one JSONL file per batch at `<data_dir>/results/<batch_id>.jsonl`. Writer is append-only and thread-safe.
+- **DB schema migrations:** `models/db.py`'s `Base` is the source of truth; schema changes are Alembic migrations under `alembic/versions/`, not hand-edits to `storage/database.py::init_db()`. Workflow: edit `models/db.py`, then `uv run alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some changes — e.g. column type-only alters on SQLite), commit both together. `init_db()` picks the right path automatically at boot: a fresh DB (every test run, any new install) gets the schema via `Base.metadata.create_all()` directly (fast — no need to replay migration history) and is stamped to head; a pre-existing DB with no `alembic_version` table gets stamped to the baseline revision then upgraded normally, so anything after baseline (e.g. the one-time `ensure_ascii` backfill migration) still actually runs for it; anything already alembic-managed just gets `upgrade head`. Because of the fresh-DB fast path, `models/db.py` and the latest migration must always describe the same schema — don't let them drift.
+- **Alembic logging:** `alembic/env.py` deliberately does *not* call `logging.config.fileConfig()` (the Alembic-generated template default) — it defaults to `disable_existing_loggers=True`, which would silently disable every logger `utils/logging.py::configure_logging()` already set up, since `init_db()` runs Alembic on every boot. Cost a real bug once (a `caplog`-based test started failing because its logger got disabled by the *next* test's `init_db()` call) — don't re-add it.
 - **Batch rerun vs replay:** `POST /batches/{id}/rerun?status=failed|all` rebuilds samples from persisted `SampleResult` rows (prompts/mode/target_profile only — `new_session`/`timeout_sec`/`retry`/`dry_run`/`callback_url` fall back to defaults, since those aren't in `SampleResult`). `POST /batches/{id}/replay` resubmits the *exact* originally-submitted `Sample` list, verbatim — `BatchScheduler.submit()` persists `Batch.samples_request_json` (JSON dump of the input `Sample` list) at submission time for this purpose. Batches created before this existed have `samples_request_json=None` and `/replay` 400s on them; use `/rerun` instead.
 - **Profiles:** YAML files under `<data_dir>/profiles/<name>.yaml`. Names restricted by allowlist regex in `profiles/registry.py::_path`.
 - **Playwright verification:** in this environment, real-browser pytest cases may need to run outside the sandbox because Chromium launch is blocked inside the sandbox. When verifying Plan 3 locally, use `python3.11 -m pytest -v` outside the sandbox for the full suite, or `python3.11 -m pytest -q -m "not playwright"` for the fast subset.
@@ -147,19 +153,21 @@ scripts/          setup.py (installer, called by install.sh), cleanup_runtime_ar
 
 ```bash
 bash install.sh                        # one-shot install: system deps + uv sync + pnpm build + playwright + .env
-python3.11 -m pytest -q                # run all tests
-python3.11 -m pytest -q -m "not playwright"   # skip real-browser tests
-python3.11 -m pytest -q -m "not playwright and not android and not slow"   # fast backend suite
-python3.11 -m pytest -v -m android     # android real-device suite
-python3.11 -m pytest tests/unit -v     # unit only
-python3.11 -m ruff check .             # lint
-python3.11 -m ruff format .            # format
-python3.11 scripts/cleanup_runtime_artifacts.py --days 7          # preview old logs/profile-builder artifacts
-python3.11 scripts/cleanup_runtime_artifacts.py --days 7 --apply  # delete old logs/profile-builder artifacts
-python3.11 scripts/cleanup_runtime_artifacts.py --all --apply     # clear all logs/profile-builder artifacts
-python3.11 -m playwright install chromium     # one-time: download Chromium
+uv run pytest -q                       # run all tests
+uv run pytest -q -m "not playwright"   # skip real-browser tests
+uv run pytest -q -m "not playwright and not android and not slow"   # fast backend suite
+uv run pytest -v -m android            # android real-device suite
+uv run pytest tests/unit -v            # unit only
+uv run ruff check .                    # lint
+uv run ruff format .                   # format
+uv run alembic revision --autogenerate -m "describe the change"   # new migration after editing models/db.py
+uv run alembic upgrade head            # apply migrations to the dev DB directly (init_db() also does this at boot)
+uv run python3 scripts/cleanup_runtime_artifacts.py --days 7          # preview old logs/profile-builder artifacts
+uv run python3 scripts/cleanup_runtime_artifacts.py --days 7 --apply  # delete old logs/profile-builder artifacts
+uv run python3 scripts/cleanup_runtime_artifacts.py --all --apply     # clear all logs/profile-builder artifacts
+uv run playwright install chromium     # one-time: download Chromium
 adb devices -l                         # verify adb sees local devices
-python3.11 -m uvicorn --app-dir src autoagent.main:app --reload   # run dev server
+uv run uvicorn --app-dir src autoagent.main:app --reload   # run dev server
 cd web && pnpm dev                     # frontend dev server (5173)
 cd web && pnpm build                   # build UI into src/autoagent/static/
 cd web && pnpm test                    # frontend unit tests
