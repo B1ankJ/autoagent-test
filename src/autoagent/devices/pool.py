@@ -59,7 +59,7 @@ class DevicePool:
         while len(self._session_pins) > _MAX_SESSIONS:
             self._session_pins.popitem(last=False)
 
-    def _reserved_serials(self, *, exclude_session: str) -> set[str]:
+    def _reserved_serials(self, *, exclude_session: str | None = None) -> set[str]:
         now = time.monotonic()
         return {
             serial
@@ -116,38 +116,51 @@ class DevicePool:
           serials. Combined with `preferred` if both are given.
         - `session_id`/`new_session`: opt-in multi-turn device stickiness
           for a conversation split across separate requests (Sample.
-          session_id). Leaving `session_id` unset (the default) is
-          byte-for-byte the original preferred/allowed_serials-only
-          behavior — nothing below this point runs. When set:
-          `new_session=True` picks a device normally, except it skips
-          devices currently pinned to a *different* session_id (so it
-          doesn't steal another in-flight conversation's device), then
-          pins `session_id` to whichever device it lands on.
+          session_id). Reservation is strict/exclusive: once a device is
+          pinned to a session_id, *no* other request can pick it up —
+          another session's `new_session=True`, and a plain request with
+          no session_id at all — until it's released or expires. If that
+          means excluding reserved devices leaves nothing available right
+          now, this waits (same poll/timeout as a locked device) rather
+          than stealing one; it never silently hands a reserved device to
+          someone else, which would silently corrupt whatever
+          conversation is using it. Leaving `session_id` unset only
+          matches the original preferred/allowed_serials-only behavior
+          when nothing else in the system currently holds a session pin —
+          "reserved but not locked" is a state that didn't exist before
+          this feature, so there's no prior behavior to preserve once
+          something is actually reserved.
+          `new_session=True` picks a device normally (skipping anything
+          reserved, including this same session_id's own stale pin if
+          any) then pins `session_id` to whichever device it lands on.
           `new_session=False` with an existing, unexpired pin for
           `session_id` forces that exact device — waits if it's busy,
           raises DeviceDisabled if it's gone, never silently substitutes
-          a different device (which would silently break conversation
-          continuity). `new_session=False` with no/expired pin falls back
-          to normal selection and self-heals a new pin. Pins expire after
-          `_SESSION_TTL_SEC` of inactivity as a fallback for callers that
-          never call `release_session`; call it explicitly when a
-          conversation legitimately ends to free the device sooner.
+          a different device. `new_session=False` with no/expired pin
+          falls back to normal (still reservation-respecting) selection
+          and self-heals a new pin. Pins expire after `_SESSION_TTL_SEC`
+          of inactivity as a fallback for callers that never call
+          `release_session`; call it explicitly when a conversation
+          legitimately ends to free the device sooner.
         - When the resulting pool is fully offline / disabled, raises
           DeviceDisabled immediately. When the pool has online devices
-          but they're all locked by other samples, polls until one frees
-          up or the timeout / cancel fires.
+          but they're all locked or reserved, polls until one frees up
+          or the timeout / cancel fires.
         """
         effective_preferred = preferred
         effective_allowed = allowed_serials
         exclude: set[str] = set()
 
-        if session_id is not None:
-            pinned = None if new_session else self._lookup_pin(session_id)
-            if pinned is not None:
-                effective_preferred = pinned
-                effective_allowed = None
-            else:
-                exclude = self._reserved_serials(exclude_session=session_id)
+        if session_id is not None and not new_session:
+            pinned = self._lookup_pin(session_id)
+        else:
+            pinned = None
+
+        if pinned is not None:
+            effective_preferred = pinned
+            effective_allowed = None
+        else:
+            exclude = self._reserved_serials(exclude_session=session_id)
 
         # Merge legacy preferred + new allowed_serials into a single pool set.
         allowed: set[str] | None
@@ -178,15 +191,11 @@ class DevicePool:
                 candidates = [d for d in pool if d.online and d.enabled]
             else:
                 candidates = [d for d in all_devices if d.online and d.enabled]
-            if exclude:
-                # Soft preference, not a hard block: avoid a device another
-                # session has reserved only when there's an alternative.
-                # Otherwise a fully (or singly-)reserved pool would starve
-                # every *other* new conversation until the reservation's
-                # TTL expires, even though nothing is actually locked.
-                unreserved = [d for d in candidates if d.serial not in exclude]
-                if unreserved:
-                    candidates = unreserved
+            # Hard exclusion: a device reserved by another session is not a
+            # candidate at all, same as if it were locked — this call waits
+            # (below) rather than picking a different device out from under
+            # an in-progress conversation.
+            candidates = [d for d in candidates if d.serial not in exclude]
 
             for device in candidates:
                 lock = self._locks.setdefault(device.serial, asyncio.Lock())

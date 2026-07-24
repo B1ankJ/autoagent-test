@@ -211,15 +211,12 @@ async def test_new_session_does_not_steal_a_device_reserved_by_another_session()
 
 
 @pytest.mark.asyncio
-async def test_non_session_acquire_ignores_other_sessions_reservations() -> None:
-    # The strict backward-compat contract: a caller not using session_id at
-    # all must see exactly today's behavior, including being free to grab
-    # a device some other session has reserved (between that session's
-    # turns the device isn't locked, and this caller never opted in to the
-    # reservation system). "a" is deterministically what conv-1 reserves
-    # (first free in list order) and is what a plain acquire would also
-    # pick first — proving the reservation was ignored, not just that some
-    # device came back.
+async def test_non_session_acquire_is_blocked_by_active_reservation() -> None:
+    # Strict/exclusive reservation: once a device is pinned to a session,
+    # it's off-limits to *any* other request — including a plain caller
+    # that never opted into the session system at all — until released or
+    # expired. With an alternative device available, the plain caller
+    # just uses that one instead.
     pool = DevicePool(lambda: [_device("a"), _device("b")])
     async with pool.acquire(
         preferred=None, timeout_sec=0.1, allowed_serials={"a", "b"},
@@ -231,7 +228,24 @@ async def test_non_session_acquire_ignores_other_sessions_reservations() -> None
     async with pool.acquire(
         preferred=None, timeout_sec=0.1, allowed_serials={"a", "b"},
     ) as serial:
-        assert serial == "a"
+        assert serial == "b"
+
+
+@pytest.mark.asyncio
+async def test_non_session_acquire_waits_when_the_only_device_is_reserved() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        session_id="conv-1", new_session=True,
+    ):
+        pass
+    # "a" is unlocked but still reserved, and there's no alternative — a
+    # plain request must wait/time out, not steal it.
+    with pytest.raises(DeviceBusy):
+        async with pool.acquire(
+            preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        ):
+            pass
 
 
 @pytest.mark.asyncio
@@ -287,13 +301,17 @@ async def test_session_pins_bounded_evicts_oldest(monkeypatch) -> None:
     import autoagent.devices.pool as pool_mod
 
     monkeypatch.setattr(pool_mod, "_MAX_SESSIONS", 3)
-    pool = DevicePool(lambda: [_device("a")])
-    for i in range(4):
+    # Four distinct devices so each of the four sessions below reserves
+    # its own with no contention — isolates the bound-eviction behavior
+    # from strict-reservation waiting.
+    serials = ["a", "b", "c", "d"]
+    pool = DevicePool(lambda: [_device(s) for s in serials])
+    for i, serial in enumerate(serials):
         async with pool.acquire(
-            preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+            preferred=None, timeout_sec=0.1, allowed_serials={serial},
             session_id=f"conv-{i}", new_session=True,
-        ):
-            pass
+        ) as picked:
+            assert picked == serial
 
     assert pool._lookup_pin("conv-0") is None
-    assert pool._lookup_pin("conv-3") == "a"
+    assert pool._lookup_pin("conv-3") == "d"
