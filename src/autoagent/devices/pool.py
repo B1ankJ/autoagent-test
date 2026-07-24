@@ -25,6 +25,19 @@ class DeviceDisabled(RuntimeError):
     pass
 
 
+class DeviceReserved(DeviceBusy):
+    """Every device that could have served this request is currently
+    reserved by other session(s) — raised immediately instead of waiting
+    (unlike plain DeviceBusy, which waits out timeout_sec first). Only
+    raised for session_id-bearing calls; a subclass of DeviceBusy so any
+    existing `except DeviceBusy` still catches it.
+    """
+
+    def __init__(self, message: str, *, blocking_session_ids: list[str]) -> None:
+        super().__init__(message)
+        self.blocking_session_ids = blocking_session_ids
+
+
 class DevicePool:
     def __init__(self, list_devices: Callable[[], list[DeviceInfo]] | None = None) -> None:
         self._snapshot: dict[str, DeviceInfo] = {}
@@ -66,6 +79,16 @@ class DevicePool:
             for sid, (serial, expires_at) in self._session_pins.items()
             if sid != exclude_session and expires_at > now
         }
+
+    def _sessions_holding(self, serials: set[str]) -> list[str]:
+        now = time.monotonic()
+        return sorted(
+            {
+                sid
+                for sid, (serial, expires_at) in self._session_pins.items()
+                if serial in serials and expires_at > now
+            }
+        )
 
     def release_session(self, session_id: str) -> bool:
         """Explicitly free a session's device pin. Returns whether one existed.
@@ -119,17 +142,27 @@ class DevicePool:
           session_id). Reservation is strict/exclusive: once a device is
           pinned to a session_id, *no* other request can pick it up —
           another session's `new_session=True`, and a plain request with
-          no session_id at all — until it's released or expires. If that
-          means excluding reserved devices leaves nothing available right
-          now, this waits (same poll/timeout as a locked device) rather
-          than stealing one; it never silently hands a reserved device to
-          someone else, which would silently corrupt whatever
-          conversation is using it. Leaving `session_id` unset only
-          matches the original preferred/allowed_serials-only behavior
-          when nothing else in the system currently holds a session pin —
-          "reserved but not locked" is a state that didn't exist before
-          this feature, so there's no prior behavior to preserve once
-          something is actually reserved.
+          no session_id at all — until it's released or expires; it never
+          silently hands a reserved device to someone else, which would
+          silently corrupt whatever conversation is using it. Leaving
+          `session_id` unset only matches the original
+          preferred/allowed_serials-only behavior when nothing else in
+          the system currently holds a session pin — "reserved but not
+          locked" is a state that didn't exist before this feature, so
+          there's no prior behavior to preserve once something is
+          actually reserved.
+          Two different callers hit two different outcomes when blocked:
+          a plain request (no session_id) still *waits* (same poll/
+          timeout as a locked device) if reservations are the only thing
+          in its way, since it has no way to know when to give up short
+          of its own timeout. A session_id-bearing call (starting fresh
+          with `new_session=True`, or self-healing a missing/expired pin)
+          instead raises `DeviceReserved` *immediately* — no waiting —
+          when every otherwise-eligible device is currently reserved,
+          naming which session_id(s) hold them, since a caller actively
+          managing a conversation can act on that (retry later, surface
+          it to whoever's driving the multi-turn flow) far better than
+          hanging for up to `timeout_sec`.
           `new_session=True` picks a device normally (skipping anything
           reserved, including this same session_id's own stale pin if
           any) then pins `session_id` to whichever device it lands on.
@@ -137,8 +170,9 @@ class DevicePool:
           `session_id` forces that exact device — waits if it's busy,
           raises DeviceDisabled if it's gone, never silently substitutes
           a different device. `new_session=False` with no/expired pin
-          falls back to normal (still reservation-respecting) selection
-          and self-heals a new pin. Pins expire after `_SESSION_TTL_SEC`
+          falls back to normal (still reservation-respecting, still
+          fast-failing) selection and self-heals a new pin. Pins expire
+          after `_SESSION_TTL_SEC`
           of inactivity as a fallback for callers that never call
           `release_session`; call it explicitly when a conversation
           legitimately ends to free the device sooner.
@@ -191,11 +225,25 @@ class DevicePool:
                 candidates = [d for d in pool if d.online and d.enabled]
             else:
                 candidates = [d for d in all_devices if d.online and d.enabled]
-            # Hard exclusion: a device reserved by another session is not a
-            # candidate at all, same as if it were locked — this call waits
-            # (below) rather than picking a different device out from under
-            # an in-progress conversation.
-            candidates = [d for d in candidates if d.serial not in exclude]
+            if exclude:
+                # Hard exclusion: a device reserved by another session is
+                # not a candidate at all, same as if it were locked.
+                unreserved = [d for d in candidates if d.serial not in exclude]
+                if session_id is not None and candidates and not unreserved:
+                    # There WERE otherwise-eligible devices, but every one
+                    # is reserved — a session-aware caller gets a clear,
+                    # immediate answer instead of silently waiting out
+                    # timeout_sec against devices that won't free up on
+                    # their own (reservations expire on a much longer
+                    # clock than a normal lock).
+                    blocking = self._sessions_holding(
+                        exclude & {d.serial for d in candidates}
+                    )
+                    raise DeviceReserved(
+                        f"all devices reserved by other session(s): {blocking}",
+                        blocking_session_ids=blocking,
+                    )
+                candidates = unreserved
 
             for device in candidates:
                 lock = self._locks.setdefault(device.serial, asyncio.Lock())

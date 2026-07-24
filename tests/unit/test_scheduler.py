@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
+from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool, DeviceReserved
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Sample
 from autoagent.scheduler.batch_scheduler import BatchScheduler
@@ -132,6 +133,7 @@ def test_resolve_concurrency_capped_by_bound_pool():
         Sample(id=f"s{i}", prompts=["hi"], mode="gui_android", target_profile="p")
         for i in range(10)
     ]
+
     # Profile bound to 2 devices; 5 online globally, requested 8 → cap to 2.
     def lookup(_n):
         return SimpleNamespace(serial=None, serials=["A", "B"])
@@ -149,9 +151,163 @@ def test_resolve_concurrency_unbound_uses_available():
         Sample(id=f"s{i}", prompts=["hi"], mode="gui_android", target_profile="p")
         for i in range(10)
     ]
+
     # Unbound profile (any online device) → capped only by available_devices.
     def lookup(_n):
         return SimpleNamespace(serial=None, serials=[])
 
     n = _resolve_concurrency(8, "gui_android", samples, lookup, available_devices=3)
     assert n == 3
+
+
+async def test_end_session_skips_execution_and_releases_pin():
+    called = []
+
+    class TrackingExec(Executor):
+        async def execute(self, sample, profile, ctx):
+            called.append(sample.id)
+            return ["should not run"]
+
+    pool = DevicePool(lambda: [])
+    pool._remember_pin("conv-1", "emulator-5554")
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: TrackingExec(),
+        profile_lookup=lambda _name: object(),
+        device_pool=pool,
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["ignored"],
+        mode="agent_android",
+        target_profile="p",
+        session_id="conv-1",
+        end_session=True,
+    )
+
+    batch_id = await scheduler.submit(
+        name="b", mode="agent_android", concurrency=1, samples=[sample]
+    )
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].status == "done"
+    assert results[0].metadata["session_released"] is True
+    assert called == []  # executor never ran
+    assert pool._lookup_pin("conv-1") is None
+
+
+async def test_end_session_without_session_id_is_a_noop():
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(),
+        profile_lookup=lambda _name: object(),
+        device_pool=DevicePool(lambda: []),
+    )
+    sample = Sample(id="s1", prompts=["ignored"], mode="api", target_profile="p", end_session=True)
+
+    batch_id = await scheduler.submit(name="b", mode="api", concurrency=1, samples=[sample])
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].status == "done"
+    assert results[0].metadata["session_released"] is False
+
+
+async def test_device_reserved_becomes_failed_result_with_blocking_sessions():
+    class RejectingPool:
+        def available_count_sync(self) -> int:
+            return 0
+
+        @asynccontextmanager
+        async def acquire(self, *args, **kwargs):
+            raise DeviceReserved("all reserved", blocking_session_ids=["conv-other"])
+            yield  # pragma: no cover - unreachable, satisfies async generator shape
+
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(),
+        profile_lookup=lambda _name: type("P", (), {"serial": None})(),
+        device_pool=RejectingPool(),
+    )
+    sample = Sample(
+        id="s1",
+        prompts=["x"],
+        mode="agent_android",
+        target_profile="p",
+        session_id="conv-me",
+        new_session=True,
+    )
+
+    batch_id = await scheduler.submit(
+        name="b", mode="agent_android", concurrency=1, samples=[sample]
+    )
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    b = await get_batch(batch_id)
+    assert b.status == "failed"  # batch reaches a real terminal status, doesn't hang
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].status == "failed"
+    assert results[0].metadata["blocking_session_ids"] == ["conv-other"]
+
+
+async def test_device_busy_no_longer_crashes_the_batch_task():
+    # Regression: acquire() raising DeviceBusy/DeviceDisabled used to
+    # propagate uncaught out of run_one(), crashing _run()'s background
+    # task before it ever called update_batch_status — the batch would
+    # stay stuck showing "running" forever.
+    class TimingOutPool:
+        def available_count_sync(self) -> int:
+            return 0
+
+        @asynccontextmanager
+        async def acquire(self, *args, **kwargs):
+            raise DeviceBusy("no device available within 0.0s")
+            yield  # pragma: no cover - unreachable, satisfies async generator shape
+
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(),
+        profile_lookup=lambda _name: type("P", (), {"serial": None})(),
+        device_pool=TimingOutPool(),
+    )
+    sample = Sample(id="s1", prompts=["x"], mode="agent_android", target_profile="p")
+
+    batch_id = await scheduler.submit(
+        name="b", mode="agent_android", concurrency=1, samples=[sample]
+    )
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    b = await get_batch(batch_id)
+    assert b.status == "failed"
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].status == "failed"
+    assert "no device available" in results[0].error
+
+
+async def test_device_disabled_also_produces_a_failed_result():
+    class OfflinePool:
+        def available_count_sync(self) -> int:
+            return 0
+
+        @asynccontextmanager
+        async def acquire(self, *args, **kwargs):
+            raise DeviceDisabled("all devices in pool offline/disabled: ['emulator-5554']")
+            yield  # pragma: no cover - unreachable, satisfies async generator shape
+
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(),
+        profile_lookup=lambda _name: type("P", (), {"serial": None})(),
+        device_pool=OfflinePool(),
+    )
+    sample = Sample(id="s1", prompts=["x"], mode="agent_android", target_profile="p")
+
+    batch_id = await scheduler.submit(
+        name="b", mode="agent_android", concurrency=1, samples=[sample]
+    )
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].status == "failed"
+    assert "offline/disabled" in results[0].error

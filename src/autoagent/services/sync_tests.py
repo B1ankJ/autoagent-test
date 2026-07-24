@@ -10,6 +10,19 @@ class SyncSampleResultMissingError(RuntimeError):
     """Raised when batch execution finishes without a recorded sample result."""
 
 
+def blocking_session_ids(result: SampleResult) -> list[str] | None:
+    """Session ids holding every device this sample could have used, if
+    that's why it failed (see devices/pool.py::DeviceReserved). Callers
+    use this to translate the result into an HTTP 429 instead of a
+    generic failure — the caller's own sample-level status/error stay a
+    plain "failed" either way, since this is only surfaced at the
+    synchronous single-sample endpoints (`/tests/sync`,
+    `/v1/chat/completions`), not batch execution in general.
+    """
+    ids = result.metadata.get("blocking_session_ids")
+    return ids or None
+
+
 class SyncSampleScheduler(Protocol):
     async def submit(
         self,

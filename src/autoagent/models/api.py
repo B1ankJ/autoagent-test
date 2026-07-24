@@ -40,6 +40,14 @@ class Sample(BaseModel):
     # physical device. None (the default) leaves device selection entirely
     # unaffected — see devices/pool.py.
     session_id: str | None = None
+    # Signals "this conversation is over" instead of sending another turn:
+    # frees session_id's device reservation immediately (rather than
+    # waiting out the inactivity TTL) and skips execution entirely — the
+    # scheduler never resolves a profile, acquires a device, or runs the
+    # prompts. `prompts` is still required by the schema but is ignored
+    # when this is set; send whatever placeholder is convenient. No-op
+    # (still succeeds) if session_id is unset or already released/expired.
+    end_session: bool = False
 
 
 class SampleResult(BaseModel):

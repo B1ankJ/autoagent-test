@@ -242,6 +242,8 @@ async def test_chat_completions_maps_extensions_and_profile_mode(
             "model": "fake_site",
             "messages": [{"role": "user", "content": "hello"}],
             "new_session": True,
+            "session_id": "conv-1",
+            "end_session": True,
             "timeout_sec": 120,
             "retry": 1,
             "dry_run": True,
@@ -254,10 +256,62 @@ async def test_chat_completions_maps_extensions_and_profile_mode(
     assert response.status_code == 200
     assert sample.mode == "gui_pc_web"
     assert sample.new_session is True
+    assert sample.session_id == "conv-1"
+    assert sample.end_session is True
     assert sample.timeout_sec == 120
     assert sample.retry == 1
     assert sample.dry_run is True
     assert sample.metadata == {"tag": "sdk"}
+
+
+async def test_chat_completions_returns_429_when_all_devices_reserved(
+    client: AsyncClient,
+    monkeypatch,
+) -> None:
+    save_profile_yaml(
+        "fake_android",
+        yaml.safe_dump(
+            {
+                "name": "fake_android",
+                "platform": "agent_android",
+                "base_url": "https://llm.example.com/v1",
+                "model": "vlm",
+                "api_key": "secret",
+                "task_template": "{prompt}",
+                "response_hint": "final answer",
+            }
+        ),
+    )
+
+    async def fake_execute(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
+        return SampleResult(
+            id=sample.id,
+            status="failed",
+            prompts_sent=list(sample.prompts),
+            mode=sample.mode,
+            target_profile=sample.target_profile,
+            error="all devices reserved by other session(s): ['conv-other']",
+            metadata={"blocking_session_ids": ["conv-other"]},
+        )
+
+    monkeypatch.setattr("autoagent.api.openai_compat.execute_sync_sample", fake_execute)
+    headers = await _login(client)
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "fake_android",
+            "messages": [{"role": "user", "content": "hello"}],
+            "session_id": "conv-me",
+            "new_session": True,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 429
+    body = response.json()
+    assert body["error"]["type"] == "rate_limit_error"
+    assert body["error"]["code"] == "device_reserved"
 
 
 async def test_chat_completions_prefers_llm_response_and_falls_back_when_needed(

@@ -163,3 +163,27 @@ async def test_execute_sync_sample_raises_when_no_result_recorded():
         )
 
     assert str(exc.value) == "no result recorded"
+
+
+def test_blocking_session_ids_extracts_from_metadata():
+    result = SampleResult(
+        id="s1",
+        status="failed",
+        mode="api",
+        target_profile="p",
+        metadata={"blocking_session_ids": ["conv-a", "conv-b"]},
+    )
+    assert mod.blocking_session_ids(result) == ["conv-a", "conv-b"]
+
+
+def test_blocking_session_ids_none_when_absent():
+    result = SampleResult(id="s1", status="failed", mode="api", target_profile="p")
+    assert mod.blocking_session_ids(result) is None
+
+
+def test_blocking_session_ids_none_when_empty_list():
+    result = SampleResult(
+        id="s1", status="failed", mode="api", target_profile="p",
+        metadata={"blocking_session_ids": []},
+    )
+    assert mod.blocking_session_ids(result) is None

@@ -15,7 +15,11 @@ from autoagent.openai_compat.chat_completions import (
     parse_chat_completions_request,
     resolve_profile,
 )
-from autoagent.services.sync_tests import SyncSampleResultMissingError, execute_sync_sample
+from autoagent.services.sync_tests import (
+    SyncSampleResultMissingError,
+    blocking_session_ids,
+    execute_sync_sample,
+)
 from autoagent.storage.samples import list_samples_for_batch
 
 router = APIRouter(prefix="/v1", tags=["openai_compat"])
@@ -65,6 +69,14 @@ async def create_chat_completion(request: Request) -> JSONResponse:
             get_scheduler_fn=get_scheduler,
             list_samples_for_batch_fn=list_samples_for_batch,
         )
+        blocking = blocking_session_ids(result)
+        if blocking:
+            raise OpenAICompatError(
+                status_code=429,
+                message=result.error or "all devices reserved by other session(s)",
+                error_type="rate_limit_error",
+                code="device_reserved",
+            )
         response = build_chat_completion_response(body, result, profile)
         return JSONResponse(status_code=200, content=response.model_dump())
     except SyncSampleResultMissingError:

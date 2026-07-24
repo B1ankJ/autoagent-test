@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.config.settings import get_settings
-from autoagent.devices.pool import DevicePool
+from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool, DeviceReserved
 from autoagent.events.bus import get_event_bus
 from autoagent.executors.base import Executor, ExecutorContext
 from autoagent.models.api import Mode, Sample, SampleResult
@@ -204,6 +204,24 @@ class BatchScheduler:
                         mode=sample.mode,
                         target_profile=sample.target_profile,
                     )
+                elif sample.end_session:
+                    # Purely a "release the device now" signal — no profile
+                    # lookup, no device acquisition, no executor run. The
+                    # required `prompts` field is present but deliberately
+                    # unused.
+                    released = (
+                        self._device_pool.release_session(sample.session_id)
+                        if sample.session_id is not None and self._device_pool is not None
+                        else False
+                    )
+                    result = SampleResult(
+                        id=sample.id,
+                        status="done",
+                        prompts_sent=[],
+                        mode=sample.mode,
+                        target_profile=sample.target_profile,
+                        metadata={"session_released": released},
+                    )
                 else:
                     # Resolve profile
                     try:
@@ -249,33 +267,67 @@ class BatchScheduler:
                             pool_set: set[str] | None = (
                                 set(profile_serials) if profile_serials else None
                             )
-                            async with self._device_pool.acquire(
-                                profile_serial,
-                                timeout_sec=settings.device_acquire_timeout_sec,
-                                cancel_event=state.cancel_event,
-                                allowed_serials=pool_set,
-                                session_id=sample.session_id,
-                                new_session=sample.new_session,
-                            ) as serial:
-                                ctx.device_serial = serial
-                                ctx.action_replay_path = (
-                                    settings.logs_root / batch_id / sample.id / "actions.jsonl"
+                            try:
+                                async with self._device_pool.acquire(
+                                    profile_serial,
+                                    timeout_sec=settings.device_acquire_timeout_sec,
+                                    cancel_event=state.cancel_event,
+                                    allowed_serials=pool_set,
+                                    session_id=sample.session_id,
+                                    new_session=sample.new_session,
+                                ) as serial:
+                                    ctx.device_serial = serial
+                                    ctx.action_replay_path = (
+                                        settings.logs_root
+                                        / batch_id
+                                        / sample.id
+                                        / "actions.jsonl"
+                                    )
+                                    await bus.publish(
+                                        batch_id,
+                                        "sample_update",
+                                        {
+                                            "sample_id": sample.id,
+                                            "status": "running",
+                                            "waiting_for_device": False,
+                                            "device_serial": serial,
+                                        },
+                                    )
+                                    result = await executor.run(
+                                        sample,
+                                        profile=profile,
+                                        default_timeout_sec=default_timeout,
+                                        ctx=ctx,
+                                    )
+                            except DeviceReserved as e:
+                                # Fast-fail case (see devices/pool.py): don't
+                                # even try to acquire — surface which
+                                # session(s) are holding every device so the
+                                # API layer can translate this into a 429
+                                # instead of a generic failure.
+                                result = SampleResult(
+                                    id=sample.id,
+                                    status="failed",
+                                    prompts_sent=list(sample.prompts),
+                                    mode=sample.mode,
+                                    target_profile=sample.target_profile,
+                                    error=str(e),
+                                    metadata={"blocking_session_ids": e.blocking_session_ids},
                                 )
-                                await bus.publish(
-                                    batch_id,
-                                    "sample_update",
-                                    {
-                                        "sample_id": sample.id,
-                                        "status": "running",
-                                        "waiting_for_device": False,
-                                        "device_serial": serial,
-                                    },
-                                )
-                                result = await executor.run(
-                                    sample,
-                                    profile=profile,
-                                    default_timeout_sec=default_timeout,
-                                    ctx=ctx,
+                            except (DeviceBusy, DeviceDisabled) as e:
+                                # Previously uncaught — DeviceBusy (timeout
+                                # waiting) / DeviceDisabled (pool offline)
+                                # from acquire() used to propagate out of
+                                # run_one() entirely, crashing this batch's
+                                # background task without ever recording a
+                                # result or updating batch status.
+                                result = SampleResult(
+                                    id=sample.id,
+                                    status="failed",
+                                    prompts_sent=list(sample.prompts),
+                                    mode=sample.mode,
+                                    target_profile=sample.target_profile,
+                                    error=str(e),
                                 )
                         else:
                             result = await executor.run(

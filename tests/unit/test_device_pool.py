@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool
+from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool, DeviceReserved
 from autoagent.models.api import DeviceInfo
 
 
@@ -208,6 +208,50 @@ async def test_new_session_does_not_steal_a_device_reserved_by_another_session()
             session_id="conv-2", new_session=True,
         ) as other:
             assert other != reserved
+
+
+@pytest.mark.asyncio
+async def test_new_session_fails_fast_instead_of_waiting_when_all_reserved() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        session_id="conv-1", new_session=True,
+    ):
+        pass
+    # A generous timeout_sec — proves this raises immediately rather than
+    # polling it out, unlike a plain (session_id=None) caller in the same
+    # spot (see test_non_session_acquire_waits_when_the_only_device_is_reserved).
+    with pytest.raises(DeviceReserved) as exc_info:
+        async with pool.acquire(
+            preferred=None, timeout_sec=5.0, allowed_serials={"a"},
+            session_id="conv-2", new_session=True,
+        ):
+            pass
+    assert exc_info.value.blocking_session_ids == ["conv-1"]
+
+
+@pytest.mark.asyncio
+async def test_continuation_self_heal_fails_fast_when_all_reserved() -> None:
+    pool = DevicePool(lambda: [_device("a")])
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        session_id="conv-1", new_session=True,
+    ):
+        pass
+    # conv-2 has no pin of its own (never started) — the self-heal path
+    # must also fail fast rather than wait, same as new_session=True.
+    with pytest.raises(DeviceReserved) as exc_info:
+        async with pool.acquire(
+            preferred=None, timeout_sec=5.0, allowed_serials={"a"},
+            session_id="conv-2", new_session=False,
+        ):
+            pass
+    assert exc_info.value.blocking_session_ids == ["conv-1"]
+
+
+@pytest.mark.asyncio
+async def test_device_reserved_is_a_device_busy_subclass() -> None:
+    assert issubclass(DeviceReserved, DeviceBusy)
 
 
 @pytest.mark.asyncio

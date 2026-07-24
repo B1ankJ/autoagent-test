@@ -104,6 +104,7 @@ def test_build_sample_uses_last_user_message():
             ],
             "new_session": True,
             "session_id": "conv-1",
+            "end_session": True,
             "timeout_sec": 123,
             "retry": 1,
             "dry_run": True,
@@ -118,6 +119,7 @@ def test_build_sample_uses_last_user_message():
     assert sample.mode == "api"
     assert sample.new_session is True
     assert sample.session_id == "conv-1"
+    assert sample.end_session is True
     assert sample.timeout_sec == 123
     assert sample.retry == 1
     assert sample.dry_run is True
@@ -135,6 +137,7 @@ def test_build_sample_session_id_defaults_to_none():
     sample = build_sample_from_request(body, _api_profile())
 
     assert sample.session_id is None
+    assert sample.end_session is False
 
 
 def test_build_sample_accepts_assistant_as_last_message():
