@@ -1,3 +1,6 @@
+import asyncio
+from pathlib import Path
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -6,6 +9,14 @@ from autoagent.models.db import Base
 
 _engine = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+# alembic/versions/<this>_baseline_schema.py — the "create everything from
+# scratch" migration. Pre-existing (pre-Alembic) DBs get stamped here, not
+# to head, so migrations after the baseline (e.g. the ensure_ascii
+# backfill) still actually run once for them instead of being silently
+# skipped.
+_BASELINE_REVISION = "e40685cf4319"
 
 
 def _db_url() -> str:
@@ -35,90 +46,91 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
+def _alembic_config():
+    from alembic.config import Config
+
+    cfg = Config(str(_REPO_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(_REPO_ROOT / "alembic"))
+    return cfg
+
+
+def _alembic_stamp_head() -> None:
+    from alembic import command
+
+    command.stamp(_alembic_config(), "head")
+
+
+def _alembic_stamp_baseline_then_upgrade_head() -> None:
+    from alembic import command
+
+    cfg = _alembic_config()
+    command.stamp(cfg, _BASELINE_REVISION)
+    command.upgrade(cfg, "head")
+
+
+def _alembic_upgrade_head() -> None:
+    from alembic import command
+
+    command.upgrade(_alembic_config(), "head")
+
+
 async def init_db() -> None:
+    """Create/migrate the schema, then bring it to Alembic's latest head.
+
+    Schema changes going forward are Alembic migrations under alembic/
+    (see CLAUDE.md), not hand-rolled ALTER TABLE checks here. Three cases:
+
+      - Fresh DB (every pytest run, and any brand-new install): create the
+        full current schema directly from the ORM models — fast, no need
+        to replay migration history step by step — then stamp so Alembic
+        considers it fully migrated. This only stays correct as long as
+        models/db.py and the latest migration describe the same schema.
+      - Pre-existing DB with no alembic_version table: a database that
+        predates this project using Alembic. Its schema already matches
+        (or was hand-migrated via the old ad-hoc ALTER TABLE/CREATE INDEX
+        checks this replaced to match) what the baseline migration
+        produces — stamp to *baseline*, not head, so we don't try to
+        re-create tables/columns/indexes that already exist, then run a
+        normal upgrade so anything after baseline (e.g. the ensure_ascii
+        backfill) still actually executes once for this DB instead of
+        being silently skipped.
+      - Already alembic-managed: apply anything newer than what's recorded.
+    """
     engine = get_engine()
+    is_sqlite = engine.url.get_backend_name().startswith("sqlite")
+
     async with engine.begin() as conn:
-        if engine.url.get_backend_name().startswith("sqlite"):
+        if is_sqlite:
             # WAL lets readers (2s UI polling) run concurrently with writers
             # (per-sample upserts) instead of blocking on a whole-db lock.
             # journal_mode is persistent (stored in the db file); setting it
             # once at boot is enough. Per-connection busy waiting comes from
             # the engine connect_args timeout above.
             await conn.execute(text("PRAGMA journal_mode=WAL"))
-        await conn.run_sync(Base.metadata.create_all)
-        if engine.url.get_backend_name().startswith("sqlite"):
-            result = await conn.execute(text("PRAGMA table_info(devices)"))
-            device_columns = {row[1] for row in result.fetchall()}
-            if "adb_keyboard_installed" not in device_columns:
-                await conn.execute(
-                    text("ALTER TABLE devices ADD COLUMN adb_keyboard_installed BOOLEAN")
-                )
-            if "adb_keyboard_enabled" not in device_columns:
-                await conn.execute(
-                    text("ALTER TABLE devices ADD COLUMN adb_keyboard_enabled BOOLEAN")
-                )
-            result = await conn.execute(text("PRAGMA table_info(samples)"))
-            sample_columns = {row[1] for row in result.fetchall()}
-            if "llm_responses_json" not in sample_columns:
-                await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_responses_json TEXT"))
-            if "llm_errors_json" not in sample_columns:
-                await conn.execute(text("ALTER TABLE samples ADD COLUMN llm_errors_json TEXT"))
-            result = await conn.execute(text("PRAGMA table_info(batches)"))
-            batch_columns = {row[1] for row in result.fetchall()}
-            if "samples_request_json" not in batch_columns:
-                await conn.execute(
-                    text("ALTER TABLE batches ADD COLUMN samples_request_json TEXT")
-                )
-            # Indexes so list/count/stats/retention queries don't full-scan
-            # as batches/samples accumulate — create_all() adds these for
-            # fresh DBs; this covers upgrades of existing dev/prod databases.
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_batches_created_at ON batches (created_at)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_batches_status ON batches (status)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_samples_status ON samples (status)")
-            )
+
+    if not is_sqlite:
+        await asyncio.to_thread(_alembic_upgrade_head)
+        return
+
+    async with engine.begin() as conn:
+        existing = (
             await conn.execute(
                 text(
-                    "CREATE INDEX IF NOT EXISTS ix_samples_target_profile "
-                    "ON samples (target_profile)"
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name IN ('batches', 'alembic_version')"
                 )
             )
-            # Backfill: prompts_sent_json used to be written with ensure_ascii
-            # (default), so non-ASCII prompts were stored as \uXXXX escapes and
-            # the batch search LIKE could never match a Chinese query. Re-dump
-            # any still-escaped rows as literal UTF-8. Idempotent: converted
-            # rows no longer contain "\u" so they're skipped next boot.
-            await _backfill_prompts_ensure_ascii(conn)
+        ).fetchall()
+    names = {row[0] for row in existing}
 
-
-async def _backfill_prompts_ensure_ascii(conn) -> None:
-    import json as _json
-
-    rows = (
-        await conn.execute(
-            text(
-                "SELECT batch_id, id, prompts_sent_json FROM samples "
-                "WHERE prompts_sent_json LIKE '%\\u%'"
-            )
-        )
-    ).fetchall()
-    for batch_id, sample_id, raw in rows:
-        try:
-            fixed = _json.dumps(_json.loads(raw), ensure_ascii=False)
-        except (TypeError, ValueError):
-            continue
-        if fixed != raw:
-            await conn.execute(
-                text(
-                    "UPDATE samples SET prompts_sent_json = :v "
-                    "WHERE batch_id = :b AND id = :s"
-                ),
-                {"v": fixed, "b": batch_id, "s": sample_id},
-            )
+    if not names:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await asyncio.to_thread(_alembic_stamp_head)
+    elif "alembic_version" not in names:
+        await asyncio.to_thread(_alembic_stamp_baseline_then_upgrade_head)
+    else:
+        await asyncio.to_thread(_alembic_upgrade_head)
 
 
 async def reset_db_for_tests() -> None:

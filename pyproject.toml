@@ -23,6 +23,7 @@ dependencies = [
   "mss>=9.0",
   "pyautogui>=0.9.54",
   "pyperclip>=1.9.0",
+  "alembic>=1.18.5",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +56,12 @@ extend-safe-fixes = []
 [tool.ruff.lint.extend-per-file-ignores]
 "src/autoagent/api/*.py" = ["B008"]
 "src/autoagent/auth/deps.py" = ["B008"]
+# Alembic's --autogenerate puts each column on its own op.create_table(...)
+# line, which reads fine but often clears 100 cols (e.g. a DateTime column
+# with a server_default). That's the standard/expected shape for every
+# future generated migration too, not just this one, so it's ignored for
+# the whole versions/ directory rather than per-file.
+"alembic/versions/*.py" = ["E501"]
 # Pre-existing >100-col lines that predate `ruff check` actually being run
 # repo-wide in CI (it was only ever spot-checked against touched files).
 # ruff format doesn't autofix E501, and reflowing these — several are long
