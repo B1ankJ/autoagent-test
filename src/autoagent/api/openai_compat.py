@@ -76,6 +76,7 @@ async def create_chat_completion(request: Request) -> JSONResponse:
                 message=result.error or "all devices reserved by other session(s)",
                 error_type="rate_limit_error",
                 code="device_reserved",
+                extra={"blocking_session_ids": blocking},
             )
         response = build_chat_completion_response(body, result, profile)
         return JSONResponse(status_code=200, content=response.model_dump())

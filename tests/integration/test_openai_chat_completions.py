@@ -144,6 +144,7 @@ async def test_chat_completions_rejects_stream_true(client: AsyncClient) -> None
 
     assert response.status_code == 400
     assert response.json()["error"]["param"] == "stream"
+    assert response.json()["x_autoagent"] is None  # only populated for errors that need it
 
 
 async def test_chat_completions_returns_openai_shaped_400_for_malformed_json(
@@ -312,6 +313,7 @@ async def test_chat_completions_returns_429_when_all_devices_reserved(
     body = response.json()
     assert body["error"]["type"] == "rate_limit_error"
     assert body["error"]["code"] == "device_reserved"
+    assert body["x_autoagent"]["blocking_session_ids"] == ["conv-other"]
 
 
 async def test_chat_completions_prefers_llm_response_and_falls_back_when_needed(

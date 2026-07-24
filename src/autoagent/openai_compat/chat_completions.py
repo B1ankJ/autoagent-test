@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -34,6 +35,12 @@ class OpenAICompatError(Exception):
     error_type: str = "invalid_request_error"
     param: str | None = None
     code: str | None = None
+    # Structured, machine-readable detail beyond the free-text message —
+    # e.g. {"blocking_session_ids": [...]} for a 429 device-reservation
+    # conflict. Mirrors the x_autoagent extension already on the success
+    # response shape; None (the default) for every error that doesn't
+    # need one.
+    extra: dict[str, Any] | None = None
 
     def to_response(self) -> OpenAIErrorResponse:
         return OpenAIErrorResponse(
@@ -42,7 +49,8 @@ class OpenAICompatError(Exception):
                 type=self.error_type,
                 param=self.param,
                 code=self.code,
-            )
+            ),
+            x_autoagent=self.extra,
         )
 
 

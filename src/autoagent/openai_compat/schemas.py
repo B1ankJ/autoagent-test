@@ -83,3 +83,8 @@ class OpenAIError(BaseModel):
 
 class OpenAIErrorResponse(BaseModel):
     error: OpenAIError
+    # Structured extension alongside the standard OpenAI error envelope —
+    # same idea as ChatCompletionResponse.x_autoagent on the success side.
+    # None for ordinary errors; populated for ones with machine-readable
+    # detail beyond the free-text message (e.g. a 429's blocking_session_ids).
+    x_autoagent: dict[str, Any] | None = None
