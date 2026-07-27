@@ -69,6 +69,7 @@ export function DevicesPage() {
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
   const [selectedSerials, setSelectedSerials] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [releaseAllBusy, setReleaseAllBusy] = useState(false)
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
     const stored =
       typeof window !== 'undefined' ? window.localStorage.getItem(VIEW_STORAGE_KEY) : null
@@ -113,6 +114,22 @@ export function DevicesPage() {
       message.success('已释放')
     } catch (e) {
       message.error((e as Error).message)
+    }
+  }
+
+  const onReleaseAllSessions = async () => {
+    const ids = (deviceSessions.data ?? []).map((s) => s.session_id)
+    if (ids.length === 0) return
+    setReleaseAllBusy(true)
+    try {
+      const results = await Promise.allSettled(ids.map((id) => releaseSession.mutateAsync(id)))
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - ok
+      message[failed ? 'warning' : 'success'](
+        `已释放 ${ok} 个会话${failed ? `,${failed} 个失败` : ''}`,
+      )
+    } finally {
+      setReleaseAllBusy(false)
     }
   }
 
@@ -174,6 +191,26 @@ export function DevicesPage() {
       <Card
         size="small"
         title="多轮对话设备占用"
+        extra={
+          <Popconfirm
+            title="释放全部会话占用的设备?"
+            description="仅在确认所有多轮对话均已结束时操作;仍在进行中的对话,后续请求可能被分配到其他设备,导致上下文错乱。"
+            okText="全部释放"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            onConfirm={onReleaseAllSessions}
+            disabled={releaseAllBusy}
+          >
+            <Button
+              size="small"
+              danger
+              loading={releaseAllBusy}
+              disabled={(deviceSessions.data?.length ?? 0) === 0 && !releaseAllBusy}
+            >
+              一键释放全部{deviceSessions.data?.length ? ` (${deviceSessions.data.length})` : ''}
+            </Button>
+          </Popconfirm>
+        }
         style={{ marginBottom: 16 }}
         styles={{ body: { padding: 0 } }}
       >

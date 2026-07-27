@@ -165,6 +165,28 @@ it('bulk-deletes selected devices after confirmation', async () => {
 it('shows a message when no session is currently occupying a device', () => {
   renderPage()
   expect(screen.getByText('当前没有正在占用设备的多轮对话')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '一键释放全部' })).toBeDisabled()
+})
+
+it('releases every active session via 一键释放全部', async () => {
+  const user = userEvent.setup()
+  mockUseDeviceSessions.mockReturnValue({
+    data: [
+      { session_id: 'conv-1', serial: 'emulator-5554', expires_in_sec: 600 },
+      { session_id: 'conv-2', serial: 'emulator-5556', expires_in_sec: 600 },
+    ],
+    isLoading: false,
+  })
+  renderPage()
+
+  const trigger = screen.getByRole('button', { name: '一键释放全部 (2)' })
+  expect(trigger).toBeEnabled()
+  await user.click(trigger)
+  const popup = await screen.findByRole('tooltip')
+  await user.click(within(popup).getByRole('button', { name: '全部释放' }))
+
+  expect(mockReleaseSession).toHaveBeenCalledWith('conv-1')
+  expect(mockReleaseSession).toHaveBeenCalledWith('conv-2')
 })
 
 it('renders an active session pin and releases it after confirmation', async () => {
@@ -180,9 +202,11 @@ it('renders an active session pin and releases it after confirmation', async () 
   expect(screen.getByText('Pixel 8 (emulator-5554)')).toBeInTheDocument()
   expect(screen.getByText('10 分 5 秒')).toBeInTheDocument()
 
-  // AntD Button inserts a mid-word space between two-character CJK labels
-  // ("释放" renders as "释 放"), same as the 批量删除 case below.
-  await user.click(screen.getByRole('button', { name: /释\s?放/ }))
+  // Scope to the row's own button: the page also has a 一键释放全部 button
+  // whose name contains "释放" too, and (like 批量删除 below) AntD inserts a
+  // mid-word space in the two-character "释放" label ("释 放").
+  const row = screen.getByText('conv-1').closest('tr') as HTMLElement
+  await user.click(within(row).getByRole('button', { name: /释\s?放/ }))
   const popup = await screen.findByRole('tooltip')
   await user.click(within(popup).getByRole('button', { name: /释\s?放/ }))
 
