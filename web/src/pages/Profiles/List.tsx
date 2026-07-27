@@ -1,5 +1,6 @@
 import {
   DeleteOutlined,
+  DesktopOutlined,
   EditOutlined,
   FileTextOutlined,
   MobileOutlined,
@@ -14,6 +15,7 @@ import { useNavigate } from 'react-router-dom'
 import { useDeleteProfile, useProfiles } from '../../api/profiles'
 import { DeviceBindingModal } from '../../components/DeviceBindingModal'
 import { DeviceInitModal } from '../../components/DeviceInitModal'
+import { ProfileDeviceScreensModal } from '../../components/ProfileDeviceScreensModal'
 import { ModeTag } from '../../components/ModeTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
@@ -30,6 +32,9 @@ export function ProfileList() {
   // current serials to seed the checkboxes.
   const [bindTarget, setBindTarget] = useState<{ name: string; serials: string[] } | null>(null)
   const [initTarget, setInitTarget] = useState<{ name: string; serials: string[] } | null>(null)
+  const [screensTarget, setScreensTarget] = useState<{ name: string; serials: string[] } | null>(
+    null,
+  )
 
   const groups = {
     api: [] as ProfileSummary[],
@@ -87,6 +92,16 @@ export function ProfileList() {
                 onClick={() => setInitTarget({ name: row.name, serials })}
               >
                 初始化
+              </Button>
+              <Button
+                size="small"
+                type="link"
+                icon={<DesktopOutlined />}
+                disabled={serials.length === 0}
+                title={serials.length === 0 ? '先绑定设备' : '查看该 profile 绑定设备的实时画面'}
+                onClick={() => setScreensTarget({ name: row.name, serials })}
+              >
+                查看画面
               </Button>
             </Space>
           )
@@ -165,6 +180,11 @@ export function ProfileList() {
         profileName={initTarget?.name ?? null}
         serials={initTarget?.serials ?? []}
         onClose={() => setInitTarget(null)}
+      />
+      <ProfileDeviceScreensModal
+        profileName={screensTarget?.name ?? null}
+        serials={screensTarget?.serials ?? []}
+        onClose={() => setScreensTarget(null)}
       />
       <PageHeader
         eyebrow="资源"

@@ -12,10 +12,8 @@ import {
   App,
   Badge,
   Button,
-  Col,
   Popconfirm,
   Popover,
-  Row,
   Segmented,
   Space,
   Table,
@@ -38,7 +36,7 @@ import {
   useReleaseDeviceSession,
   useUpdateDeviceLabel,
 } from '../../api/devices'
-import { DeviceStreamCard } from '../../components/DeviceStreamCard'
+import { DeviceScreenGrid } from '../../components/DeviceScreenGrid'
 import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
@@ -305,13 +303,7 @@ export function DevicesPage() {
           }
         />
       ) : viewMode === 'cards' ? (
-        <Row gutter={[12, 12]}>
-          {rows.map((row) => (
-            <Col xs={24} sm={12} md={12} lg={8} xl={6} key={row.serial}>
-              <DeviceStreamCard device={row} onOpenFullView={setStreamSerial} />
-            </Col>
-          ))}
-        </Row>
+        <DeviceScreenGrid devices={rows} onOpenFullView={setStreamSerial} />
       ) : (
         <>
           {selectedSerials.length > 0 ? (
