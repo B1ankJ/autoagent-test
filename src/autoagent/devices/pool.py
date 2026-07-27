@@ -90,6 +90,19 @@ class DevicePool:
             }
         )
 
+    def list_sessions(self) -> list[tuple[str, str, float]]:
+        """List active (non-expired) session pins as (session_id, serial, remaining_seconds).
+
+        Read-only — unlike `_lookup_pin`, doesn't evict expired entries it
+        happens to see (they'll fall out naturally on next lookup/insert).
+        """
+        now = time.monotonic()
+        return [
+            (sid, serial, expires_at - now)
+            for sid, (serial, expires_at) in self._session_pins.items()
+            if expires_at > now
+        ]
+
     def release_session(self, session_id: str) -> bool:
         """Explicitly free a session's device pin. Returns whether one existed.
 

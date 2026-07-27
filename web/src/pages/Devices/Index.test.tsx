@@ -10,6 +10,11 @@ const connectMutateAsync = vi.fn()
 const disconnectMutateAsync = vi.fn()
 const deleteMutateAsync = vi.fn()
 
+const { mockUseDeviceSessions, mockReleaseSession } = vi.hoisted(() => ({
+  mockUseDeviceSessions: vi.fn(),
+  mockReleaseSession: vi.fn(),
+}))
+
 vi.mock('../../api/deviceStream', () => {
   const stubHandle = {
     canvasRef: { current: null },
@@ -63,6 +68,8 @@ vi.mock('../../api/devices', () => ({
   useDisconnectDevice: () => ({ mutateAsync: disconnectMutateAsync, isPending: false }),
   useUpdateDeviceLabel: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteDevice: () => ({ mutateAsync: deleteMutateAsync, isPending: false }),
+  useDeviceSessions: mockUseDeviceSessions,
+  useReleaseDeviceSession: () => ({ mutateAsync: mockReleaseSession, isPending: false }),
 }))
 
 function renderPage() {
@@ -78,6 +85,8 @@ beforeEach(() => {
   connectMutateAsync.mockClear()
   disconnectMutateAsync.mockClear()
   deleteMutateAsync.mockClear()
+  mockReleaseSession.mockClear()
+  mockUseDeviceSessions.mockReturnValue({ data: [], isLoading: false })
 })
 
 it('renders device rows', () => {
@@ -151,4 +160,31 @@ it('bulk-deletes selected devices after confirmation', async () => {
 
   expect(deleteMutateAsync).toHaveBeenCalledWith('emulator-5554')
   expect(deleteMutateAsync).toHaveBeenCalledWith('emulator-5556')
+})
+
+it('shows a message when no session is currently occupying a device', () => {
+  renderPage()
+  expect(screen.getByText('当前没有正在占用设备的多轮对话')).toBeInTheDocument()
+})
+
+it('renders an active session pin and releases it after confirmation', async () => {
+  const user = userEvent.setup()
+  mockUseDeviceSessions.mockReturnValue({
+    data: [{ session_id: 'conv-1', serial: 'emulator-5554', expires_in_sec: 605 }],
+    isLoading: false,
+  })
+  renderPage()
+
+  expect(screen.getByText('conv-1')).toBeInTheDocument()
+  // Friendly label (from the mocked device list) rather than the bare serial.
+  expect(screen.getByText('Pixel 8 (emulator-5554)')).toBeInTheDocument()
+  expect(screen.getByText('10 分 5 秒')).toBeInTheDocument()
+
+  // AntD Button inserts a mid-word space between two-character CJK labels
+  // ("释放" renders as "释 放"), same as the 批量删除 case below.
+  await user.click(screen.getByRole('button', { name: /释\s?放/ }))
+  const popup = await screen.findByRole('tooltip')
+  await user.click(within(popup).getByRole('button', { name: /释\s?放/ }))
+
+  expect(mockReleaseSession).toHaveBeenCalledWith('conv-1')
 })

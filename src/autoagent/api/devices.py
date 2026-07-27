@@ -13,7 +13,7 @@ from autoagent.devices.adb import (
     is_package_installed,
     set_ime,
 )
-from autoagent.models.api import DeviceInfo, DeviceLabelUpdate
+from autoagent.models.api import DeviceInfo, DeviceLabelUpdate, DeviceSessionInfo
 from autoagent.storage.devices import (
     delete_device,
     update_device_enabled,
@@ -122,6 +122,15 @@ async def enable_ime_route(serial: str) -> DeviceInfo:
         online=True,
         seen_at=datetime.now(timezone.utc),
     )
+
+
+@router.get("/sessions", response_model=list[DeviceSessionInfo])
+async def list_device_sessions() -> list[DeviceSessionInfo]:
+    """Active multi-turn Sample.session_id -> device pins (see DevicePool)."""
+    return [
+        DeviceSessionInfo(session_id=sid, serial=serial, expires_in_sec=max(0, int(remaining)))
+        for sid, serial, remaining in get_device_pool().list_sessions()
+    ]
 
 
 @router.post("/sessions/{session_id}/release")

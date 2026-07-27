@@ -7,18 +7,33 @@ import {
   ReloadOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'
-import { App, Button, Col, Popconfirm, Row, Segmented, Space, Table, Tag, Typography } from 'antd'
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  Popconfirm,
+  Row,
+  Segmented,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd'
 import { useState } from 'react'
 
 import {
+  DeviceSession,
   useConnectDevice,
   useDeleteDevice,
+  useDeviceSessions,
   useDevices,
   useDisableIme,
   useDisconnectDevice,
   useEnableIme,
   useInstallAdbKeyboard,
   useRefreshDevices,
+  useReleaseDeviceSession,
   useUpdateDeviceLabel,
 } from '../../api/devices'
 import { DeviceStreamCard } from '../../components/DeviceStreamCard'
@@ -31,6 +46,13 @@ import { Device } from '../../types/api'
 type ViewMode = 'table' | 'cards'
 const VIEW_STORAGE_KEY = 'autoagent_devices_view'
 
+function formatRemaining(sec: number): string {
+  if (sec <= 0) return '即将过期'
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m} 分 ${s} 秒` : `${s} 秒`
+}
+
 export function DevicesPage() {
   const devices = useDevices()
   const refresh = useRefreshDevices()
@@ -41,6 +63,8 @@ export function DevicesPage() {
   const disconnectDevice = useDisconnectDevice()
   const updateLabel = useUpdateDeviceLabel()
   const deleteDevice = useDeleteDevice()
+  const deviceSessions = useDeviceSessions()
+  const releaseSession = useReleaseDeviceSession()
   const { message } = App.useApp()
   const [streamSerial, setStreamSerial] = useState<string | null>(null)
   const [selectedSerials, setSelectedSerials] = useState<string[]>([])
@@ -78,6 +102,15 @@ export function DevicesPage() {
         await connectDevice.mutateAsync(row.serial)
         message.success('已启用')
       }
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
+  const onReleaseSession = async (sessionId: string) => {
+    try {
+      await releaseSession.mutateAsync(sessionId)
+      message.success('已释放')
     } catch (e) {
       message.error((e as Error).message)
     }
@@ -138,6 +171,65 @@ export function DevicesPage() {
           </Space>
         }
       />
+      <Card
+        size="small"
+        title="多轮对话设备占用"
+        style={{ marginBottom: 16 }}
+        styles={{ body: { padding: 0 } }}
+      >
+        <Table<DeviceSession>
+          rowKey="session_id"
+          size="small"
+          loading={deviceSessions.isLoading}
+          dataSource={deviceSessions.data ?? []}
+          pagination={false}
+          locale={{ emptyText: '当前没有正在占用设备的多轮对话' }}
+          columns={[
+            {
+              title: 'Session ID',
+              dataIndex: 'session_id',
+              render: (value: string) => <span className="aa-mono">{value}</span>,
+            },
+            {
+              title: '占用设备',
+              dataIndex: 'serial',
+              render: (serial: string) => {
+                const d = rows.find((device) => device.serial === serial)
+                const shown = d?.label || d?.model ? `${d.label || d.model} (${serial})` : serial
+                return <Tag className="aa-mono">{shown}</Tag>
+              },
+            },
+            {
+              title: '剩余时间',
+              dataIndex: 'expires_in_sec',
+              width: 140,
+              render: (sec: number) => (
+                <span className="aa-muted" title="超过此时间未使用会自动释放">
+                  {formatRemaining(sec)}
+                </span>
+              ),
+            },
+            {
+              title: '操作',
+              width: 100,
+              render: (_, row) => (
+                <Popconfirm
+                  title="释放该会话占用的设备?"
+                  description="仅在确认多轮对话已结束时操作;如果对方还会继续发送请求,后续请求可能被分配到其他设备,导致对话上下文错乱。"
+                  okText="释放"
+                  okButtonProps={{ danger: true }}
+                  cancelText="取消"
+                  onConfirm={() => onReleaseSession(row.session_id)}
+                >
+                  <Button size="small" danger loading={releaseSession.isPending}>
+                    释放
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      </Card>
       {devices.isError ? (
         <ErrorState
           title="设备列表加载失败"

@@ -125,3 +125,38 @@ export function useDisableIme() {
     },
   })
 }
+
+// Active Sample.session_id -> device pins (multi-turn conversations chained
+// via new_session=false across separate requests — see DevicePool). Polls
+// like useDevices so the remaining-TTL display stays roughly current.
+export interface DeviceSession {
+  session_id: string
+  serial: string
+  expires_in_sec: number
+}
+
+export function useDeviceSessions() {
+  return useQuery({
+    queryKey: ['device-sessions'],
+    queryFn: async () => (await client.get<DeviceSession[]>('/devices/sessions')).data,
+    refetchInterval: 10_000,
+  })
+}
+
+export function useReleaseDeviceSession() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (sessionId: string) =>
+      (
+        await client.post<{ session_id: string; released: boolean }>(
+          `/devices/sessions/${encodeURIComponent(sessionId)}/release`,
+        )
+      ).data,
+    onSuccess: (_result, sessionId) => {
+      queryClient.setQueryData<DeviceSession[]>(['device-sessions'], (prev = []) =>
+        prev.filter((s) => s.session_id !== sessionId),
+      )
+    },
+  })
+}

@@ -112,3 +112,27 @@ async def test_release_session_endpoint(client):
     assert r.status_code == 200
     assert r.json() == {"session_id": "conv-1", "released": True}
     assert pool._lookup_pin("conv-1") is None
+
+
+async def test_list_device_sessions_endpoint(client):
+    from autoagent.api._deps import get_device_pool
+
+    h = await _h(client)
+    r = await client.get("/api/v1/devices/sessions", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []
+
+    pool = get_device_pool()
+    pool._remember_pin("conv-1", "emulator-5554")
+    r = await client.get("/api/v1/devices/sessions", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["session_id"] == "conv-1"
+    assert body[0]["serial"] == "emulator-5554"
+    assert 0 < body[0]["expires_in_sec"] <= 1800
+
+    # Released pins disappear from the listing.
+    await client.post("/api/v1/devices/sessions/conv-1/release", headers=h)
+    r = await client.get("/api/v1/devices/sessions", headers=h)
+    assert r.json() == []

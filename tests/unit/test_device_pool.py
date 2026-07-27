@@ -314,6 +314,54 @@ async def test_release_session_frees_the_pin() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_sessions_reports_active_pins() -> None:
+    import autoagent.devices.pool as pool_mod
+
+    pool = DevicePool(lambda: [_device("a"), _device("b")])
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        session_id="conv-1", new_session=True,
+    ):
+        pass
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"b"},
+        session_id="conv-2", new_session=True,
+    ):
+        pass
+
+    sessions = {sid: (serial, remaining) for sid, serial, remaining in pool.list_sessions()}
+    assert set(sessions) == {"conv-1", "conv-2"}
+    assert sessions["conv-1"][0] == "a"
+    assert sessions["conv-2"][0] == "b"
+    # Fresh pins should report close to the full TTL remaining.
+    assert 0 < sessions["conv-1"][1] <= pool_mod._SESSION_TTL_SEC
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_excludes_released_and_expired_pins(monkeypatch) -> None:
+    import autoagent.devices.pool as pool_mod
+
+    t = [1000.0]
+    monkeypatch.setattr(pool_mod.time, "monotonic", lambda: t[0])
+    pool = DevicePool(lambda: [_device("a"), _device("b")])
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"a"},
+        session_id="conv-released", new_session=True,
+    ):
+        pass
+    async with pool.acquire(
+        preferred=None, timeout_sec=0.1, allowed_serials={"b"},
+        session_id="conv-expired", new_session=True,
+    ):
+        pass
+    pool.release_session("conv-released")
+
+    t[0] += pool_mod._SESSION_TTL_SEC + 1
+
+    assert pool.list_sessions() == []
+
+
+@pytest.mark.asyncio
 async def test_session_pin_expires_after_ttl(monkeypatch) -> None:
     import autoagent.devices.pool as pool_mod
 

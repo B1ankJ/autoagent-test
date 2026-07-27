@@ -150,6 +150,17 @@ class DeviceLabelUpdate(BaseModel):
     label: str | None = None
 
 
+class DeviceSessionInfo(BaseModel):
+    """One active multi-turn Sample.session_id -> device pin (DevicePool)."""
+
+    session_id: str
+    serial: str
+    # Remaining seconds until the pin self-heals via TTL if never released
+    # explicitly. Computed from a monotonic clock at read time, not an
+    # absolute timestamp (monotonic has no fixed epoch to serialize).
+    expires_in_sec: int
+
+
 class VLMConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     base_url: str | None = None
