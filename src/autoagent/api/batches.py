@@ -33,6 +33,7 @@ from autoagent.models.api import (
     BatchCreatedResponse,
     BatchCreateJSON,
     BatchDetail,
+    BatchStatus,
     BatchSummary,
     Mode,
     Sample,
@@ -201,12 +202,15 @@ async def batch_stats(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    mode: Mode | None = None,
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
     Returns {"total": N, "queued": .., "running": .., "done": .., "failed": ..,
-    "cancelled": ..}. Filter args mirror /batches so the dashboard cards
-    stay consistent with the visible list.
+    "cancelled": ..}. Filter args mirror /batches (minus `status` — this is
+    the per-status breakdown, so the caller picks the right key out of the
+    result instead of pre-filtering by status) so the dashboard cards stay
+    consistent with the visible list.
     """
     counts = await count_batches_by_status(
         q=q or None,
@@ -215,6 +219,7 @@ async def batch_stats(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
+        mode=mode,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
@@ -270,6 +275,8 @@ async def list_all(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    status: BatchStatus | None = None,
+    mode: Mode | None = None,
 ) -> list[BatchSummary]:
     rows = await list_batches(
         limit=limit,
@@ -280,6 +287,8 @@ async def list_all(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
+        status=status,
+        mode=mode,
     )
     # One aggregate query for the whole page's profiles + devices, and one
     # more for single-sample batches' previews — avoids N+1 per-batch

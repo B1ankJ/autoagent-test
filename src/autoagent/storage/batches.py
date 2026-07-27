@@ -108,6 +108,8 @@ async def list_batches(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    status: str | None = None,
+    mode: str | None = None,
 ) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
@@ -121,6 +123,10 @@ async def list_batches(
                 joined_samples = True
             return stmt_
 
+        if status:
+            stmt = stmt.where(Batch.status == status)
+        if mode:
+            stmt = stmt.where(Batch.mode == mode)
         if q:
             # Match batch name OR any of its samples' prompt JSON. Slow on
             # huge tables but adequate for the scale here.
@@ -171,11 +177,14 @@ async def count_batches_by_status(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    mode: str | None = None,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
 
     All filter args mirror list_batches so the dashboard cards stay
-    consistent with the visible list.
+    consistent with the visible list. No `status` filter here by design —
+    grouping by status is the whole point, so the caller reads the count for
+    whichever status it cares about out of the returned breakdown instead.
     """
     sm = get_sessionmaker()
     async with sm() as s:
@@ -189,6 +198,8 @@ async def count_batches_by_status(
                 joined_samples = True
             return stmt_
 
+        if mode:
+            stmt = stmt.where(Batch.mode == mode)
         if q:
             term = _like_term(q)
             stmt = ensure_samples_join(stmt).where(

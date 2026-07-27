@@ -11,7 +11,7 @@ from pytest_httpx import HTTPXMock
 from autoagent.auth.passwords import hash_password
 from autoagent.models.api import Sample
 from autoagent.profiles.registry import save_profile_yaml
-from autoagent.storage.batches import get_batch
+from autoagent.storage.batches import get_batch, update_batch_status
 from autoagent.storage.database import get_sessionmaker, init_db
 from autoagent.storage.users import upsert_user
 
@@ -227,6 +227,51 @@ async def test_list_batches(client, httpx_mock: HTTPXMock):
     r = await client.get("/api/v1/batches", headers=h)
     assert r.status_code == 200
     assert len(r.json()) >= 1
+
+
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+async def test_list_batches_and_stats_filter_by_status_and_mode(client, httpx_mock: HTTPXMock):
+    # Regression: GET /batches used to silently ignore ?status=/?mode= —
+    # the frontend applied them client-side to whatever page was fetched,
+    # which showed an empty table when the match wasn't on that page even
+    # though matching batches existed. Filtering must happen server-side.
+    httpx_mock.add_response(
+        url="https://api.example.com/v1/chat/completions",
+        json={"choices": [{"message": {"content": "x"}}]},
+    )
+    h = await _login(client)
+    body = {
+        "name": "will-fail",
+        "mode": "api",
+        "concurrency": 1,
+        "samples": [{"id": "t1", "prompts": ["x"], "mode": "api", "target_profile": "p_api"}],
+    }
+    created = await client.post("/api/v1/batches", json=body, headers=h)
+    batch_id = created.json()["batch_id"]
+    await _wait_done(client, h, batch_id)
+    await update_batch_status(batch_id, "failed")
+
+    r = await client.get("/api/v1/batches", params={"status": "failed"}, headers=h)
+    assert r.status_code == 200
+    assert [b["batch_id"] for b in r.json()] == [batch_id]
+
+    r_done = await client.get("/api/v1/batches", params={"status": "done"}, headers=h)
+    assert batch_id not in [b["batch_id"] for b in r_done.json()]
+
+    r_mode = await client.get(
+        "/api/v1/batches", params={"mode": "gui_android"}, headers=h
+    )
+    assert batch_id not in [b["batch_id"] for b in r_mode.json()]
+
+    # /stats has no `status` filter (it groups by status) but must still
+    # respect `mode`, mirroring /batches so the two stay consistent.
+    stats = await client.get("/api/v1/batches/stats", params={"mode": "api"}, headers=h)
+    assert stats.status_code == 200
+    assert stats.json()["failed"] == 1
+    stats_other_mode = await client.get(
+        "/api/v1/batches/stats", params={"mode": "gui_android"}, headers=h
+    )
+    assert stats_other_mode.json()["total"] == 0
 
 
 async def test_list_batches_rejects_limit_above_cap(client):

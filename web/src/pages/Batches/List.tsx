@@ -25,7 +25,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   useBatches,
@@ -196,6 +196,8 @@ export function BatchList() {
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
     emptyResponseOnly,
+    status: statusFilter,
+    mode: modeFilter,
   })
   const { data: stats } = useBatchStats({
     q: debouncedQ,
@@ -204,18 +206,16 @@ export function BatchList() {
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
     emptyResponseOnly,
+    mode: modeFilter,
   })
 
-  const rows = useMemo(
-    () =>
-      (data ?? []).filter(
-        (batch) =>
-          (!statusFilter || batch.status === statusFilter) &&
-          (!modeFilter || batch.mode === modeFilter),
-      ),
-    [data, statusFilter, modeFilter],
-  )
-  const total = stats?.total ?? 0
+  // status/mode are now applied server-side (paginated correctly); no
+  // client-side re-filtering needed here.
+  const rows = data ?? []
+  // /batches/stats groups by status rather than accepting one, so when a
+  // status filter is active the matching count is a specific key out of the
+  // breakdown rather than the grand total.
+  const total = (statusFilter ? stats?.[statusFilter] : stats?.total) ?? 0
   const activeCount = (stats?.queued ?? 0) + (stats?.running ?? 0)
 
   const onCancelActive = async () => {
@@ -703,10 +703,10 @@ export function BatchList() {
       ) : rows.length === 0 && !isLoading ? (
         <EmptyState
           icon={<ExperimentOutlined />}
-          title={debouncedQ ? '没有匹配的批次' : '还没有批次'}
+          title={debouncedQ || activeFilters.length > 0 ? '没有匹配的批次' : '还没有批次'}
           description={
-            debouncedQ
-              ? '换个关键字,或清空搜索看全部。'
+            debouncedQ || activeFilters.length > 0
+              ? '换个关键字或筛选条件,或清空筛选看全部。'
               : '创建第一个批次开始批量测试。'
           }
           action={

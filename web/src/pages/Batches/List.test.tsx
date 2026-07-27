@@ -18,11 +18,14 @@ const batch: BatchSummary = {
   devices: [],
 }
 
+const { mockUseBatches, mockUseBatchStats } = vi.hoisted(() => ({
+  mockUseBatches: vi.fn(),
+  mockUseBatchStats: vi.fn(),
+}))
+
 vi.mock('../../api/batches', () => ({
-  useBatches: () => ({ data: [batch], isLoading: false, isError: false, error: null, refetch: vi.fn() }),
-  useBatchStats: () => ({
-    data: { total: 1, queued: 0, running: 0, done: 1, failed: 0, cancelled: 0 },
-  }),
+  useBatches: mockUseBatches,
+  useBatchStats: mockUseBatchStats,
   useBatch: () => ({ data: undefined, isLoading: false, error: null }),
   useCancelActiveBatches: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useCancelBatch: () => ({ isPending: false, mutateAsync: vi.fn() }),
@@ -43,6 +46,16 @@ const COLUMN_VISIBILITY_KEY = 'autoagent_batches_visible_columns'
 describe('BatchList column visibility', () => {
   beforeEach(() => {
     localStorage.clear()
+    mockUseBatches.mockReturnValue({
+      data: [batch],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    mockUseBatchStats.mockReturnValue({
+      data: { total: 1, queued: 0, running: 0, done: 1, failed: 0, cancelled: 0 },
+    })
   })
 
   afterEach(() => {
@@ -72,5 +85,54 @@ describe('BatchList column visibility', () => {
     const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) ?? '[]') as string[]
     expect(saved).not.toContain('mode')
     expect(saved).toContain('started_at')
+  })
+})
+
+describe('BatchList status/mode filters', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockUseBatches.mockReturnValue({
+      data: [batch],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    mockUseBatchStats.mockReturnValue({
+      data: { total: 5, queued: 0, running: 0, done: 3, failed: 2, cancelled: 0 },
+    })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('sends status/mode from the URL to the backend queries instead of only filtering the fetched page client-side', async () => {
+    renderWithProviders(<BatchList />, { initialPath: '/batches?status=failed&mode=gui_android' })
+
+    // Regression: status/mode used to be parsed from the URL but only ever
+    // applied to `data` after the fact via Array.filter — since `data` is
+    // just one paginated page from the backend, a status with no matches on
+    // that page rendered an empty table even when matching batches existed
+    // elsewhere. They must reach the backend queries as real params.
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'failed', mode: 'gui_android' }),
+      )
+      expect(mockUseBatchStats).toHaveBeenLastCalledWith(
+        expect.objectContaining({ mode: 'gui_android' }),
+      )
+    })
+  })
+
+  it('paginates against the filtered count, not the grand total, when a status filter is active', async () => {
+    // /batches/stats groups by status rather than accepting one, so with
+    // status=failed active the pagination total must come from stats.failed
+    // (2), not stats.total (5) — otherwise the "共 N 条" count and page
+    // controls stay sized for every status combined.
+    renderWithProviders(<BatchList />, { initialPath: '/batches?status=failed' })
+
+    await waitFor(() => expect(screen.getByText('共 2 条')).toBeInTheDocument())
+    expect(screen.queryByText('共 5 条')).not.toBeInTheDocument()
   })
 })

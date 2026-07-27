@@ -2,10 +2,12 @@ import asyncio
 
 from autoagent.models.api import SampleResult
 from autoagent.storage.batches import (
+    count_batches_by_status,
     create_batch,
     get_batch,
     list_batches,
     update_batch_progress,
+    update_batch_status,
 )
 from autoagent.storage.database import init_db
 from autoagent.storage.samples import (
@@ -86,6 +88,51 @@ async def test_list_samples_for_batches_groups_by_batch_in_one_query():
 
 async def test_list_samples_for_batches_empty_ids_returns_empty_map():
     assert await list_samples_for_batches([]) == {}
+
+
+async def test_list_batches_filters_by_status_and_mode():
+    await init_db()
+    await create_batch(
+        batch_id="b1", name="n1", mode="api", concurrency=1, total=1, target_profile_default=None
+    )
+    await create_batch(
+        batch_id="b2",
+        name="n2",
+        mode="gui_android",
+        concurrency=1,
+        total=1,
+        target_profile_default=None,
+    )
+    await update_batch_status("b2", "failed")
+
+    only_failed = await list_batches(limit=10, offset=0, status="failed")
+    assert [b.id for b in only_failed] == ["b2"]
+
+    only_api = await list_batches(limit=10, offset=0, mode="api")
+    assert [b.id for b in only_api] == ["b1"]
+
+    # b1 is mode=api/status=queued, b2 is mode=gui_android/status=failed —
+    # no batch matches both filters at once.
+    assert await list_batches(limit=10, offset=0, status="failed", mode="api") == []
+
+
+async def test_count_batches_by_status_has_no_status_filter_but_respects_mode():
+    await init_db()
+    await create_batch(
+        batch_id="b1", name="n1", mode="api", concurrency=1, total=1, target_profile_default=None
+    )
+    await create_batch(
+        batch_id="b2",
+        name="n2",
+        mode="gui_android",
+        concurrency=1,
+        total=1,
+        target_profile_default=None,
+    )
+    await update_batch_status("b2", "failed")
+
+    counts = await count_batches_by_status(mode="gui_android")
+    assert counts == {"failed": 1, "total": 1}
 
 
 async def test_update_progress():
