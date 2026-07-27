@@ -18,6 +18,26 @@ def _make_sample(*, serial: str | None, response: str, status: str = "done") -> 
     )
 
 
+def _make_llm_sample(
+    *,
+    serial: str | None,
+    raw_response: str,
+    llm_response: str,
+    llm_error: str | None = None,
+) -> SampleResult:
+    return SampleResult(
+        id="s1",
+        status="done",
+        prompts_sent=["hi"],
+        responses=[raw_response],
+        llm_responses=[llm_response],
+        llm_errors=[llm_error],
+        mode="gui_android",
+        target_profile="p",
+        metadata={"device_serial": serial} if serial else {},
+    )
+
+
 @pytest.fixture(autouse=True)
 def _reset():
     rules._reset_streak_for_tests()
@@ -113,6 +133,37 @@ async def test_per_device_independent(monkeypatch):
     assert len(sent) == 1
     await rules.on_sample_result(_make_sample(serial="B", response=""), batch_id="b")
     assert len(sent) == 2
+
+
+async def test_empty_streak_ignores_raw_empty_when_llm_response_present(monkeypatch):
+    """Regression: a profile with LLM response extraction routinely has an
+    empty raw extraction (nothing directly copyable in the UI) that LLM
+    review recovers real text from — that must never count toward the
+    empty-response streak."""
+    sent: list[dict] = []
+    cfg = {"enabled": True, "webhook_url": "x", "empty_response_threshold": 1}
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for _ in range(5):
+        await rules.on_sample_result(
+            _make_llm_sample(serial="dev1", raw_response="", llm_response="real answer"),
+            batch_id="b",
+        )
+    assert sent == []
+
+
+async def test_empty_streak_fires_when_llm_extraction_also_failed(monkeypatch):
+    sent: list[dict] = []
+    cfg = {"enabled": True, "webhook_url": "x", "empty_response_threshold": 1}
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(
+        _make_llm_sample(serial="dev1", raw_response="", llm_response="", llm_error="auth"),
+        batch_id="b",
+    )
+    assert len(sent) == 1
 
 
 async def test_failed_status_ignored(monkeypatch):
@@ -457,6 +508,43 @@ async def test_same_response_finds_jpg_screenshots(monkeypatch, tmp_path):
     )
 
     assert seen_paths == [shot]
+
+
+async def test_same_response_streak_uses_effective_response_not_raw(monkeypatch):
+    """Regression: comparing raw `responses` directly meant every sample
+    from an LLM-extraction profile had an identical (empty) raw response,
+    which would false-positive the same-response streak constantly. The
+    streak must be keyed on the LLM-reviewed text — three *different*
+    effective responses (even with identical empty raw ones) must not fire,
+    and three *identical* effective responses must."""
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "get_config", _stub_vlm_config(
+        {"base_url": "x", "model": "m", "api_key": "k"}
+    ))
+    monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
+    monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record([]))
+    monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    for text in ("one", "two", "three"):
+        await rules.on_sample_result(
+            _make_llm_sample(serial="A", raw_response="", llm_response=text), batch_id="b"
+        )
+    assert sent == []
+
+    for _ in range(3):
+        await rules.on_sample_result(
+            _make_llm_sample(serial="A", raw_response="", llm_response="same"), batch_id="b"
+        )
+    assert len(sent) == 1
 
 
 async def test_same_response_whitelisted_skips(monkeypatch):

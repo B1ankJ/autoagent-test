@@ -16,6 +16,7 @@ from autoagent.models.api import SampleResult
 from autoagent.notifications import whitelist
 from autoagent.notifications.dingtalk import send_markdown
 from autoagent.notifications.vlm_judge import describe_judgement_error, is_normal_chat_page
+from autoagent.openai_compat.chat_completions import select_effective_response
 from autoagent.storage.configs import get_config, put_config
 
 _log = logging.getLogger(__name__)
@@ -111,11 +112,22 @@ def _is_terminal_done(result: SampleResult) -> bool:
     return result.status == "done"
 
 
+def _effective_response(result: SampleResult) -> str:
+    """The response this system actually stands behind (see
+    select_effective_response) — prefers the LLM-reviewed extraction over
+    the raw one when it ran and succeeded. Both notification rules below
+    must judge "empty" / "same response" against this, not raw `responses`
+    directly: a profile with LLM response extraction enabled routinely has
+    an empty raw extraction (nothing directly copyable in the UI) that the
+    LLM review recovers real text from, which used to trip both rules as
+    false positives.
+    """
+    return select_effective_response(result.responses, result.llm_responses, result.llm_errors)
+
+
 def _has_empty_response(result: SampleResult) -> bool:
     """True when the sample finished cleanly but produced no usable text."""
-    if not result.responses:
-        return True
-    return all((not isinstance(r, str)) or not r.strip() for r in result.responses)
+    return not _effective_response(result).strip()
 
 
 def _device_serial_of(result: SampleResult) -> str | None:
@@ -213,7 +225,7 @@ async def _rule_same_response_streak(
     # and we don't want to double-alert.
     if _has_empty_response(result):
         return
-    response = (result.responses[0] or "").strip()
+    response = _effective_response(result).strip()
     if not response:
         return
 
