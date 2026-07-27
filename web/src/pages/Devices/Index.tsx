@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   DeleteOutlined,
+  LockOutlined,
   MobileOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -9,10 +10,11 @@ import {
 } from '@ant-design/icons'
 import {
   App,
+  Badge,
   Button,
-  Card,
   Col,
   Popconfirm,
+  Popover,
   Row,
   Segmented,
   Space,
@@ -156,6 +158,87 @@ export function DevicesPage() {
 
   const rows = devices.data ?? []
   const onlineCount = rows.filter((d) => d.online).length
+  const sessionRows = deviceSessions.data ?? []
+
+  const sessionsTable = (
+    <Table<DeviceSession>
+      rowKey="session_id"
+      size="small"
+      style={{ width: 560 }}
+      loading={deviceSessions.isLoading}
+      dataSource={sessionRows}
+      pagination={false}
+      locale={{ emptyText: '当前没有正在占用设备的多轮对话' }}
+      columns={[
+        {
+          title: 'Session ID',
+          dataIndex: 'session_id',
+          render: (value: string) => <span className="aa-mono">{value}</span>,
+        },
+        {
+          title: '占用设备',
+          dataIndex: 'serial',
+          render: (serial: string) => {
+            const d = rows.find((device) => device.serial === serial)
+            const shown = d?.label || d?.model ? `${d.label || d.model} (${serial})` : serial
+            return <Tag className="aa-mono">{shown}</Tag>
+          },
+        },
+        {
+          title: '剩余时间',
+          dataIndex: 'expires_in_sec',
+          width: 140,
+          render: (sec: number) => (
+            <span className="aa-muted" title="超过此时间未使用会自动释放">
+              {formatRemaining(sec)}
+            </span>
+          ),
+        },
+        {
+          title: '操作',
+          width: 90,
+          render: (_, row) => (
+            <Popconfirm
+              title="释放该会话占用的设备?"
+              description="仅在确认多轮对话已结束时操作;如果对方还会继续发送请求,后续请求可能被分配到其他设备,导致对话上下文错乱。"
+              okText="释放"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              onConfirm={() => onReleaseSession(row.session_id)}
+            >
+              <Button size="small" danger loading={releaseSession.isPending}>
+                释放
+              </Button>
+            </Popconfirm>
+          ),
+        },
+      ]}
+    />
+  )
+
+  const sessionsPopoverTitle = (
+    <Space style={{ width: 560, justifyContent: 'space-between' }}>
+      <span>多轮对话设备占用</span>
+      <Popconfirm
+        title="释放全部会话占用的设备?"
+        description="仅在确认所有多轮对话均已结束时操作;仍在进行中的对话,后续请求可能被分配到其他设备,导致上下文错乱。"
+        okText="全部释放"
+        okButtonProps={{ danger: true }}
+        cancelText="取消"
+        onConfirm={onReleaseAllSessions}
+        disabled={releaseAllBusy}
+      >
+        <Button
+          size="small"
+          danger
+          loading={releaseAllBusy}
+          disabled={sessionRows.length === 0 && !releaseAllBusy}
+        >
+          一键释放全部
+        </Button>
+      </Popconfirm>
+    </Space>
+  )
 
   return (
     <div>
@@ -178,6 +261,16 @@ export function DevicesPage() {
                 { label: '画面', value: 'cards', icon: <AppstoreOutlined /> },
               ]}
             />
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              title={sessionsPopoverTitle}
+              content={sessionsTable}
+            >
+              <Badge count={sessionRows.length} size="small">
+                <Button icon={<LockOutlined />}>会话占用</Button>
+              </Badge>
+            </Popover>
             <Button
               icon={<ReloadOutlined />}
               loading={refresh.isPending}
@@ -188,85 +281,6 @@ export function DevicesPage() {
           </Space>
         }
       />
-      <Card
-        size="small"
-        title="多轮对话设备占用"
-        extra={
-          <Popconfirm
-            title="释放全部会话占用的设备?"
-            description="仅在确认所有多轮对话均已结束时操作;仍在进行中的对话,后续请求可能被分配到其他设备,导致上下文错乱。"
-            okText="全部释放"
-            okButtonProps={{ danger: true }}
-            cancelText="取消"
-            onConfirm={onReleaseAllSessions}
-            disabled={releaseAllBusy}
-          >
-            <Button
-              size="small"
-              danger
-              loading={releaseAllBusy}
-              disabled={(deviceSessions.data?.length ?? 0) === 0 && !releaseAllBusy}
-            >
-              一键释放全部{deviceSessions.data?.length ? ` (${deviceSessions.data.length})` : ''}
-            </Button>
-          </Popconfirm>
-        }
-        style={{ marginBottom: 16 }}
-        styles={{ body: { padding: 0 } }}
-      >
-        <Table<DeviceSession>
-          rowKey="session_id"
-          size="small"
-          loading={deviceSessions.isLoading}
-          dataSource={deviceSessions.data ?? []}
-          pagination={false}
-          locale={{ emptyText: '当前没有正在占用设备的多轮对话' }}
-          columns={[
-            {
-              title: 'Session ID',
-              dataIndex: 'session_id',
-              render: (value: string) => <span className="aa-mono">{value}</span>,
-            },
-            {
-              title: '占用设备',
-              dataIndex: 'serial',
-              render: (serial: string) => {
-                const d = rows.find((device) => device.serial === serial)
-                const shown = d?.label || d?.model ? `${d.label || d.model} (${serial})` : serial
-                return <Tag className="aa-mono">{shown}</Tag>
-              },
-            },
-            {
-              title: '剩余时间',
-              dataIndex: 'expires_in_sec',
-              width: 140,
-              render: (sec: number) => (
-                <span className="aa-muted" title="超过此时间未使用会自动释放">
-                  {formatRemaining(sec)}
-                </span>
-              ),
-            },
-            {
-              title: '操作',
-              width: 100,
-              render: (_, row) => (
-                <Popconfirm
-                  title="释放该会话占用的设备?"
-                  description="仅在确认多轮对话已结束时操作;如果对方还会继续发送请求,后续请求可能被分配到其他设备,导致对话上下文错乱。"
-                  okText="释放"
-                  okButtonProps={{ danger: true }}
-                  cancelText="取消"
-                  onConfirm={() => onReleaseSession(row.session_id)}
-                >
-                  <Button size="small" danger loading={releaseSession.isPending}>
-                    释放
-                  </Button>
-                </Popconfirm>
-              ),
-            },
-          ]}
-        />
-      </Card>
       {devices.isError ? (
         <ErrorState
           title="设备列表加载失败"

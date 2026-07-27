@@ -162,9 +162,20 @@ it('bulk-deletes selected devices after confirmation', async () => {
   expect(deleteMutateAsync).toHaveBeenCalledWith('emulator-5556')
 })
 
-it('shows a message when no session is currently occupying a device', () => {
+// The session-occupancy panel now lives behind a 会话占用 button + Popover
+// (mirrors Batches List's 筛选 pattern) instead of an always-rendered card,
+// so every test below opens it first.
+async function openSessionsPopover(user: ReturnType<typeof userEvent.setup>) {
+  // Icon-only-prefixed buttons pick up the icon's own accessible name too
+  // (e.g. "lock 会话占用"), same as the 批量启用 case below — match by substring.
+  await user.click(screen.getByRole('button', { name: /会话占用/ }))
+}
+
+it('shows a message when no session is currently occupying a device', async () => {
+  const user = userEvent.setup()
   renderPage()
-  expect(screen.getByText('当前没有正在占用设备的多轮对话')).toBeInTheDocument()
+  await openSessionsPopover(user)
+  expect(await screen.findByText('当前没有正在占用设备的多轮对话')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '一键释放全部' })).toBeDisabled()
 })
 
@@ -178,12 +189,14 @@ it('releases every active session via 一键释放全部', async () => {
     isLoading: false,
   })
   renderPage()
+  await openSessionsPopover(user)
 
-  const trigger = screen.getByRole('button', { name: '一键释放全部 (2)' })
+  const trigger = await screen.findByRole('button', { name: '一键释放全部' })
   expect(trigger).toBeEnabled()
   await user.click(trigger)
-  const popup = await screen.findByRole('tooltip')
-  await user.click(within(popup).getByRole('button', { name: '全部释放' }))
+  // "全部释放" (the Popconfirm's okText) is unique in the document, so no
+  // extra scoping is needed to find its confirm button.
+  await user.click(await screen.findByRole('button', { name: '全部释放' }))
 
   expect(mockReleaseSession).toHaveBeenCalledWith('conv-1')
   expect(mockReleaseSession).toHaveBeenCalledWith('conv-2')
@@ -196,8 +209,9 @@ it('renders an active session pin and releases it after confirmation', async () 
     isLoading: false,
   })
   renderPage()
+  await openSessionsPopover(user)
 
-  expect(screen.getByText('conv-1')).toBeInTheDocument()
+  expect(await screen.findByText('conv-1')).toBeInTheDocument()
   // Friendly label (from the mocked device list) rather than the bare serial.
   expect(screen.getByText('Pixel 8 (emulator-5554)')).toBeInTheDocument()
   expect(screen.getByText('10 分 5 秒')).toBeInTheDocument()
@@ -207,8 +221,11 @@ it('renders an active session pin and releases it after confirmation', async () 
   // mid-word space in the two-character "释放" label ("释 放").
   const row = screen.getByText('conv-1').closest('tr') as HTMLElement
   await user.click(within(row).getByRole('button', { name: /释\s?放/ }))
-  const popup = await screen.findByRole('tooltip')
-  await user.click(within(popup).getByRole('button', { name: /释\s?放/ }))
+  // Two popups are now open (the outer 会话占用 Popover + this row's
+  // Popconfirm) — both expose role="tooltip", so scope to whichever
+  // mounted last rather than assuming there's only one.
+  const tooltips = await screen.findAllByRole('tooltip')
+  await user.click(within(tooltips[tooltips.length - 1]!).getByRole('button', { name: /释\s?放/ }))
 
   expect(mockReleaseSession).toHaveBeenCalledWith('conv-1')
 })
