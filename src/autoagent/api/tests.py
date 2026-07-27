@@ -27,6 +27,10 @@ async def execute_sync_test(sample: Sample) -> SampleResult:
             list_samples_for_batch_fn=list_samples_for_batch,
         )
     except SyncSampleResultMissingError as exc:
+        log.warning(
+            "sync test target_profile=%s: batch finished with no recorded result",
+            sample.target_profile,
+        )
         raise HTTPException(status_code=500, detail="no result recorded") from exc
     blocking = blocking_session_ids(result)
     if blocking:

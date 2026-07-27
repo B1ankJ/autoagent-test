@@ -9,6 +9,7 @@ from autoagent.auth.passwords import hash_password
 from autoagent.config.settings import get_settings
 from autoagent.models.api import SampleResult
 from autoagent.profiles.registry import save_profile_yaml
+from autoagent.services.sync_tests import SyncSampleResultMissingError
 from autoagent.storage.database import init_db
 from autoagent.storage.users import upsert_user
 
@@ -166,6 +167,7 @@ async def test_chat_completions_returns_openai_shaped_400_for_malformed_json(
 async def test_chat_completions_returns_openai_shaped_500_for_unexpected_runtime_error(
     client: AsyncClient,
     monkeypatch,
+    caplog,
 ) -> None:
     save_profile_yaml(
         "p_api",
@@ -188,16 +190,64 @@ async def test_chat_completions_returns_openai_shaped_500_for_unexpected_runtime
     monkeypatch.setattr("autoagent.api.openai_compat.execute_sync_sample", fake_execute)
     headers = await _login(client)
 
-    response = await client.post(
-        "/v1/chat/completions",
-        json={"model": "p_api", "messages": [{"role": "user", "content": "hello"}]},
-        headers=headers,
-    )
+    with caplog.at_level("ERROR", logger="autoagent.api.openai_compat"):
+        response = await client.post(
+            "/v1/chat/completions",
+            json={"model": "p_api", "messages": [{"role": "user", "content": "hello"}]},
+            headers=headers,
+        )
 
     assert response.status_code == 500
     body = response.json()
     assert "error" in body
     assert body["error"]["type"] == "api_error"
+
+    # Regression: this used to be swallowed with no logging at all — the
+    # only way to see what actually broke was the generic client-facing
+    # message. The real exception (and traceback) must now be logged.
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert "p_api" in record.message
+    assert record.exc_info is not None
+    assert "RuntimeError: boom" in caplog.text
+
+
+async def test_chat_completions_logs_a_warning_when_no_result_was_recorded(
+    client: AsyncClient,
+    monkeypatch,
+    caplog,
+) -> None:
+    save_profile_yaml(
+        "p_api",
+        yaml.safe_dump(
+            {
+                "name": "p_api",
+                "platform": "api",
+                "api": {
+                    "base_url": "https://api.example.com/v1",
+                    "model": "m",
+                    "api_key": "OPENAI_TEST_KEY",
+                },
+            }
+        ),
+    )
+
+    async def fake_execute(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
+        raise SyncSampleResultMissingError("no result recorded")
+
+    monkeypatch.setattr("autoagent.api.openai_compat.execute_sync_sample", fake_execute)
+    headers = await _login(client)
+
+    with caplog.at_level("WARNING", logger="autoagent.api.openai_compat"):
+        response = await client.post(
+            "/v1/chat/completions",
+            json={"model": "p_api", "messages": [{"role": "user", "content": "hello"}]},
+            headers=headers,
+        )
+
+    assert response.status_code == 500
+    assert len(caplog.records) == 1
+    assert "p_api" in caplog.records[0].message
 
 
 async def test_chat_completions_maps_extensions_and_profile_mode(

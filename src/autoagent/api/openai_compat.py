@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -21,6 +22,8 @@ from autoagent.services.sync_tests import (
     execute_sync_sample,
 )
 from autoagent.storage.samples import list_samples_for_batch
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["openai_compat"])
 
@@ -49,6 +52,10 @@ def _require_openai_bearer(request: Request) -> str:
 
 @router.post("/chat/completions")
 async def create_chat_completion(request: Request) -> JSONResponse:
+    # Set once parsing succeeds; stays None if the request never got that
+    # far (e.g. failed auth) so the except blocks below can still log which
+    # model/sample this was for without assuming it's bound.
+    body = None
     try:
         _require_openai_bearer(request)
         try:
@@ -81,6 +88,10 @@ async def create_chat_completion(request: Request) -> JSONResponse:
         response = build_chat_completion_response(body, result, profile)
         return JSONResponse(status_code=200, content=response.model_dump())
     except SyncSampleResultMissingError:
+        log.warning(
+            "chat.completions model=%s: batch finished with no recorded result",
+            body.model if body else "unknown",
+        )
         error = OpenAICompatError(
             status_code=500,
             message="no result recorded",
@@ -90,6 +101,14 @@ async def create_chat_completion(request: Request) -> JSONResponse:
     except OpenAICompatError as exc:
         return JSONResponse(status_code=exc.status_code, content=exc.to_response().model_dump())
     except Exception:
+        # Previously swallowed with no logging at all — an unexpected crash
+        # anywhere in this handler (profile resolution, executor, response
+        # building) just returned a generic message with zero way to find
+        # out what actually broke. log.exception captures the traceback.
+        log.exception(
+            "chat.completions model=%s: internal execution failure",
+            body.model if body else "unknown",
+        )
         error = OpenAICompatError(
             status_code=500,
             message="internal execution failure",

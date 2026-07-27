@@ -55,6 +55,24 @@ async def test_sync_test_runs_to_done(client, httpx_mock: HTTPXMock, monkeypatch
     assert body["llm_errors"] == []
 
 
+async def test_sync_logs_a_warning_when_no_result_was_recorded(client, monkeypatch, caplog):
+    async def fake_execute(sample, *, get_scheduler_fn, list_samples_for_batch_fn):
+        from autoagent.services.sync_tests import SyncSampleResultMissingError
+
+        raise SyncSampleResultMissingError("no result recorded")
+
+    monkeypatch.setattr("autoagent.api.tests.execute_sync_sample", fake_execute)
+    h = await _login(client)
+    sample = {"id": "t1", "prompts": ["yo"], "mode": "api", "target_profile": "p_api"}
+
+    with caplog.at_level("WARNING", logger="autoagent.api.tests"):
+        r = await client.post("/api/v1/tests/sync", json=sample, headers=h)
+
+    assert r.status_code == 500
+    assert len(caplog.records) == 1
+    assert "p_api" in caplog.records[0].message
+
+
 async def test_async_test_lifecycle(client, httpx_mock: HTTPXMock):
     httpx_mock.add_response(
         url="https://api.example.com/v1/chat/completions",
