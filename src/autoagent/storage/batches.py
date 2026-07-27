@@ -72,6 +72,19 @@ def _has_effective_llm_response_clause():
     )
 
 
+def _is_end_session_noop_clause():
+    """True for a Sample.end_session=true no-op turn.
+
+    That path never calls a profile/executor at all — it just releases a
+    device-session pin and returns status=done with no prompts/responses —
+    so it always looks raw-empty. `session_released` is the one key that
+    branch's SampleResult.metadata always has (see batch_scheduler.py's
+    end_session branch), making it a reliable "this was never meant to
+    produce a response" signal distinct from a real empty-response anomaly.
+    """
+    return func.json_extract(Sample.metadata_json, "$.session_released").is_not(None)
+
+
 def _is_empty_response_clause():
     """SQL clause matching sample rows whose *effective* response is empty.
 
@@ -88,6 +101,10 @@ def _is_empty_response_clause():
       '["", ...'        → multi-prompt sample with empty first response
     First-empty in multi-prompt covers OpenAI-compat single-prompt batches
     where most empty-response anomalies show up.
+
+    Also excludes Sample.end_session=true no-ops (see
+    _is_end_session_noop_clause) — those are a deliberate "release the
+    device, don't send anything" signal, not a failed response.
     """
     raw_empty = or_(
         Sample.responses_json.is_(None),
@@ -96,7 +113,9 @@ def _is_empty_response_clause():
         Sample.responses_json.like('["", %'),
         Sample.responses_json.like('["",%'),
     )
-    return and_(raw_empty, ~_has_effective_llm_response_clause())
+    return and_(
+        raw_empty, ~_has_effective_llm_response_clause(), ~_is_end_session_noop_clause()
+    )
 
 
 async def list_batches(

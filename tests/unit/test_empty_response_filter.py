@@ -105,6 +105,26 @@ async def test_llm_empty_text_falls_back_to_raw_and_still_counts_as_empty():
     assert any(b.id == "b_llm_empty_text" for b in hits)
 
 
+async def test_end_session_noop_excluded_from_empty_filter():
+    """Sample.end_session=true never sends anything (see batch_scheduler.py's
+    end_session branch — it just releases a device-session pin), so it
+    always looks raw-empty. That's not a real anomaly."""
+    await init_db()
+    await _single_sample_batch(
+        "b_end_session",
+        SampleResult(
+            id="s1",
+            status="done",
+            prompts_sent=[],
+            mode="agent_android",
+            target_profile="p",
+            metadata={"session_released": True},
+        ),
+    )
+    hits = await list_batches(limit=100, empty_response_only=True)
+    assert not any(b.id == "b_end_session" for b in hits)
+
+
 async def test_non_empty_raw_response_never_matches_filter():
     await init_db()
     await _single_sample_batch(
