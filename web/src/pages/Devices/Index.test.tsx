@@ -214,7 +214,7 @@ it('renders an active session pin and releases it after confirmation', async () 
   expect(await screen.findByText('conv-1')).toBeInTheDocument()
   // Friendly label (from the mocked device list) rather than the bare serial.
   expect(screen.getByText('Pixel 8 (emulator-5554)')).toBeInTheDocument()
-  expect(screen.getByText('10 分 5 秒')).toBeInTheDocument()
+  expect(screen.getByText('10:05')).toBeInTheDocument()
 
   // Scope to the row's own button: the page also has a 一键释放全部 button
   // whose name contains "释放" too, and (like 批量删除 below) AntD inserts a
@@ -228,4 +228,26 @@ it('renders an active session pin and releases it after confirmation', async () 
   await user.click(within(tooltips[tooltips.length - 1]!).getByRole('button', { name: /释\s?放/ }))
 
   expect(mockReleaseSession).toHaveBeenCalledWith('conv-1')
+})
+
+it('paginates the session list instead of rendering every row at once', async () => {
+  const user = userEvent.setup()
+  const data = Array.from({ length: 8 }, (_, i) => ({
+    session_id: `conv-${i}`,
+    serial: 'emulator-5554',
+    expires_in_sec: 600,
+  }))
+  mockUseDeviceSessions.mockReturnValue({ data, isLoading: false })
+  renderPage()
+  await openSessionsPopover(user)
+
+  expect(await screen.findByText('conv-0')).toBeInTheDocument()
+  expect(screen.getByText('conv-5')).toBeInTheDocument()
+  expect(screen.queryByText('conv-6')).not.toBeInTheDocument()
+
+  await user.click(screen.getByTitle('2'))
+
+  expect(await screen.findByText('conv-6')).toBeInTheDocument()
+  expect(screen.getByText('conv-7')).toBeInTheDocument()
+  expect(screen.queryByText('conv-0')).not.toBeInTheDocument()
 })

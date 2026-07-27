@@ -46,12 +46,17 @@ import { Device } from '../../types/api'
 type ViewMode = 'table' | 'cards'
 const VIEW_STORAGE_KEY = 'autoagent_devices_view'
 
+// mm:ss — compact enough that the 剩余时间 column never wraps, unlike the
+// previous "X 分 Y 秒" (which line-wrapped at the column's width in a small
+// table row).
 function formatRemaining(sec: number): string {
   if (sec <= 0) return '即将过期'
   const m = Math.floor(sec / 60)
   const s = sec % 60
-  return m > 0 ? `${m} 分 ${s} 秒` : `${s} 秒`
+  return `${m}:${String(s).padStart(2, '0')}`
 }
+
+const SESSIONS_PANEL_WIDTH = 760
 
 export function DevicesPage() {
   const devices = useDevices()
@@ -162,39 +167,49 @@ export function DevicesPage() {
     <Table<DeviceSession>
       rowKey="session_id"
       size="small"
-      style={{ width: 560 }}
+      style={{ width: SESSIONS_PANEL_WIDTH }}
       loading={deviceSessions.isLoading}
       dataSource={sessionRows}
-      pagination={false}
+      pagination={{ pageSize: 6, size: 'small', hideOnSinglePage: true }}
       locale={{ emptyText: '当前没有正在占用设备的多轮对话' }}
       columns={[
         {
           title: 'Session ID',
           dataIndex: 'session_id',
-          render: (value: string) => <span className="aa-mono">{value}</span>,
+          ellipsis: true,
+          render: (value: string) => (
+            <span className="aa-mono" title={value}>
+              {value}
+            </span>
+          ),
         },
         {
           title: '占用设备',
           dataIndex: 'serial',
+          width: 220,
           render: (serial: string) => {
             const d = rows.find((device) => device.serial === serial)
             const shown = d?.label || d?.model ? `${d.label || d.model} (${serial})` : serial
-            return <Tag className="aa-mono">{shown}</Tag>
+            return (
+              <Tag className="aa-mono" title={shown}>
+                {shown}
+              </Tag>
+            )
           },
         },
         {
           title: '剩余时间',
           dataIndex: 'expires_in_sec',
-          width: 140,
+          width: 90,
           render: (sec: number) => (
-            <span className="aa-muted" title="超过此时间未使用会自动释放">
+            <span className="aa-muted aa-mono" title="超过此时间未使用会自动释放">
               {formatRemaining(sec)}
             </span>
           ),
         },
         {
           title: '操作',
-          width: 90,
+          width: 80,
           render: (_, row) => (
             <Popconfirm
               title="释放该会话占用的设备?"
@@ -215,7 +230,7 @@ export function DevicesPage() {
   )
 
   const sessionsPopoverTitle = (
-    <Space style={{ width: 560, justifyContent: 'space-between' }}>
+    <Space style={{ width: SESSIONS_PANEL_WIDTH, justifyContent: 'space-between' }}>
       <span>多轮对话设备占用</span>
       <Popconfirm
         title="释放全部会话占用的设备?"
