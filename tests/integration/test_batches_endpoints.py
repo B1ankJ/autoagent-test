@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import zipfile
+from datetime import datetime, timezone
 
 import pytest
 import yaml
@@ -9,10 +10,11 @@ from httpx import ASGITransport, AsyncClient
 from pytest_httpx import HTTPXMock
 
 from autoagent.auth.passwords import hash_password
-from autoagent.models.api import Sample
+from autoagent.models.api import Sample, SampleResult
 from autoagent.profiles.registry import save_profile_yaml
-from autoagent.storage.batches import get_batch, update_batch_status
+from autoagent.storage.batches import create_batch, get_batch, update_batch_status
 from autoagent.storage.database import get_sessionmaker, init_db
+from autoagent.storage.samples import upsert_sample
 from autoagent.storage.users import upsert_user
 
 
@@ -282,3 +284,58 @@ async def test_list_batches_rejects_limit_above_cap(client):
     assert r.status_code == 200
     r = await client.get("/api/v1/batches", params={"offset": -1}, headers=h)
     assert r.status_code == 422
+
+
+async def test_list_batches_exposes_session_id_for_single_sample_batches(client):
+    h = await _login(client)
+    await create_batch(
+        batch_id="b_session", name="b_session", mode="agent_android", concurrency=1,
+        total=1, target_profile_default=None,
+    )
+    await upsert_sample(
+        "b_session",
+        SampleResult(
+            id="s1", status="done", prompts_sent=["hi"], responses=["ok"],
+            mode="agent_android", target_profile="p", session_id="conv-1",
+        ),
+    )
+
+    r = await client.get("/api/v1/batches", headers=h)
+    assert r.status_code == 200
+    row = next(b for b in r.json() if b["batch_id"] == "b_session")
+    assert row["session_id"] == "conv-1"
+
+
+async def test_session_conversation_endpoint_reconstructs_turns_across_batches(client):
+    h = await _login(client)
+    turns = [
+        ("b1", "turn-1", "hi", "hello!", 1),
+        ("b2", "turn-2", "how are you", "good, thanks", 2),
+    ]
+    for batch_id, sample_id, prompt, response, minute in turns:
+        await create_batch(
+            batch_id=batch_id, name=batch_id, mode="agent_android", concurrency=1,
+            total=1, target_profile_default=None,
+        )
+        await upsert_sample(
+            batch_id,
+            SampleResult(
+                id=sample_id, status="done", prompts_sent=[prompt], responses=[response],
+                mode="agent_android", target_profile="p", session_id="conv-thread",
+                started_at=datetime(2026, 1, 1, 0, minute, tzinfo=timezone.utc),
+            ),
+        )
+
+    r = await client.get("/api/v1/batches/sessions/conv-thread", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert [t["batch_id"] for t in body] == ["b1", "b2"]
+    assert [t["prompt"] for t in body] == ["hi", "how are you"]
+    assert [t["response"] for t in body] == ["hello!", "good, thanks"]
+
+
+async def test_session_conversation_endpoint_empty_for_unknown_session(client):
+    h = await _login(client)
+    r = await client.get("/api/v1/batches/sessions/never-existed", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []

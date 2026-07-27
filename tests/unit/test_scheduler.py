@@ -123,6 +123,22 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
     assert seen["session_id"] == "conv-1"
     assert seen["new_session"] is True
 
+    # session_id is stamped onto the persisted SampleResult too (the
+    # executor itself has no notion of it) so a conversation split across
+    # separate requests can be reconstructed later by session_id.
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].session_id == "conv-1"
+
+
+async def test_session_id_omitted_persists_as_none(scheduler):
+    """The overwhelming majority of samples never set session_id — make
+    sure that stays a clean None, not e.g. an empty string."""
+    sample = Sample(id="t1", prompts=["x"], mode="api", target_profile="p")
+    batch_id = await scheduler.submit(name="b", mode="api", concurrency=1, samples=[sample])
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+    results = await list_samples_for_batch(batch_id)
+    assert results[0].session_id is None
+
 
 def test_resolve_concurrency_capped_by_bound_pool():
     from types import SimpleNamespace
@@ -193,6 +209,7 @@ async def test_end_session_skips_execution_and_releases_pin():
     results = await list_samples_for_batch(batch_id)
     assert results[0].status == "done"
     assert results[0].metadata["session_released"] is True
+    assert results[0].session_id == "conv-1"
     assert called == []  # executor never ran
     assert pool._lookup_pin("conv-1") is None
 
@@ -249,6 +266,7 @@ async def test_device_reserved_becomes_failed_result_with_blocking_sessions():
     results = await list_samples_for_batch(batch_id)
     assert results[0].status == "failed"
     assert results[0].metadata["blocking_session_ids"] == ["conv-other"]
+    assert results[0].session_id == "conv-me"
 
 
 async def test_device_busy_no_longer_crashes_the_batch_task():

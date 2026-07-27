@@ -3,6 +3,7 @@ import {
   ExperimentOutlined,
   EyeOutlined,
   FilterOutlined,
+  LinkOutlined,
   PlusOutlined,
   SettingOutlined,
   StopOutlined,
@@ -39,6 +40,7 @@ import { useDevices } from '../../api/devices'
 import { useProfiles } from '../../api/profiles'
 import { BatchPromptModal } from '../../components/BatchPromptModal'
 import { ModeTag } from '../../components/ModeTag'
+import { SessionConversationModal } from '../../components/SessionConversationModal'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
@@ -94,6 +96,7 @@ export function BatchList() {
   const deleteOne = useDeleteBatch()
   const deleteByStatus = useDeleteBatchesByStatus()
   const [previewBatchId, setPreviewBatchId] = useState<string | null>(null)
+  const [conversationSessionId, setConversationSessionId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleColumns())
@@ -293,6 +296,20 @@ export function BatchList() {
               {isEmptyResponse ? (
                 <Tag color="orange" title="批次完成但响应为空,可能抽取失败">
                   响应为空
+                </Tag>
+              ) : null}
+              {row.session_id ? (
+                <Tag
+                  icon={<LinkOutlined />}
+                  color="purple"
+                  title={`该批次是多轮对话的一轮,session_id: ${row.session_id}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConversationSessionId(row.session_id ?? null)
+                  }}
+                >
+                  多轮对话
                 </Tag>
               ) : null}
             </Space>
@@ -574,6 +591,10 @@ export function BatchList() {
       <BatchPromptModal
         batchId={previewBatchId}
         onClose={() => setPreviewBatchId(null)}
+      />
+      <SessionConversationModal
+        sessionId={conversationSessionId}
+        onClose={() => setConversationSessionId(null)}
       />
       <PageHeader
         eyebrow="任务"

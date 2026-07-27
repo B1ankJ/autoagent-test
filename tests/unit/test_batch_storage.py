@@ -11,6 +11,7 @@ from autoagent.storage.batches import (
 )
 from autoagent.storage.database import init_db
 from autoagent.storage.samples import (
+    list_samples_by_session_id,
     list_samples_for_batch,
     list_samples_for_batches,
     upsert_sample,
@@ -133,6 +134,57 @@ async def test_count_batches_by_status_has_no_status_filter_but_respects_mode():
 
     counts = await count_batches_by_status(mode="gui_android")
     assert counts == {"failed": 1, "total": 1}
+
+
+async def test_list_samples_by_session_id_spans_batches_ordered_by_time():
+    """A session_id conversation is typically a sequence of separate
+    single-sample batches (each turn its own /tests/sync-style submission),
+    not one batch — so reconstruction must query across the whole table,
+    not one batch_id, and come back in conversation order regardless of
+    which batch was created/updated last."""
+    import datetime as dt
+
+    await init_db()
+    entries = [("b2", "turn-2", 2), ("b1", "turn-1", 1), ("b3", "turn-3", 3)]
+    for batch_id, sample_id, minute in entries:
+        await create_batch(
+            batch_id=batch_id, name=batch_id, mode="agent_android", concurrency=1,
+            total=1, target_profile_default=None,
+        )
+        await upsert_sample(
+            batch_id,
+            SampleResult(
+                id=sample_id,
+                status="done",
+                prompts_sent=[f"prompt {minute}"],
+                responses=[f"response {minute}"],
+                mode="agent_android",
+                target_profile="p",
+                started_at=dt.datetime(2026, 1, 1, 0, minute, tzinfo=dt.timezone.utc),
+                session_id="conv-1",
+            ),
+        )
+    # A different session_id must not leak in.
+    await create_batch(
+        batch_id="other", name="other", mode="agent_android", concurrency=1,
+        total=1, target_profile_default=None,
+    )
+    await upsert_sample(
+        "other",
+        SampleResult(
+            id="turn-x", status="done", mode="agent_android", target_profile="p",
+            session_id="conv-2",
+        ),
+    )
+
+    turns = await list_samples_by_session_id("conv-1")
+    assert [batch_id for batch_id, _ in turns] == ["b1", "b2", "b3"]
+    assert [r.id for _, r in turns] == ["turn-1", "turn-2", "turn-3"]
+
+
+async def test_list_samples_by_session_id_empty_for_unknown_session():
+    await init_db()
+    assert await list_samples_by_session_id("never-existed") == []
 
 
 async def test_update_progress():

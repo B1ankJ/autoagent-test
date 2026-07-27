@@ -337,6 +337,13 @@ class BatchScheduler:
                                 ctx=ctx,
                             )
 
+                # Stamped uniformly here rather than on each SampleResult(...)
+                # construction site above (there are several branches) so a
+                # multi-turn conversation can be reconstructed later by
+                # querying every Sample row sharing one session_id —
+                # including branches that never call the executor (cancelled,
+                # end_session, device-acquisition failures).
+                result.session_id = sample.session_id
                 writer.append(result)
                 try:
                     await upsert_sample(batch_id, result)

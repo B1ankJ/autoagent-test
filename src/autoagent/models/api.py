@@ -66,6 +66,11 @@ class SampleResult(BaseModel):
     logs_dir: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    # Copied verbatim from the originating Sample.session_id so a multi-turn
+    # conversation split across separate requests (see Sample.session_id)
+    # can be reconstructed later by querying every Sample row that shares
+    # one — None for samples that never set it (the overwhelming majority).
+    session_id: str | None = None
 
 
 class BatchCreateJSON(BaseModel):
@@ -113,6 +118,10 @@ class BatchSummary(BaseModel):
     # samples, for at-a-glance display. Aggregated in one query per page.
     profiles: list[str] = Field(default_factory=list)
     devices: list[str] = Field(default_factory=list)
+    # The sole sample's session_id when total == 1, same conditions as
+    # preview_prompt — lets the Batches list flag a batch as one turn of a
+    # multi-turn conversation and link to the reconstructed thread.
+    session_id: str | None = None
 
 
 class BatchDetail(BatchSummary):
@@ -120,6 +129,24 @@ class BatchDetail(BatchSummary):
     target_profile_default: str | None = None
     samples: list[SampleResult] = Field(default_factory=list)
     seq: int = 0
+
+
+class SessionTurn(BaseModel):
+    """One turn of a session_id-linked multi-turn conversation.
+
+    Reconstructed by querying every Sample row that shares one session_id
+    (see storage/samples.py::list_samples_by_session_id) — such a
+    conversation is typically a sequence of separate single-sample batches,
+    not one batch, so this deliberately isn't scoped to a batch_id.
+    """
+
+    batch_id: str
+    sample_id: str
+    status: SampleStatus
+    prompt: str | None = None
+    response: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
 
 
 class AsyncTestResponse(BaseModel):

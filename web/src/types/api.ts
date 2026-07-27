@@ -61,6 +61,17 @@ export interface BatchSummary {
   preview_response?: string | null
   profiles?: string[]
   devices?: string[]
+  session_id?: string | null
+}
+
+export interface SessionTurn {
+  batch_id: string
+  sample_id: string
+  status: SampleStatus
+  prompt: string | null
+  response: string | null
+  started_at?: string | null
+  ended_at?: string | null
 }
 
 export interface BatchDetail extends BatchSummary {

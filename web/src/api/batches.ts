@@ -6,6 +6,7 @@ import {
   ExecutionMode,
   BatchStatus,
   BatchSummary,
+  SessionTurn,
 } from '../types/api'
 import { client } from './client'
 import { parseContentDisposition, triggerDownload } from '../utils/download'
@@ -142,6 +143,19 @@ export function useBatch(id: string | undefined) {
       const status = query.state.data?.status
       return status === 'running' || status === 'queued' ? 2000 : false
     },
+  })
+}
+
+// A session_id conversation is typically a sequence of separate
+// single-sample batches (each turn its own submission), not one batch — so
+// this is its own endpoint rather than something scoped to a batch_id.
+export function useSessionConversation(sessionId: string | null) {
+  return useQuery({
+    queryKey: ['batches', 'sessions', sessionId],
+    queryFn: async () =>
+      (await client.get<SessionTurn[]>(`/batches/sessions/${encodeURIComponent(sessionId!)}`))
+        .data,
+    enabled: !!sessionId,
   })
 }
 

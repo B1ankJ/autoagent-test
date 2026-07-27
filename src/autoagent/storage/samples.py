@@ -27,6 +27,7 @@ def _row_to_result(r: SampleRow) -> SampleResult:
         logs_dir=r.logs_dir,
         started_at=r.started_at.replace(tzinfo=timezone.utc) if r.started_at else None,
         ended_at=r.ended_at.replace(tzinfo=timezone.utc) if r.ended_at else None,
+        session_id=r.session_id,
     )
 
 
@@ -59,6 +60,7 @@ async def upsert_sample(batch_id: str, result: SampleResult) -> None:
         existing.logs_dir = result.logs_dir
         existing.started_at = result.started_at
         existing.ended_at = result.ended_at
+        existing.session_id = result.session_id
         await s.commit()
 
 
@@ -67,6 +69,28 @@ async def list_samples_for_batch(batch_id: str) -> list[SampleResult]:
     async with sm() as s:
         r = await s.execute(select(SampleRow).where(SampleRow.batch_id == batch_id))
         return [_row_to_result(row) for row in r.scalars().all()]
+
+
+async def list_samples_by_session_id(session_id: str) -> list[tuple[str, SampleResult]]:
+    """Every Sample carrying this session_id, oldest first, as (batch_id, result).
+
+    A multi-turn conversation stitched together via session_id (as opposed
+    to multiple `prompts` in one Sample) is typically a sequence of separate
+    single-sample batches, not one batch — so this queries the whole table
+    rather than being scoped to a batch_id like list_samples_for_batch.
+    Ordered by started_at; a turn that never reached execution (e.g. a
+    device-acquisition failure, or an end_session no-op) has no started_at
+    and sorts first, which is an acceptable rough edge for what's meant to
+    be a debugging aid, not an authoritative ordering.
+    """
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(SampleRow)
+            .where(SampleRow.session_id == session_id)
+            .order_by(SampleRow.started_at.asc())
+        )
+        return [(row.batch_id, _row_to_result(row)) for row in r.scalars().all()]
 
 
 async def list_samples_for_batches(batch_ids: list[str]) -> dict[str, list[SampleResult]]:

@@ -39,6 +39,7 @@ from autoagent.models.api import (
     Sample,
     SampleResult,
     ScreenshotInfo,
+    SessionTurn,
 )
 from autoagent.openai_compat.chat_completions import select_effective_response
 from autoagent.storage.batches import (
@@ -49,7 +50,11 @@ from autoagent.storage.batches import (
     list_batches,
     update_batch_status,
 )
-from autoagent.storage.samples import list_samples_for_batch, list_samples_for_batches
+from autoagent.storage.samples import (
+    list_samples_by_session_id,
+    list_samples_for_batch,
+    list_samples_for_batches,
+)
 
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
 # Accept both .png (legacy batches) and .jpg (current, JPEG-compressed).
@@ -301,8 +306,10 @@ async def list_all(
         if r.total == 1:
             sample = next(iter(samples_map.get(r.id, [])), None)
             preview, response = _single_sample_preview(sample)
+            session_id = sample.session_id if sample else None
         else:
             preview, response = None, None
+            session_id = None
         profiles, devices = pd_map.get(r.id, ([], []))
         summaries.append(
             BatchSummary(
@@ -321,9 +328,42 @@ async def list_all(
                 preview_response=response,
                 profiles=profiles,
                 devices=devices,
+                session_id=session_id,
             )
         )
     return summaries
+
+
+@router.get("/sessions/{session_id}", response_model=list[SessionTurn])
+async def get_session_conversation(session_id: str) -> list[SessionTurn]:
+    """Reconstruct a session_id-linked multi-turn conversation, oldest first.
+
+    A conversation stitched together via Sample.session_id (as opposed to
+    multiple `prompts` in one Sample) is typically a sequence of separate
+    single-sample batches, not one batch — so this queries across the whole
+    samples table rather than being scoped to a batch_id.
+    """
+    turns = await list_samples_by_session_id(session_id)
+    return [
+        SessionTurn(
+            batch_id=batch_id,
+            sample_id=sample.id,
+            status=sample.status,
+            prompt=sample.prompts_sent[0] if sample.prompts_sent else None,
+            # Empty string (as opposed to None) is meaningful here, same as
+            # BatchSummary.preview_response — it means the turn executed but
+            # produced no text, distinct from a turn that never ran at all
+            # (end_session, cancelled, device-acquisition failure).
+            response=select_effective_response(
+                sample.responses, sample.llm_responses, sample.llm_errors
+            )
+            if sample.prompts_sent
+            else None,
+            started_at=sample.started_at,
+            ended_at=sample.ended_at,
+        )
+        for batch_id, sample in turns
+    ]
 
 
 @router.get("/{batch_id}", response_model=BatchDetail)

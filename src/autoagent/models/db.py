@@ -68,6 +68,11 @@ class Sample(Base):
     logs_dir = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
+    # Indexed: reconstructing a multi-turn conversation queries across the
+    # whole table (a session's turns are typically scattered across many
+    # separate single-sample batches, not one batch). NULL for the
+    # overwhelming majority of samples that never set Sample.session_id.
+    session_id = Column(String, nullable=True, index=True)
 
 
 class Device(Base):
