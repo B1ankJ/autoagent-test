@@ -81,8 +81,8 @@ describe('Dashboard 进行中/排队中 panel', () => {
     renderWithProviders(<Dashboard />)
     await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument())
 
-    expect(useBatchesMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'running' }))
-    expect(useBatchesMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }))
+    expect(useBatchesMock).toHaveBeenCalledWith(expect.objectContaining({ status: ['running'] }))
+    expect(useBatchesMock).toHaveBeenCalledWith(expect.objectContaining({ status: ['queued'] }))
   })
 
   it('shows the accurate active count from stats even when the panel can only display a capped number of rows', async () => {
@@ -97,13 +97,14 @@ describe('Dashboard 进行中/排队中 panel', () => {
     profilesMock.mockReturnValue([])
     vlmMock.mockReturnValue(null)
     useBatchesMock.mockImplementation((raw?: unknown) => {
-      const params = raw as { status: string }
+      const params = raw as { status: string[] }
+      const status = params.status[0]
       return {
         data: Array.from({ length: 6 }, (_, i) => ({
-          batch_id: `${params.status}-${i}`,
-          name: `${params.status} batch ${i}`,
+          batch_id: `${status}-${i}`,
+          name: `${status} batch ${i}`,
           mode: 'api',
-          status: params.status,
+          status,
           total: 1,
           done: 0,
           failed: 0,

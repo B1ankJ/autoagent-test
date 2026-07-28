@@ -276,6 +276,65 @@ async def test_list_batches_and_stats_filter_by_status_and_mode(client, httpx_mo
     assert stats_other_mode.json()["total"] == 0
 
 
+@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+async def test_list_batches_and_stats_accept_multiple_status_and_mode_values(
+    client, httpx_mock: HTTPXMock
+):
+    httpx_mock.add_response(
+        url="https://api.example.com/v1/chat/completions",
+        json={"choices": [{"message": {"content": "x"}}]},
+    )
+    h = await _login(client)
+
+    async def _make_batch(name: str, mode: str) -> str:
+        body = {
+            "name": name,
+            "mode": mode,
+            "concurrency": 1,
+            "samples": [{"id": "t1", "prompts": ["x"], "mode": mode, "target_profile": "p"}],
+        }
+        created = await client.post("/api/v1/batches", json=body, headers=h)
+        batch_id = created.json()["batch_id"]
+        await _wait_done(client, h, batch_id)
+        return batch_id
+
+    api_batch = await _make_batch("api-one", "api")
+    android_batch = await _make_batch("android-one", "gui_android")
+    await update_batch_status(android_batch, "failed")
+
+    # ?status=done&status=failed (repeated query param) should match both.
+    r = await client.get(
+        "/api/v1/batches",
+        params=[("status", "done"), ("status", "failed")],
+        headers=h,
+    )
+    assert r.status_code == 200
+    ids = {b["batch_id"] for b in r.json()}
+    assert api_batch in ids
+    assert android_batch in ids
+
+    # ?mode=api&mode=gui_android should match both too.
+    r_mode = await client.get(
+        "/api/v1/batches",
+        params=[("mode", "api"), ("mode", "gui_android")],
+        headers=h,
+    )
+    mode_ids = {b["batch_id"] for b in r_mode.json()}
+    assert api_batch in mode_ids
+    assert android_batch in mode_ids
+
+    stats = await client.get(
+        "/api/v1/batches/stats",
+        params=[("mode", "api"), ("mode", "gui_android")],
+        headers=h,
+    )
+    # Both created batches (one per mode) must be counted somewhere in the
+    # combined breakdown — the exact status either landed in isn't the point
+    # here (gui_android has no real device in this test environment and may
+    # fail for reasons unrelated to the filter itself).
+    assert sum(stats.json()[s] for s in ("queued", "running", "done", "failed", "cancelled")) >= 2
+
+
 async def test_list_batches_rejects_limit_above_cap(client):
     h = await _login(client)
     r = await client.get("/api/v1/batches", params={"limit": 201}, headers=h)

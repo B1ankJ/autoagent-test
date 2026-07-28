@@ -185,10 +185,22 @@ describe('BatchList status/mode filters', () => {
     // elsewhere. They must reach the backend queries as real params.
     await waitFor(() => {
       expect(mockUseBatches).toHaveBeenLastCalledWith(
-        expect.objectContaining({ status: 'failed', mode: 'gui_android' }),
+        expect.objectContaining({ status: ['failed'], mode: ['gui_android'] }),
       )
       expect(mockUseBatchStats).toHaveBeenLastCalledWith(
-        expect.objectContaining({ mode: 'gui_android' }),
+        expect.objectContaining({ mode: ['gui_android'] }),
+      )
+    })
+  })
+
+  it('supports selecting multiple statuses/modes at once via comma-joined URL params', async () => {
+    renderWithProviders(<BatchList />, {
+      initialPath: '/batches?status=failed,done&mode=gui_android,api',
+    })
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: ['failed', 'done'], mode: ['gui_android', 'api'] }),
       )
     })
   })

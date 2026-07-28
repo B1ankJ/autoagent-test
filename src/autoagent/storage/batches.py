@@ -127,8 +127,8 @@ async def list_batches(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
-    status: str | None = None,
-    mode: str | None = None,
+    status: list[str] | None = None,
+    mode: list[str] | None = None,
 ) -> list[Batch]:
     sm = get_sessionmaker()
     async with sm() as s:
@@ -143,9 +143,9 @@ async def list_batches(
             return stmt_
 
         if status:
-            stmt = stmt.where(Batch.status == status)
+            stmt = stmt.where(Batch.status.in_(status))
         if mode:
-            stmt = stmt.where(Batch.mode == mode)
+            stmt = stmt.where(Batch.mode.in_(mode))
         if q:
             # Match batch name OR any of its samples' prompt JSON. Slow on
             # huge tables but adequate for the scale here.
@@ -196,7 +196,7 @@ async def count_batches_by_status(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
-    mode: str | None = None,
+    mode: list[str] | None = None,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
 
@@ -218,7 +218,7 @@ async def count_batches_by_status(
             return stmt_
 
         if mode:
-            stmt = stmt.where(Batch.mode == mode)
+            stmt = stmt.where(Batch.mode.in_(mode))
         if q:
             term = _like_term(q)
             stmt = ensure_samples_join(stmt).where(

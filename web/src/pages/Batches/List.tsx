@@ -117,8 +117,14 @@ export function BatchList() {
   const page = Math.max(1, parseInt(searchParams.get(QP_PAGE) ?? '1', 10) || 1)
   const pageSize = parseInt(searchParams.get(QP_SIZE) ?? '20', 10) || 20
   const debouncedQ = searchParams.get(QP_Q) ?? ''
-  const statusFilter = (searchParams.get(QP_STATUS) as BatchStatus | null) || undefined
-  const modeFilter = (searchParams.get(QP_MODE) as ExecutionMode | null) || undefined
+  const rawStatus = searchParams.get(QP_STATUS)
+  const statusFilter: BatchStatus[] = rawStatus
+    ? (rawStatus.split(',').filter(Boolean) as BatchStatus[])
+    : []
+  const rawMode = searchParams.get(QP_MODE)
+  const modeFilter: ExecutionMode[] = rawMode
+    ? (rawMode.split(',').filter(Boolean) as ExecutionMode[])
+    : []
   const fromIso = searchParams.get(QP_FROM) || undefined
   const toIso = searchParams.get(QP_TO) || undefined
   const dateRange: [Dayjs | null, Dayjs | null] = [
@@ -152,11 +158,11 @@ export function BatchList() {
       { replace: true },
     )
   }
-  const setStatusFilter = (v: BatchStatus | undefined) => {
-    updateParams({ [QP_STATUS]: v, [QP_PAGE]: undefined })
+  const setStatusFilter = (v: BatchStatus[]) => {
+    updateParams({ [QP_STATUS]: v.length ? v.join(',') : undefined, [QP_PAGE]: undefined })
   }
-  const setModeFilter = (v: ExecutionMode | undefined) => {
-    updateParams({ [QP_MODE]: v, [QP_PAGE]: undefined })
+  const setModeFilter = (v: ExecutionMode[]) => {
+    updateParams({ [QP_MODE]: v.length ? v.join(',') : undefined, [QP_PAGE]: undefined })
   }
   const setPagination = (p: number, ps: number) => {
     updateParams({
@@ -219,10 +225,12 @@ export function BatchList() {
   // status/mode are now applied server-side (paginated correctly); no
   // client-side re-filtering needed here.
   const rows = data ?? []
-  // /batches/stats groups by status rather than accepting one, so when a
-  // status filter is active the matching count is a specific key out of the
-  // breakdown rather than the grand total.
-  const total = (statusFilter ? stats?.[statusFilter] : stats?.total) ?? 0
+  // /batches/stats groups by status rather than accepting a filter, so when
+  // one or more statuses are selected the matching count is the sum of
+  // those specific keys out of the breakdown rather than the grand total.
+  const total = statusFilter.length
+    ? statusFilter.reduce((sum, s) => sum + (stats?.[s] ?? 0), 0)
+    : (stats?.total ?? 0)
   const activeCount = (stats?.queued ?? 0) + (stats?.running ?? 0)
 
   const onCancelActive = async () => {
@@ -533,10 +541,18 @@ export function BatchList() {
   // Active (non-search) filters, rendered as removable chips + counted on
   // the 筛选 button badge. Search stays on the main row.
   const activeFilters: { key: string; label: string; onClear: () => void }[] = []
-  if (statusFilter)
-    activeFilters.push({ key: 's', label: `状态: ${statusFilter}`, onClear: () => setStatusFilter(undefined) })
-  if (modeFilter)
-    activeFilters.push({ key: 'm', label: `模式: ${modeFilter}`, onClear: () => setModeFilter(undefined) })
+  if (statusFilter.length)
+    activeFilters.push({
+      key: 's',
+      label: `状态: ${statusFilter.join(', ')}`,
+      onClear: () => setStatusFilter([]),
+    })
+  if (modeFilter.length)
+    activeFilters.push({
+      key: 'm',
+      label: `模式: ${modeFilter.join(', ')}`,
+      onClear: () => setModeFilter([]),
+    })
   if (profileFilter)
     activeFilters.push({ key: 'p', label: `Profile: ${profileFilter}`, onClear: () => setProfileFilter(undefined) })
   if (deviceFilter)
@@ -551,8 +567,8 @@ export function BatchList() {
     activeFilters.push({ key: 'e', label: '仅响应为空', onClear: () => setEmptyResponseOnly(false) })
 
   const clearAllFilters = () => {
-    setStatusFilter(undefined)
-    setModeFilter(undefined)
+    setStatusFilter([])
+    setModeFilter([])
     setProfileFilter(undefined)
     setDeviceFilter(undefined)
     setDateRange(null)
@@ -562,22 +578,26 @@ export function BatchList() {
   const filterPopover = (
     <Space direction="vertical" size={10} style={{ width: 260 }}>
       <Select
+        mode="multiple"
         allowClear
-        placeholder="状态"
+        placeholder="状态(可多选)"
         style={{ width: '100%' }}
         value={statusFilter}
         onChange={setStatusFilter}
+        maxTagCount="responsive"
         options={['queued', 'running', 'done', 'failed', 'cancelled'].map((status) => ({
           value: status,
           label: status,
         }))}
       />
       <Select
+        mode="multiple"
         allowClear
-        placeholder="模式"
+        placeholder="模式(可多选)"
         style={{ width: '100%' }}
         value={modeFilter}
         onChange={setModeFilter}
+        maxTagCount="responsive"
         options={['api', 'gui_pc_web', 'gui_android', 'agent_pc', 'agent_android'].map((mode) => ({
           value: mode,
           label: mode,

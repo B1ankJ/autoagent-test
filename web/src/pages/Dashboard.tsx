@@ -234,8 +234,11 @@ const LIVE_PANEL_DISPLAY_LIMIT = 8
 
 export function Dashboard() {
   const navigate = useNavigate()
-  const { data: runningBatches } = useBatches({ status: 'running', limit: LIVE_PANEL_FETCH_LIMIT })
-  const { data: queuedBatches } = useBatches({ status: 'queued', limit: LIVE_PANEL_FETCH_LIMIT })
+  const { data: runningBatches } = useBatches({
+    status: ['running'],
+    limit: LIVE_PANEL_FETCH_LIMIT,
+  })
+  const { data: queuedBatches } = useBatches({ status: ['queued'], limit: LIVE_PANEL_FETCH_LIMIT })
   const { data: stats } = useBatchStats()
   const { data: profiles } = useProfiles()
   const { data: vlm } = useVLM()

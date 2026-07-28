@@ -213,7 +213,7 @@ async def batch_stats(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
-    mode: Mode | None = None,
+    mode: list[Mode] | None = Query(default=None),
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
 
@@ -230,7 +230,7 @@ async def batch_stats(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
-        mode=mode,
+        mode=mode or None,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
         counts.setdefault(status, 0)
@@ -286,8 +286,8 @@ async def list_all(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
-    status: BatchStatus | None = None,
-    mode: Mode | None = None,
+    status: list[BatchStatus] | None = Query(default=None),
+    mode: list[Mode] | None = Query(default=None),
 ) -> list[BatchSummary]:
     rows = await list_batches(
         limit=limit,
@@ -298,8 +298,8 @@ async def list_all(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
-        status=status,
-        mode=mode,
+        status=status or None,
+        mode=mode or None,
     )
     # One aggregate query for the whole page's profiles + devices, and one
     # more for single-sample batches' previews — avoids N+1 per-batch

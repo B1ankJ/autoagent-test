@@ -21,12 +21,12 @@ interface BatchQueryFilters {
   targetProfile?: string
   deviceSerial?: string
   emptyResponseOnly?: boolean
-  status?: BatchStatus
-  mode?: ExecutionMode
+  status?: BatchStatus[]
+  mode?: ExecutionMode[]
 }
 
 function buildBatchParams(p: BatchQueryFilters) {
-  const params: Record<string, string | number | boolean> = {}
+  const params: Record<string, string | number | boolean | string[]> = {}
   if (p.limit !== undefined) params.limit = p.limit
   if (p.offset !== undefined) params.offset = p.offset
   const q = p.q?.trim()
@@ -36,8 +36,10 @@ function buildBatchParams(p: BatchQueryFilters) {
   if (p.targetProfile) params.target_profile = p.targetProfile
   if (p.deviceSerial) params.device_serial = p.deviceSerial
   if (p.emptyResponseOnly) params.empty_response_only = true
-  if (p.status) params.status = p.status
-  if (p.mode) params.mode = p.mode
+  // Repeated query params (?status=a&status=b) — axios's default params
+  // serializer emits arrays this way, matching FastAPI's Query(list[...]).
+  if (p.status?.length) params.status = p.status
+  if (p.mode?.length) params.mode = p.mode
   return params
 }
 
@@ -99,7 +101,7 @@ export function useBatchStats(params?: {
   targetProfile?: string
   deviceSerial?: string
   emptyResponseOnly?: boolean
-  mode?: ExecutionMode
+  mode?: ExecutionMode[]
 }) {
   const q = params?.q?.trim() || undefined
   const ca = params?.createdAfter ?? null
