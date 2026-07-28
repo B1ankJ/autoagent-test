@@ -43,6 +43,19 @@ vi.mock('../../api/devices', () => ({
   useDevices: () => ({ data: [], isLoading: false }),
 }))
 
+vi.mock('../../api/deviceStream', () => {
+  const stubHandle = {
+    canvasRef: { current: null },
+    state: 'closed' as const,
+    latencyMs: null,
+    reconnect: vi.fn(),
+  }
+  return {
+    useDeviceHttpStream: () => stubHandle,
+    postDeviceInput: vi.fn(),
+  }
+})
+
 const COLUMN_VISIBILITY_KEY = 'autoagent_batches_visible_columns'
 
 describe('BatchList column visibility', () => {
@@ -88,6 +101,57 @@ describe('BatchList column visibility', () => {
     const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) ?? '[]') as string[]
     expect(saved).not.toContain('mode')
     expect(saved).toContain('started_at')
+  })
+
+  it('opens the device stream modal when clicking a device chip in the Profile/设备 column', async () => {
+    const user = userEvent.setup()
+    mockUseBatches.mockReturnValue({
+      data: [{ ...batch, devices: ['dev-1'] }],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    await user.click(screen.getByText('dev-1'))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('dev-1')
+  })
+
+  it('shows the effective response for a single-sample batch and "-" for multi-sample ones', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [
+        { ...batch, batch_id: 'b1', name: 'single sample run', total: 1, preview_response: 'llm-reviewed answer' },
+        { ...batch, batch_id: 'b2', name: 'multi sample run', total: 3, preview_response: null },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('single sample run')).toBeInTheDocument())
+
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('llm-reviewed answer')).toBeInTheDocument()
+    expect(within(table).getAllByText('-').length).toBeGreaterThan(0)
+  })
+
+  it('does not open a modal when clicking a profile chip', async () => {
+    const user = userEvent.setup()
+    mockUseBatches.mockReturnValue({
+      data: [{ ...batch, devices: ['dev-1'] }],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    await user.click(screen.getByText('p1'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

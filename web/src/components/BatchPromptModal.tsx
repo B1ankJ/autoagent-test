@@ -1,5 +1,6 @@
 import { Alert, Card, Collapse, Empty, Modal, Space, Tag, Typography } from 'antd'
 import { useBatch } from '../api/batches'
+import { ScreenshotStrip } from './ScreenshotStrip'
 import { StatusTag } from './StatusTag'
 import type { Sample } from '../types/api'
 import { hasLLMExtractionData, selectEffectiveResponseText } from '../utils/llmExtraction'
@@ -49,7 +50,7 @@ export function BatchPromptModal({ batchId, onClose }: Props) {
       ) : samples.length === 0 ? (
         <Empty description="没有 sample" />
       ) : singleSample ? (
-        <SampleBody sample={samples[0]} />
+        <SampleBody batchId={data.batch_id} sample={samples[0]} />
       ) : (
         <Collapse
           accordion={false}
@@ -65,7 +66,7 @@ export function BatchPromptModal({ batchId, onClose }: Props) {
                 {s.status ? <StatusTag status={s.status} /> : null}
               </Space>
             ),
-            children: <SampleBody sample={s} />,
+            children: <SampleBody batchId={data.batch_id} sample={s} />,
           }))}
         />
       )}
@@ -73,7 +74,7 @@ export function BatchPromptModal({ batchId, onClose }: Props) {
   )
 }
 
-function SampleBody({ sample }: { sample: Sample }) {
+function SampleBody({ batchId, sample }: { batchId: string; sample: Sample }) {
   const prompts = sample.prompts_sent ?? []
   const responses = sample.responses ?? []
   const rounds = Math.max(prompts.length, responses.length, 1)
@@ -119,6 +120,9 @@ function SampleBody({ sample }: { sample: Sample }) {
           </Card>
         )
       })}
+      <Card size="small" title="截图">
+        <ScreenshotStrip batchId={batchId} sampleId={sample.id} />
+      </Card>
     </Space>
   )
 }

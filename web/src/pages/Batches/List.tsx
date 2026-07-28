@@ -39,6 +39,7 @@ import {
 import { useDevices } from '../../api/devices'
 import { useProfiles } from '../../api/profiles'
 import { BatchPromptModal } from '../../components/BatchPromptModal'
+import { DeviceStreamModal } from '../../components/DeviceStreamModal'
 import { ModeTag } from '../../components/ModeTag'
 import { SessionConversationModal } from '../../components/SessionConversationModal'
 import { StatusTag } from '../../components/StatusTag'
@@ -60,12 +61,13 @@ const QP_PROFILE = 'profile' // target_profile_default exact match
 const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
 
-// Column visibility: 名称/操作 always show; these five can be hidden and the
+// Column visibility: 名称/操作 always show; these six can be hidden and the
 // choice is remembered per browser so different people can trim the table to
 // what they care about (device-heavy vs. timing-heavy workflows differ).
 const TOGGLEABLE_COLUMNS = [
   { key: 'mode', label: '模式' },
   { key: 'profile_device', label: 'Profile / 设备' },
+  { key: 'response', label: '响应(单条)' },
   { key: 'status', label: '状态' },
   { key: 'progress', label: '进度' },
   { key: 'started_at', label: '开始时间' },
@@ -97,6 +99,7 @@ export function BatchList() {
   const deleteByStatus = useDeleteBatchesByStatus()
   const [previewBatchId, setPreviewBatchId] = useState<string | null>(null)
   const [conversationSessionId, setConversationSessionId] = useState<string | null>(null)
+  const [streamSerial, setStreamSerial] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleColumns())
@@ -356,7 +359,12 @@ export function BatchList() {
         if (profiles.length === 0 && devices.length === 0) {
           return <span className="aa-muted">-</span>
         }
-        const chips = (items: string[], color: string, prefix: string) => {
+        const chips = (
+          items: string[],
+          color: string,
+          prefix: string,
+          onItemClick?: (s: string) => void,
+        ) => {
           const shown = items.slice(0, 2)
           return (
             <>
@@ -365,7 +373,19 @@ export function BatchList() {
                   key={prefix + s}
                   color={color}
                   className="aa-mono"
-                  style={{ marginInlineEnd: 4, maxWidth: 180 }}
+                  style={{
+                    marginInlineEnd: 4,
+                    maxWidth: 180,
+                    cursor: onItemClick ? 'pointer' : undefined,
+                  }}
+                  onClick={
+                    onItemClick
+                      ? (e) => {
+                          e.stopPropagation()
+                          onItemClick(s)
+                        }
+                      : undefined
+                  }
                 >
                   <span
                     style={{
@@ -376,7 +396,7 @@ export function BatchList() {
                       whiteSpace: 'nowrap',
                       verticalAlign: 'bottom',
                     }}
-                    title={s}
+                    title={onItemClick ? `点击查看 ${s} 画面` : s}
                   >
                     {s}
                   </span>
@@ -391,8 +411,39 @@ export function BatchList() {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {profiles.length ? <div>{chips(profiles, 'blue', 'p')}</div> : null}
-            {devices.length ? <div>{chips(devices, 'default', 'd')}</div> : null}
+            {devices.length ? <div>{chips(devices, 'default', 'd', setStreamSerial)}</div> : null}
           </div>
+        )
+      },
+    },
+    {
+      key: 'response',
+      title: '响应(单条)',
+      width: 240,
+      // Only single-sample batches carry a meaningful preview_response
+      // (backend's _single_sample_preview) — it's already the effective
+      // (LLM-reviewed when configured) response, same as select_effective_response
+      // everywhere else, not the raw extraction.
+      render: (_v, row) => {
+        if (row.total !== 1 || row.preview_response === null || row.preview_response === undefined) {
+          return <span className="aa-muted">-</span>
+        }
+        if (row.preview_response === '') {
+          return <span className="aa-muted">(空)</span>
+        }
+        return (
+          <span
+            title={row.preview_response}
+            style={{
+              display: 'block',
+              maxWidth: 224,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {row.preview_response}
+          </span>
         )
       },
     },
@@ -596,6 +647,7 @@ export function BatchList() {
         sessionId={conversationSessionId}
         onClose={() => setConversationSessionId(null)}
       />
+      <DeviceStreamModal serial={streamSerial} onClose={() => setStreamSerial(null)} />
       <PageHeader
         eyebrow="任务"
         title="批次 Batches"
