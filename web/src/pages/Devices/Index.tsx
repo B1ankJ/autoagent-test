@@ -187,11 +187,23 @@ export function DevicesPage() {
           title: '占用设备',
           dataIndex: 'serial',
           width: 220,
+          ellipsis: true,
           render: (serial: string) => {
             const d = rows.find((device) => device.serial === serial)
             const shown = d?.label || d?.model ? `${d.label || d.model} (${serial})` : serial
             return (
-              <Tag className="aa-mono" title={shown}>
+              <Tag
+                className="aa-mono"
+                title={shown}
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  verticalAlign: 'bottom',
+                }}
+              >
                 {shown}
               </Tag>
             )

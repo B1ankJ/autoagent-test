@@ -251,3 +251,17 @@ it('paginates the session list instead of rendering every row at once', async ()
   expect(screen.getByText('conv-7')).toBeInTheDocument()
   expect(screen.queryByText('conv-0')).not.toBeInTheDocument()
 })
+
+it('applies ellipsis truncation styling to the occupied-device tag so a long label cannot overflow into 剩余时间', async () => {
+  const user = userEvent.setup()
+  mockUseDeviceSessions.mockReturnValue({
+    data: [{ session_id: 'conv-1', serial: 'emulator-5554', expires_in_sec: 605 }],
+    isLoading: false,
+  })
+  renderPage()
+  await openSessionsPopover(user)
+
+  const tag = await screen.findByText('Pixel 8 (emulator-5554)')
+  expect(tag).toHaveStyle({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })
+  expect(screen.getByText('10:05')).toBeInTheDocument()
+})
