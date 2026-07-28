@@ -220,9 +220,22 @@ function OnboardingChecklist({ hasVlm, hasProfiles, onNavigate }: OnboardingChec
   )
 }
 
+// /batches has no "status is one of [a,b]" filter — only a single exact
+// status — so the "进行中/排队中" panel needs two separate queries (one per
+// status) rather than "most recent N batches of any status, then filter
+// client-side", which used to silently under-report whenever the newest N
+// batches overall weren't the same as the actually-active ones (e.g. a
+// burst of newer done/failed batches pushes older still-running ones off
+// the fetched page). /batches/stats' running/queued counts are always
+// accurate (server-side aggregate), so the header count comes from there,
+// independent of how many rows the panel below can actually display.
+const LIVE_PANEL_FETCH_LIMIT = 6
+const LIVE_PANEL_DISPLAY_LIMIT = 8
+
 export function Dashboard() {
   const navigate = useNavigate()
-  const { data: running } = useBatches({ limit: 6 })
+  const { data: runningBatches } = useBatches({ status: 'running', limit: LIVE_PANEL_FETCH_LIMIT })
+  const { data: queuedBatches } = useBatches({ status: 'queued', limit: LIVE_PANEL_FETCH_LIMIT })
   const { data: stats } = useBatchStats()
   const { data: profiles } = useProfiles()
   const { data: vlm } = useVLM()
@@ -234,9 +247,12 @@ export function Dashboard() {
     cancelled: stats?.cancelled ?? 0,
   }
   const total = stats?.total ?? 0
-  // Live focus: queued + running batches the user might want to monitor.
-  const live = (running ?? []).filter(
-    (b) => b.status === 'running' || b.status === 'queued',
+  const activeCount = byStatus.running + byStatus.queued
+  // Running batches surface first (actively executing, most actionable);
+  // queued ones follow. Each query is already newest-first server-side.
+  const live = [...(runningBatches ?? []), ...(queuedBatches ?? [])].slice(
+    0,
+    LIVE_PANEL_DISPLAY_LIMIT,
   )
 
   return (
@@ -329,13 +345,14 @@ export function Dashboard() {
             <PauseCircleOutlined style={{ color: 'var(--aa-cobalt)' }} />
             <span>进行中 / 排队中</span>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {live.length} 个
+              {activeCount} 个
             </Typography.Text>
           </Space>
         }
         extra={
           <Button type="link" size="small" onClick={() => navigate('/batches')}>
-            查看全部 <ArrowRightOutlined />
+            {activeCount > live.length ? `查看全部 (还有 ${activeCount - live.length} 个)` : '查看全部'}{' '}
+            <ArrowRightOutlined />
           </Button>
         }
         styles={{ body: { padding: live.length === 0 ? 0 : '4px 0' } }}
