@@ -115,6 +115,33 @@ it('passes a refetchInterval to useAppLog only while 自动刷新 is on', async 
   })
 })
 
+it('filters the displayed content by search text', async () => {
+  const user = userEvent.setup()
+  mockUseAppLog.mockReturnValue({
+    data: {
+      path: '/app/logs/uvicorn.log',
+      exists: true,
+      size_bytes: 10,
+      truncated: false,
+      content: '2026-07-28 10:00:00,000 INFO x - hello\n2026-07-28 10:00:01,000 ERROR x - boom',
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+    isFetching: false,
+  })
+  renderWithProviders(<LogsPage />)
+  expect(await screen.findByTestId('log-content')).toHaveTextContent(/hello.*boom/)
+
+  await user.type(screen.getByPlaceholderText('搜索日志内容'), 'boom')
+  await waitFor(() => {
+    expect(screen.getByTestId('log-content')).not.toHaveTextContent('hello')
+  })
+  expect(screen.getByTestId('log-content')).toHaveTextContent('boom')
+  expect(screen.getByText(/筛选后显示 1 \/ 2 行/)).toBeInTheDocument()
+})
+
 it('triggers a download of the full log file', async () => {
   const user = userEvent.setup()
   mockUseAppLog.mockReturnValue({

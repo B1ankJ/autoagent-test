@@ -3,14 +3,15 @@ import {
   ReloadOutlined,
   VerticalAlignBottomOutlined,
 } from '@ant-design/icons'
-import { Button, Select, Skeleton, Space, Switch, Typography } from 'antd'
+import { Button, Input, Select, Skeleton, Space, Switch, Typography } from 'antd'
 import type * as monacoNS from 'monaco-editor'
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { downloadAppLog, useAppLog } from '../../api/system'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
+import { LOG_LEVELS, type LogLevel, filterLogContent } from '../../utils/logFilter'
 
 // Lazy — LogViewer pulls in Monaco (same ~4MB chunk YamlEditor uses), and
 // this page shouldn't make every other page pay for it on initial load.
@@ -30,12 +31,22 @@ function formatSize(bytes: number): string {
 export function LogsPage() {
   const [lines, setLines] = useState(1000)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [levels, setLevels] = useState<LogLevel[]>([...LOG_LEVELS])
+  const [search, setSearch] = useState('')
   const editorRef = useRef<monacoNS.editor.IStandaloneCodeEditor | null>(null)
 
   const { data, isLoading, isError, error, refetch, isFetching } = useAppLog(
     lines,
     autoRefresh ? AUTO_REFRESH_MS : false,
   )
+
+  const filteredContent = useMemo(
+    () => filterLogContent(data?.content ?? '', { levels: new Set(levels), search }),
+    [data?.content, levels, search],
+  )
+  const isFiltered = levels.length < LOG_LEVELS.length || search.trim() !== ''
+  const totalLineCount = data?.content ? data.content.split('\n').length : 0
+  const filteredLineCount = filteredContent ? filteredContent.split('\n').length : 0
 
   const scrollToBottom = () => {
     const editor = editorRef.current
@@ -50,7 +61,7 @@ export function LogsPage() {
   useEffect(() => {
     scrollToBottom()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.content])
+  }, [filteredContent])
 
   return (
     <div>
@@ -65,12 +76,28 @@ export function LogsPage() {
             : '应用进程的 stdout/stderr 运行日志(由 run.sh 写入)'
         }
         extra={
-          <Space>
+          <Space wrap>
             <Select
               value={lines}
               onChange={setLines}
               options={LINE_OPTIONS.map((n) => ({ value: n, label: `最近 ${n} 行` }))}
               style={{ width: 120 }}
+            />
+            <Select
+              mode="multiple"
+              value={levels}
+              onChange={setLevels}
+              options={LOG_LEVELS.map((l) => ({ value: l, label: l }))}
+              maxTagCount="responsive"
+              placeholder="日志级别"
+              style={{ width: 220 }}
+            />
+            <Input.Search
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索日志内容"
+              allowClear
+              style={{ width: 220 }}
             />
             <Space size={6}>
               <Switch checked={autoRefresh} onChange={setAutoRefresh} size="small" />
@@ -88,6 +115,11 @@ export function LogsPage() {
           </Space>
         }
       />
+      {isFiltered && data?.exists ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+          筛选后显示 {filteredLineCount} / {totalLineCount} 行
+        </Typography.Text>
+      ) : null}
       {isError ? (
         <ErrorState
           title="日志加载失败"
@@ -108,7 +140,7 @@ export function LogsPage() {
       ) : (
         <Suspense fallback={<Skeleton active paragraph={{ rows: 10 }} />}>
           <LogViewer
-            value={data?.content ?? ''}
+            value={filteredContent}
             height="calc(100vh - 260px)"
             onMount={(editor) => {
               editorRef.current = editor
