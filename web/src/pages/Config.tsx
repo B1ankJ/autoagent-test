@@ -3,15 +3,18 @@ import {
   App,
   Button,
   Card,
+  Empty,
   Form,
   Input,
   InputNumber,
+  List,
   Popconfirm,
   Space,
   Switch,
   Tabs,
   Typography,
 } from 'antd'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import {
   DingTalkConfig,
@@ -48,6 +51,44 @@ function humanBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+/** Visually groups a set of related Form.Items (e.g. one DingTalk rule's
+ * fields) inside a bordered box, so a long flat form reads as sections
+ * instead of an undifferentiated list of fields. */
+function RuleSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      style={{
+        background: '#fafafa',
+        border: '1px solid #f0f0f0',
+        borderRadius: 8,
+        padding: '12px 16px 0',
+        marginBottom: 20,
+      }}
+    >
+      <Typography.Text strong style={{ display: 'block', marginBottom: description ? 2 : 8 }}>
+        {title}
+      </Typography.Text>
+      {description ? (
+        <Typography.Text
+          type="secondary"
+          style={{ display: 'block', fontSize: 12, marginBottom: 8 }}
+        >
+          {description}
+        </Typography.Text>
+      ) : null}
+      {children}
+    </div>
+  )
 }
 
 function saveErrorMessage(error: unknown): string {
@@ -410,12 +451,6 @@ export function ConfigPage() {
             }
           />
         ) : null}
-        <Alert
-          style={{ marginBottom: 12 }}
-          type="info"
-          showIcon
-          message="规则:同一设备连续 N 个 sample 响应为空(status=done 且 responses[0] 为空) → 自动钉钉提醒。"
-        />
         <Form
           form={notifyForm}
           layout="vertical"
@@ -428,6 +463,9 @@ export function ConfigPage() {
             }
           }}
         >
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            基础设置
+          </Typography.Title>
           <Form.Item name="enabled" label="启用通知" valuePropName="checked">
             <Switch />
           </Form.Item>
@@ -452,46 +490,47 @@ export function ConfigPage() {
           >
             <Input placeholder="https://autoagent.example.com" />
           </Form.Item>
-          <Form.Item
-            name="empty_response_threshold"
-            label="连续空响应阈值"
-            extra="规则 1:同一设备连续多少次空响应触发通知"
-          >
-            <InputNumber min={1} max={20} />
-          </Form.Item>
-          <Form.Item
-            name="empty_response_auto_reinit"
-            label="连续空响应时自动重新初始化设备"
-            valuePropName="checked"
-            extra="规则 1 触发通知时,自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。与规则 2 的自动复位开关相互独立。"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="same_response_enabled"
-            label="启用重复响应检测"
-            valuePropName="checked"
-            extra="规则 2:同设备连续 N 次响应一样 → 截图给 VLM 判断是否还是聊天页;白名单按 profile 维度(需 VLM 已配置)"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="same_response_threshold"
-            label="连续相同响应阈值"
-          >
-            <InputNumber min={1} max={20} />
-          </Form.Item>
-          <Form.Item
-            name="same_response_auto_reinit"
-            label="异常时自动重新初始化设备"
-            valuePropName="checked"
-            extra="规则 2 判定页面异常时,自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。"
-          >
-            <Switch />
-          </Form.Item>
           <Form.Item name="at_all" label="@ 全体" valuePropName="checked">
             <Switch />
           </Form.Item>
+
+          <RuleSection
+            title="规则 1 · 连续空响应"
+            description="同一设备连续 N 次有效响应为空(已按 LLM 复核结果判断,status=done)时触发提醒。"
+          >
+            <Form.Item name="empty_response_threshold" label="连续空响应阈值">
+              <InputNumber min={1} max={20} />
+            </Form.Item>
+            <Form.Item
+              name="empty_response_auto_reinit"
+              label="连续空响应时自动重新初始化设备"
+              valuePropName="checked"
+              extra="触发通知时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。与规则 2 的自动复位开关相互独立。"
+            >
+              <Switch />
+            </Form.Item>
+          </RuleSection>
+
+          <RuleSection
+            title="规则 2 · 连续相同响应"
+            description="同设备连续 N 次响应一样 → 截图交给 VLM 判断是否还停留在聊天页;白名单按 profile 维度(需 VLM 已配置)。"
+          >
+            <Form.Item name="same_response_enabled" label="启用重复响应检测" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="same_response_threshold" label="连续相同响应阈值">
+              <InputNumber min={1} max={20} />
+            </Form.Item>
+            <Form.Item
+              name="same_response_auto_reinit"
+              label="异常时自动重新初始化设备"
+              valuePropName="checked"
+              extra="判定页面异常时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。"
+            >
+              <Switch />
+            </Form.Item>
+          </RuleSection>
+
           <Space>
             <Button type="primary" htmlType="submit" loading={saveNotifications.isPending}>
               保存
@@ -546,49 +585,46 @@ export function ConfigPage() {
               </Button>
             }
           />
-        ) : whitelist.data && whitelist.data.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {whitelist.data.map((entry, idx) => (
-              <div
-                key={`${entry.target_profile}-${idx}`}
-                style={{
-                  border: '1px solid var(--aa-border, #eee)',
-                  borderRadius: 6,
-                  padding: 8,
-                  display: 'flex',
-                  alignItems: 'start',
-                  gap: 8,
-                }}
-              >
-                <div style={{ flex: 1, fontSize: 12 }}>
-                  <div className="aa-mono">profile: {entry.target_profile}</div>
-                  <div className="aa-muted" style={{ marginTop: 4 }}>
-                    {entry.response_excerpt || '(空)'}
-                  </div>
-                  <div className="aa-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                    {new Date(entry.added_at).toLocaleString()}
-                  </div>
-                </div>
-                <Button
-                  size="small"
-                  danger
-                  loading={removeWhitelist.isPending}
-                  onClick={() =>
-                    removeWhitelist
-                      .mutateAsync({
-                        target_profile: entry.target_profile,
-                        response: entry.response,
-                      })
-                      .catch((e) => message.error((e as Error).message))
-                  }
-                >
-                  删除
-                </Button>
-              </div>
-            ))}
-          </div>
         ) : (
-          <Typography.Text type="secondary">还没有白名单记录。</Typography.Text>
+          <List
+            dataSource={whitelist.data ?? []}
+            locale={{ emptyText: <Empty description="还没有白名单记录" /> }}
+            renderItem={(entry, idx) => (
+              <List.Item
+                key={`${entry.target_profile}-${idx}`}
+                actions={[
+                  <Button
+                    key="remove"
+                    size="small"
+                    danger
+                    loading={removeWhitelist.isPending}
+                    onClick={() =>
+                      removeWhitelist
+                        .mutateAsync({
+                          target_profile: entry.target_profile,
+                          response: entry.response,
+                        })
+                        .catch((e) => message.error((e as Error).message))
+                    }
+                  >
+                    删除
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={<span className="aa-mono">{entry.target_profile}</span>}
+                  description={
+                    <>
+                      <div>{entry.response_excerpt || '(空)'}</div>
+                      <div className="aa-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        {new Date(entry.added_at).toLocaleString()}
+                      </div>
+                    </>
+                  }
+                />
+              </List.Item>
+            )}
+          />
         )}
       </Card>
             ),
