@@ -12,6 +12,12 @@ export function createTestQueryClient() {
 
 interface WrapperOpts {
   initialPath?: string
+  // Full history stack + which entry is "current" — for tests that need
+  // real browser-history back (navigate(-1)) to land somewhere specific,
+  // e.g. asserting a "返回" link restores the previous page's querystring
+  // instead of hard-navigating to a bare path. Ignored if initialPath is set.
+  initialEntries?: string[]
+  initialIndex?: number
   queryClient?: QueryClient
 }
 
@@ -21,12 +27,15 @@ export function renderWithProviders(
   rtlOpts?: RenderOptions,
 ) {
   const queryClient = opts.queryClient ?? createTestQueryClient()
+  const entries = opts.initialPath ? [opts.initialPath] : (opts.initialEntries ?? ['/'])
 
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
         <AntdApp>
-          <MemoryRouter initialEntries={[opts.initialPath ?? '/']}>{children}</MemoryRouter>
+          <MemoryRouter initialEntries={entries} initialIndex={opts.initialIndex}>
+            {children}
+          </MemoryRouter>
         </AntdApp>
       </ConfigProvider>
     </QueryClientProvider>

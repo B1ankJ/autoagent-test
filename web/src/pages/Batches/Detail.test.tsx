@@ -1,9 +1,14 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import { renderWithProviders } from '../../test/test-utils'
 import { BatchDetail } from './Detail'
+
+function BatchesListStub() {
+  const location = useLocation()
+  return <div>batches-list-page{location.search}</div>
+}
 
 const useBatchStream = vi.fn()
 const useCancelBatch = vi.fn()
@@ -147,5 +152,76 @@ describe('BatchDetail', () => {
     await userEvent.click(await screen.findByText('完整重放(与原批次配置完全一致)'))
 
     await waitFor(() => expect(replayMutateAsync).toHaveBeenCalledWith('b1'))
+  })
+
+  it('返回 link restores the Batches List querystring (filters/pagination/search) instead of a bare path', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Test',
+        mode: 'api',
+        status: 'done',
+        total: 3,
+        done: 3,
+        failed: 0,
+        concurrency: 1,
+        samples: [],
+        seq: 4,
+      },
+      isLoading: false,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
+    useReplayBatch.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches" element={<BatchesListStub />} />
+        <Route path="/batches/:id" element={<BatchDetail />} />
+      </Routes>,
+      {
+        initialEntries: ['/batches?status=failed&page=2', '/batches/b1'],
+        initialIndex: 1,
+      },
+    )
+    await waitFor(() => expect(screen.getByText('Test')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('批次'))
+
+    expect(
+      await screen.findByText('batches-list-page?status=failed&page=2'),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back to a plain /batches navigation when there is no in-app history to go back to', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Test',
+        mode: 'api',
+        status: 'done',
+        total: 3,
+        done: 3,
+        failed: 0,
+        concurrency: 1,
+        samples: [],
+        seq: 4,
+      },
+      isLoading: false,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
+    useReplayBatch.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches" element={<BatchesListStub />} />
+        <Route path="/batches/:id" element={<BatchDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1' },
+    )
+    await waitFor(() => expect(screen.getByText('Test')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('批次'))
+
+    expect(await screen.findByText('batches-list-page')).toBeInTheDocument()
   })
 })

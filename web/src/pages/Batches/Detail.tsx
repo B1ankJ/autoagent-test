@@ -23,7 +23,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { cloneElement, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   statusIsTerminal,
   useBatchStream,
@@ -61,6 +61,7 @@ function formatEta(ms: number): string {
 export function BatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { data, isLoading, isError, error, refetch } = useBatchStream(id)
   const cancel = useCancelBatch()
   const rerun = useRerunBatch()
@@ -249,7 +250,20 @@ export function BatchDetail() {
         eyebrow={
           <Space size={6}>
             <a
-              onClick={() => navigate('/batches')}
+              onClick={() => {
+                // Filters/pagination/search on Batches List live in the URL
+                // query string — navigating here always used to hard-jump to
+                // the bare "/batches" path, silently discarding all of that.
+                // Prefer real browser-history back (preserves the querystring
+                // the user actually had) and only fall back to a plain list
+                // navigation when there's nothing in this SPA session to go
+                // back to (e.g. a bookmarked/deep link straight into this page).
+                if (location.key === 'default') {
+                  navigate('/batches')
+                } else {
+                  navigate(-1)
+                }
+              }}
               style={{ color: 'var(--aa-text-muted)' }}
             >
               <ArrowLeftOutlined /> 批次
