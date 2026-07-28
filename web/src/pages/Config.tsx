@@ -4,29 +4,30 @@ import {
   App,
   Button,
   Card,
-  Empty,
   Form,
   Input,
   InputNumber,
-  List,
   Popconfirm,
-  Select,
   Space,
   Switch,
   Tabs,
   Typography,
 } from 'antd'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   DingTalkConfig,
   LLMCheckResult,
   downloadBackup,
+  useAddBlacklist,
+  useAddWhitelist,
   useBackupList,
+  useBlacklist,
   useDefaults,
   useDeleteBackup,
   useNotifications,
   usePreviewLogsCleanup,
+  useRemoveBlacklist,
   useRemoveWhitelist,
   useRunBackup,
   useRunLogsCleanup,
@@ -39,6 +40,7 @@ import {
   useWhitelist,
 } from '../api/config'
 import { PageHeader } from '../components/states/PageHeader'
+import { ResponseListPanel } from '../components/ResponseListPanel'
 import { SystemUpdatePanel } from '../components/SystemUpdatePanel'
 import { GlobalDefaults, VLMConfig } from '../types/api'
 
@@ -113,21 +115,11 @@ export function ConfigPage() {
   const saveNotifications = useSaveNotifications()
   const testNotifications = useTestNotifications()
   const whitelist = useWhitelist()
-  const [whitelistProfileFilter, setWhitelistProfileFilter] = useState<string | undefined>(
-    undefined,
-  )
-  const whitelistProfiles = useMemo(
-    () => Array.from(new Set((whitelist.data ?? []).map((e) => e.target_profile))).sort(),
-    [whitelist.data],
-  )
-  const filteredWhitelist = useMemo(
-    () =>
-      whitelistProfileFilter
-        ? (whitelist.data ?? []).filter((e) => e.target_profile === whitelistProfileFilter)
-        : (whitelist.data ?? []),
-    [whitelist.data, whitelistProfileFilter],
-  )
+  const addWhitelist = useAddWhitelist()
   const removeWhitelist = useRemoveWhitelist()
+  const blacklist = useBlacklist()
+  const addBlacklist = useAddBlacklist()
+  const removeBlacklist = useRemoveBlacklist()
   const previewLogsCleanup = usePreviewLogsCleanup()
   const runLogsCleanup = useRunLogsCleanup()
   const backupList = useBackupList()
@@ -631,26 +623,16 @@ export function ConfigPage() {
         title="重复响应白名单"
         size="small"
         extra={
-          <Space size={8}>
-            <Select
-              allowClear
-              placeholder="按 Profile 筛选"
-              style={{ width: 200 }}
-              value={whitelistProfileFilter}
-              onChange={setWhitelistProfileFilter}
-              options={whitelistProfiles.map((p) => ({ value: p, label: p }))}
-            />
-            <Button size="small" onClick={() => whitelist.refetch()}>
-              刷新
-            </Button>
-          </Space>
+          <Button size="small" onClick={() => whitelist.refetch()}>
+            刷新
+          </Button>
         }
       >
         <Alert
           style={{ marginBottom: 12 }}
           type="info"
           showIcon
-          message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里。后续同样的响应不再触发判断/告警。"
+          message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里,后续同样的响应不再触发判断/告警。也可以手动新增(比如提前知道某个响应就是正常的)。"
         />
         {whitelist.isError ? (
           <Alert
@@ -665,53 +647,61 @@ export function ConfigPage() {
             }
           />
         ) : (
-          <List
-            dataSource={filteredWhitelist}
-            pagination={{ pageSize: 8, hideOnSinglePage: true, size: 'small' }}
-            locale={{
-              emptyText: (
-                <Empty
-                  description={
-                    whitelistProfileFilter ? '该 Profile 下没有白名单记录' : '还没有白名单记录'
-                  }
-                />
-              ),
-            }}
-            renderItem={(entry, idx) => (
-              <List.Item
-                key={`${entry.target_profile}-${idx}`}
-                actions={[
-                  <Button
-                    key="remove"
-                    size="small"
-                    danger
-                    loading={removeWhitelist.isPending}
-                    onClick={() =>
-                      removeWhitelist
-                        .mutateAsync({
-                          target_profile: entry.target_profile,
-                          response: entry.response,
-                        })
-                        .catch((e) => message.error((e as Error).message))
-                    }
-                  >
-                    删除
-                  </Button>,
-                ]}
-              >
-                <List.Item.Meta
-                  title={<span className="aa-mono">{entry.target_profile}</span>}
-                  description={
-                    <>
-                      <div>{entry.response_excerpt || '(空)'}</div>
-                      <div className="aa-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        {new Date(entry.added_at).toLocaleString()}
-                      </div>
-                    </>
-                  }
-                />
-              </List.Item>
-            )}
+          <ResponseListPanel
+            entries={whitelist.data}
+            addPending={addWhitelist.isPending}
+            removePending={removeWhitelist.isPending}
+            onAdd={(values) => addWhitelist.mutateAsync(values)}
+            onRemove={(entry) => removeWhitelist.mutateAsync(entry)}
+            emptyText="还没有白名单记录"
+            addButtonLabel="新增白名单"
+            addModalTitle="新增白名单记录"
+          />
+        )}
+      </Card>
+            ),
+          },
+          {
+            key: 'blacklist',
+            label: '黑名单',
+            children: (
+      <Card
+        title="重复响应黑名单"
+        size="small"
+        extra={
+          <Button size="small" onClick={() => blacklist.refetch()}>
+            刷新
+          </Button>
+        }
+      >
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="warning"
+          showIcon
+          message="命中黑名单的响应会跳过规则 2 的连续次数等待和 VLM 判断,第一次出现就直接告警(并按同一开关触发自动复位)。仅支持手动新增——确认过某个响应确实是异常后,把它加进来。"
+        />
+        {blacklist.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="黑名单加载失败"
+            description={(blacklist.error as Error)?.message}
+            action={
+              <Button size="small" onClick={() => blacklist.refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : (
+          <ResponseListPanel
+            entries={blacklist.data}
+            addPending={addBlacklist.isPending}
+            removePending={removeBlacklist.isPending}
+            onAdd={(values) => addBlacklist.mutateAsync(values)}
+            onRemove={(entry) => removeBlacklist.mutateAsync(entry)}
+            emptyText="还没有黑名单记录"
+            addButtonLabel="新增黑名单"
+            addModalTitle="新增黑名单记录"
           />
         )}
       </Card>

@@ -22,7 +22,7 @@ from typing import Any
 from autoagent.config.settings import get_settings
 from autoagent.devices import adb
 from autoagent.models.api import SampleResult
-from autoagent.notifications import whitelist
+from autoagent.notifications import blacklist, whitelist
 from autoagent.notifications.dingtalk import send_markdown
 from autoagent.notifications.vlm_judge import describe_judgement_error, is_normal_chat_page
 from autoagent.openai_compat.chat_completions import select_effective_response
@@ -239,12 +239,6 @@ async def _rule_same_response_streak(
     threshold = int(config.get("same_response_threshold") or 3)
     if threshold < 1:
         return
-    # VLM precondition: this rule depends on a configured global VLM. If
-    # the user hasn't set one, we can't judge "is this the chat page",
-    # so skip silently rather than half-running the streak detection.
-    vlm_cfg = await get_config("vlm")
-    if not vlm_cfg or not all(vlm_cfg.get(k) for k in ("base_url", "model", "api_key")):
-        return
 
     # Skip empty responses entirely — the other rule already covers them
     # and we don't want to double-alert.
@@ -256,6 +250,34 @@ async def _rule_same_response_streak(
 
     profile = result.target_profile
     if not profile:
+        return
+
+    # Blacklist: a human already confirmed this exact response is a real
+    # anomaly for this profile, so skip the streak wait *and* the VLM judge
+    # entirely and alert on the very first occurrence. Checked before the
+    # VLM-config gate below on purpose — a blacklist hit must still fire
+    # even when no VLM is configured at all.
+    if await blacklist.contains(profile, response):
+        async with _lock:
+            await _hydrate_state_once()
+            _same_state.pop((serial, profile), None)
+            await _persist_state()
+        await _fire_same_response_alert(
+            config=config,
+            serial=serial,
+            profile=profile,
+            response=response,
+            refs=[(batch_id, result.id)],
+            normal=False,
+            reason="命中黑名单,已跳过 VLM 判断直接告警",
+        )
+        return
+
+    # VLM precondition: the streak-judge path below depends on a configured
+    # global VLM. If the user hasn't set one, we can't judge "is this the
+    # chat page", so skip silently rather than half-running the detection.
+    vlm_cfg = await get_config("vlm")
+    if not vlm_cfg or not all(vlm_cfg.get(k) for k in ("base_url", "model", "api_key")):
         return
 
     if await whitelist.contains(profile, response):

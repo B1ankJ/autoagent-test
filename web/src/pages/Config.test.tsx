@@ -12,16 +12,23 @@ interface WhitelistFixture {
   added_at: string
 }
 
-const { testLlmMock, backupListMock, deleteBackupMock, downloadBackupMock, whitelistMock } =
-  vi.hoisted(() => ({
-    testLlmMock: vi.fn(),
-    backupListMock: vi.fn(() => ({
-      data: [] as { name: string; bytes: number; created_at: string }[],
-    })),
-    deleteBackupMock: vi.fn(async () => {}),
-    downloadBackupMock: vi.fn(async () => {}),
-    whitelistMock: vi.fn(() => ({ data: [] as WhitelistFixture[], refetch: vi.fn() })),
-  }))
+const {
+  testLlmMock,
+  backupListMock,
+  deleteBackupMock,
+  downloadBackupMock,
+  whitelistMock,
+  blacklistMock,
+} = vi.hoisted(() => ({
+  testLlmMock: vi.fn(),
+  backupListMock: vi.fn(() => ({
+    data: [] as { name: string; bytes: number; created_at: string }[],
+  })),
+  deleteBackupMock: vi.fn(async () => {}),
+  downloadBackupMock: vi.fn(async () => {}),
+  whitelistMock: vi.fn(() => ({ data: [] as WhitelistFixture[], refetch: vi.fn() })),
+  blacklistMock: vi.fn(() => ({ data: [] as WhitelistFixture[], refetch: vi.fn() })),
+}))
 
 vi.mock('../api/config', () => ({
   useVLM: () => ({ data: { base_url: 'https://old', model: 'old-model', api_key: 'old-key' } }),
@@ -33,7 +40,11 @@ vi.mock('../api/config', () => ({
   useSaveNotifications: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
   useTestNotifications: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useWhitelist: whitelistMock,
+  useAddWhitelist: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRemoveWhitelist: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useBlacklist: blacklistMock,
+  useAddBlacklist: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRemoveBlacklist: () => ({ isPending: false, mutateAsync: vi.fn() }),
   usePreviewLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRunLogsCleanup: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useBackupList: backupListMock,

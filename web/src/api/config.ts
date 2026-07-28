@@ -102,13 +102,52 @@ export function useTestNotifications() {
   })
 }
 
-export function useWhitelist() {
-  return useQuery({
-    queryKey: ['config', 'notifications', 'whitelist'],
-    queryFn: async () =>
-      (await client.get<WhitelistEntry[]>('/config/notifications/whitelist')).data,
-  })
+/** Whitelist and blacklist share the exact same shape/endpoints (list/add/
+ * remove), differing only in kv key server-side and in meaning: whitelist
+ * entries suppress rule-2 alerts, blacklist entries skip straight past the
+ * VLM judge and alert immediately on a repeat. */
+function makeResponseListHooks(kind: 'whitelist' | 'blacklist') {
+  const queryKey = ['config', 'notifications', kind]
+  const basePath = `/config/notifications/${kind}`
+
+  function useList() {
+    return useQuery({
+      queryKey,
+      queryFn: async () => (await client.get<WhitelistEntry[]>(basePath)).data,
+    })
+  }
+
+  function useAdd() {
+    const queryClient = useQueryClient()
+    return useMutation({
+      mutationFn: async (body: { target_profile: string; response: string }) =>
+        (await client.post(`${basePath}/add`, body)).data,
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    })
+  }
+
+  function useRemove() {
+    const queryClient = useQueryClient()
+    return useMutation({
+      mutationFn: async (body: { target_profile: string; response: string }) =>
+        (await client.post(`${basePath}/remove`, body)).data,
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    })
+  }
+
+  return { useList, useAdd, useRemove }
 }
+
+const whitelistHooks = makeResponseListHooks('whitelist')
+const blacklistHooks = makeResponseListHooks('blacklist')
+
+export const useWhitelist = whitelistHooks.useList
+export const useAddWhitelist = whitelistHooks.useAdd
+export const useRemoveWhitelist = whitelistHooks.useRemove
+
+export const useBlacklist = blacklistHooks.useList
+export const useAddBlacklist = blacklistHooks.useAdd
+export const useRemoveBlacklist = blacklistHooks.useRemove
 
 export interface LogCleanupReport {
   files_deleted: number
@@ -188,12 +227,3 @@ export function useDeleteBackup() {
   })
 }
 
-export function useRemoveWhitelist() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (body: { target_profile: string; response: string }) =>
-      (await client.post('/config/notifications/whitelist/remove', body)).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['config', 'notifications', 'whitelist'] }),
-  })
-}

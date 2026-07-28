@@ -22,6 +22,7 @@ from autoagent.models.api import (
     VLMConfig,
     WhitelistEntry,
 )
+from autoagent.notifications import blacklist as bl
 from autoagent.notifications import whitelist as wl
 from autoagent.notifications.dingtalk import send_markdown
 from autoagent.storage.configs import get_config, put_config
@@ -219,6 +220,16 @@ async def delete_backup_route(name: str) -> dict:
     return {"deleted": True}
 
 
+class _ResponseListAdd(BaseModel):
+    target_profile: str
+    response: str
+
+
+class _ResponseListRemove(BaseModel):
+    target_profile: str
+    response: str
+
+
 @router.get("/notifications/whitelist", response_model=list[WhitelistEntry])
 async def list_whitelist() -> list[WhitelistEntry]:
     raw = await wl.load_all()
@@ -231,14 +242,41 @@ async def list_whitelist() -> list[WhitelistEntry]:
     return out
 
 
-class _WhitelistRemove(BaseModel):
-    target_profile: str
-    response: str
+@router.post("/notifications/whitelist/add")
+async def add_whitelist(body: _ResponseListAdd) -> dict:
+    await wl.add(body.target_profile, body.response)
+    return {"ok": True}
 
 
 @router.post("/notifications/whitelist/remove")
-async def remove_whitelist(body: _WhitelistRemove) -> dict:
+async def remove_whitelist(body: _ResponseListRemove) -> dict:
     removed = await wl.remove(body.target_profile, body.response)
+    if not removed:
+        raise HTTPException(status_code=404, detail="entry not found")
+    return {"ok": True}
+
+
+@router.get("/notifications/blacklist", response_model=list[WhitelistEntry])
+async def list_blacklist() -> list[WhitelistEntry]:
+    raw = await bl.load_all()
+    out: list[WhitelistEntry] = []
+    for entry in raw:
+        try:
+            out.append(WhitelistEntry.model_validate(entry))
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+@router.post("/notifications/blacklist/add")
+async def add_blacklist(body: _ResponseListAdd) -> dict:
+    await bl.add(body.target_profile, body.response)
+    return {"ok": True}
+
+
+@router.post("/notifications/blacklist/remove")
+async def remove_blacklist(body: _ResponseListRemove) -> dict:
+    removed = await bl.remove(body.target_profile, body.response)
     if not removed:
         raise HTTPException(status_code=404, detail="entry not found")
     return {"ok": True}

@@ -165,3 +165,71 @@ async def test_backup_run_respects_zero_retention_by_not_pruning(client):
     assert r.status_code == 200
     assert r.json()["pruned"] == 0
     assert stale.exists()
+
+
+async def test_whitelist_add_list_remove(client):
+    h = await _h(client)
+    r = await client.get("/api/v1/config/notifications/whitelist", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []
+
+    r = await client.post(
+        "/api/v1/config/notifications/whitelist/add",
+        json={"target_profile": "p1", "response": "canned reply"},
+        headers=h,
+    )
+    assert r.status_code == 200
+
+    r = await client.get("/api/v1/config/notifications/whitelist", headers=h)
+    entries = r.json()
+    assert len(entries) == 1
+    assert entries[0]["target_profile"] == "p1"
+    assert entries[0]["response"] == "canned reply"
+
+    r = await client.post(
+        "/api/v1/config/notifications/whitelist/remove",
+        json={"target_profile": "p1", "response": "canned reply"},
+        headers=h,
+    )
+    assert r.status_code == 200
+    r = await client.get("/api/v1/config/notifications/whitelist", headers=h)
+    assert r.json() == []
+
+    r = await client.post(
+        "/api/v1/config/notifications/whitelist/remove",
+        json={"target_profile": "p1", "response": "canned reply"},
+        headers=h,
+    )
+    assert r.status_code == 404
+
+
+async def test_blacklist_add_list_remove(client):
+    h = await _h(client)
+    r = await client.get("/api/v1/config/notifications/blacklist", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []
+
+    r = await client.post(
+        "/api/v1/config/notifications/blacklist/add",
+        json={"target_profile": "p1", "response": "known bad reply"},
+        headers=h,
+    )
+    assert r.status_code == 200
+
+    r = await client.get("/api/v1/config/notifications/blacklist", headers=h)
+    entries = r.json()
+    assert len(entries) == 1
+    assert entries[0]["response"] == "known bad reply"
+
+    # Independent from the whitelist store.
+    r = await client.get("/api/v1/config/notifications/whitelist", headers=h)
+    assert r.json() == []
+
+    r = await client.post(
+        "/api/v1/config/notifications/blacklist/remove",
+        json={"target_profile": "p1", "response": "known bad reply"},
+        headers=h,
+    )
+    assert r.status_code == 200
+    r = await client.get("/api/v1/config/notifications/blacklist", headers=h)
+    assert r.json() == []

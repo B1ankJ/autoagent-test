@@ -41,8 +41,16 @@ def _make_llm_sample(
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(monkeypatch):
     rules._reset_streak_for_tests()
+    # blacklist.contains hits the real kv config table (get_config), which
+    # doesn't exist in these unit tests (no init_db()) — default to "not
+    # blacklisted" so existing same-response-streak tests aren't affected;
+    # blacklist-specific tests override this explicitly.
+    async def _no_blacklist(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(rules.blacklist, "contains", _no_blacklist)
 
 
 async def test_no_config_no_fire(monkeypatch):
@@ -652,6 +660,65 @@ async def test_same_response_whitelisted_skips(monkeypatch):
             _make_sample(serial="A", response="same"), batch_id="b"
         )
     assert sent == []
+
+
+async def test_same_response_blacklisted_fires_immediately_without_vlm(monkeypatch):
+    """A blacklisted response should alert on the very first occurrence —
+    no streak wait, and no VLM call at all (config.get('vlm') is never
+    even consulted here, unlike the whitelist/streak-judge path)."""
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+
+    async def _get_config_should_not_be_called(key):
+        raise AssertionError(f"get_config({key!r}) should not be called on a blacklist hit")
+
+    monkeypatch.setattr(rules, "get_config", _get_config_should_not_be_called)
+
+    async def _bl_contains_true(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(rules.blacklist, "contains", _bl_contains_true)
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(_make_sample(serial="A", response="bad"), batch_id="b")
+
+    assert len(sent) == 1
+    assert "黑名单" in sent[0]["text"]
+
+
+async def test_same_response_blacklist_checked_before_whitelist(monkeypatch):
+    sent: list[dict] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "same_response_enabled": True,
+        "same_response_threshold": 3,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+
+    async def _bl_contains_true(*args, **kwargs):
+        return True
+
+    async def _wl_contains_true(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(rules.blacklist, "contains", _bl_contains_true)
+    monkeypatch.setattr(rules.whitelist, "contains", _wl_contains_true)
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    await rules.on_sample_result(_make_sample(serial="A", response="bad"), batch_id="b")
+
+    # Blacklist wins — still fires even though whitelist also (nonsensically)
+    # contains this response.
+    assert len(sent) == 1
 
 
 # --- ANR check rule (rule 3) ---
