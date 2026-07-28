@@ -342,8 +342,12 @@ class BatchScheduler:
                 # multi-turn conversation can be reconstructed later by
                 # querying every Sample row sharing one session_id —
                 # including branches that never call the executor (cancelled,
-                # end_session, device-acquisition failures).
+                # end_session, device-acquisition failures). new_session is
+                # stamped the same way for the same reason: SampleResult never
+                # set it before, so SampleDetail's "New session" field always
+                # displayed False regardless of what was actually submitted.
                 result.session_id = sample.session_id
+                result.new_session = sample.new_session
                 writer.append(result)
                 try:
                     await upsert_sample(batch_id, result)

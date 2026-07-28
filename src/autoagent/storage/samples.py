@@ -28,6 +28,7 @@ def _row_to_result(r: SampleRow) -> SampleResult:
         started_at=r.started_at.replace(tzinfo=timezone.utc) if r.started_at else None,
         ended_at=r.ended_at.replace(tzinfo=timezone.utc) if r.ended_at else None,
         session_id=r.session_id,
+        new_session=r.new_session,
     )
 
 
@@ -61,6 +62,7 @@ async def upsert_sample(batch_id: str, result: SampleResult) -> None:
         existing.started_at = result.started_at
         existing.ended_at = result.ended_at
         existing.session_id = result.session_id
+        existing.new_session = result.new_session
         await s.commit()
 
 

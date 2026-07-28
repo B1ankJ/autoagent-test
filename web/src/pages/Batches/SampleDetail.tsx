@@ -1,7 +1,8 @@
 import { ArrowLeftOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { App, Button, Card, Collapse, Descriptions, Space, Table, Typography } from 'antd'
+import { App, Button, Card, Collapse, Descriptions, Skeleton, Space, Table, Typography } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useSampleArtifactContent, useSampleArtifactList } from '../../api/artifacts'
 import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
 import { ResponseComparison } from '../../components/ResponseComparison'
@@ -52,6 +53,60 @@ function formatActionTarget(record: Record<string, unknown>): string {
   return '-'
 }
 
+/** Fetches and shows one text artifact's content only once its Collapse
+ * panel is actually expanded — `active` gates the query itself, not just
+ * the rendering, so an unopened panel never triggers a fetch. */
+function ArtifactViewer({
+  batchId,
+  sampleId,
+  name,
+  active,
+}: {
+  batchId: string
+  sampleId: string
+  name: string
+  active: boolean
+}) {
+  const { data, isLoading, isError, error, refetch } = useSampleArtifactContent(
+    batchId,
+    sampleId,
+    name,
+    active,
+  )
+  if (!active) return null
+  if (isLoading) return <Skeleton active paragraph={{ rows: 3 }} />
+  if (isError) {
+    return (
+      <Space direction="vertical">
+        <Typography.Text type="danger">
+          加载失败:{(error as Error)?.message}
+        </Typography.Text>
+        <Button size="small" onClick={() => refetch()}>
+          重试
+        </Button>
+      </Space>
+    )
+  }
+  return (
+    <pre
+      className="aa-mono"
+      style={{
+        maxHeight: 420,
+        overflow: 'auto',
+        fontSize: 12,
+        background: 'var(--aa-surface-alt)',
+        padding: 12,
+        borderRadius: 6,
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+      }}
+    >
+      {data || '(空)'}
+    </pre>
+  )
+}
+
 function metadataSummary(metadata: Record<string, unknown> | undefined) {
   const screenshots = Array.isArray(metadata?.screenshots) ? metadata.screenshots.length : 0
   const actionLog = Array.isArray(metadata?.action_log) ? metadata.action_log.length : 0
@@ -74,6 +129,8 @@ export function SampleDetail() {
   const promptRounds = sample?.prompts ?? sample?.prompts_sent ?? []
   const summary = metadataSummary(sample?.metadata)
   const llmEnabled = hasLLMExtractionData(sample?.llm_responses, sample?.llm_errors)
+  const [activeArtifacts, setActiveArtifacts] = useState<string[]>([])
+  const artifactsQ = useSampleArtifactList(data?.batch_id ?? '', sample?.id ?? '')
 
   // Prev/next navigation: use the batch's sample order as-is (matches what
   // the batch detail table shows). At the head/tail the neighbor is null.
@@ -232,6 +289,9 @@ export function SampleDetail() {
               {sample.duration_ms ?? '-'}
             </span>
           </Descriptions.Item>
+          <Descriptions.Item label="Profile">
+            <span className="aa-mono">{sample.target_profile || '-'}</span>
+          </Descriptions.Item>
           <Descriptions.Item label="New session">
             {String(sample.new_session ?? false)}
           </Descriptions.Item>
@@ -305,6 +365,27 @@ export function SampleDetail() {
       <Card size="small" title="截图" style={{ marginBottom: 16 }}>
         <ScreenshotStrip batchId={data.batch_id} sampleId={sample.id} />
       </Card>
+
+      {artifactsQ.data && artifactsQ.data.length > 0 ? (
+        <Card size="small" title="日志文件" style={{ marginBottom: 16 }}>
+          <Collapse
+            activeKey={activeArtifacts}
+            onChange={(keys) => setActiveArtifacts(keys as string[])}
+            items={artifactsQ.data.map((name) => ({
+              key: name,
+              label: <span className="aa-mono">{name}</span>,
+              children: (
+                <ArtifactViewer
+                  batchId={data.batch_id}
+                  sampleId={sample.id}
+                  name={name}
+                  active={activeArtifacts.includes(name)}
+                />
+              ),
+            }))}
+          />
+        </Card>
+      ) : null}
 
       {Array.isArray(sample.metadata?.action_log) && sample.metadata.action_log.length ? (
         <Card size="small" title="动作日志" style={{ marginBottom: 16 }}>

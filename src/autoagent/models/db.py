@@ -73,6 +73,11 @@ class Sample(Base):
     # separate single-sample batches, not one batch). NULL for the
     # overwhelming majority of samples that never set Sample.session_id.
     session_id = Column(String, nullable=True, index=True)
+    # Copied verbatim from the originating Sample.new_session at execution
+    # time — SampleResult never persisted this before, so SampleDetail's
+    # "New session" field always displayed False regardless of what was
+    # actually submitted.
+    new_session = Column(Boolean, nullable=False, default=False)
 
 
 class Device(Base):

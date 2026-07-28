@@ -18,7 +18,7 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.exc import OperationalError
 from sse_starlette.sse import EventSourceResponse
 
@@ -59,6 +59,12 @@ from autoagent.storage.samples import (
 router = APIRouter(prefix="/batches", tags=["batches"], dependencies=[Depends(require_user)])
 # Accept both .png (legacy batches) and .jpg (current, JPEG-compressed).
 _SCREENSHOT_RE = re.compile(r"^[a-z0-9_]+\.(png|jpg)$")
+# Plain-text artifacts SampleDetail can view inline on demand — deliberately
+# narrow (executor.log + any UI-tree XML dump like after_result_1.xml), not
+# "serve any file in the sample dir": screenshots go through media.py, and
+# everything else (actions.jsonl, llm_extract_*.json, ...) is already
+# reachable via the full logs.zip download.
+_TEXT_ARTIFACT_RE = re.compile(r"^(executor\.log|[a-z0-9_]+\.xml)$")
 _STAGE_ORDER = {
     "before_input": 0,
     "after_input": 1,
@@ -666,6 +672,44 @@ async def list_screenshots(batch_id: str, sample_id: str) -> list[ScreenshotInfo
             )
         )
     return out
+
+
+@router.get("/{batch_id}/samples/{sample_id}/artifacts", response_model=list[str])
+async def list_text_artifacts(batch_id: str, sample_id: str) -> list[str]:
+    """Names of plain-text artifacts SampleDetail can view inline on demand
+    (executor.log, after_result_*.xml, etc.) — sorted so executor.log (the
+    single most useful one) always leads."""
+    settings = get_settings()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (settings.logs_root / batch_id / sample_id).resolve()
+    if not sample_dir.is_dir():
+        return []
+    names = [
+        entry.name
+        for entry in sample_dir.iterdir()
+        if entry.is_file() and _TEXT_ARTIFACT_RE.match(entry.name)
+    ]
+    return sorted(names, key=lambda n: (n != "executor.log", n))
+
+
+@router.get("/{batch_id}/samples/{sample_id}/artifact/{name}")
+async def get_text_artifact(batch_id: str, sample_id: str, name: str) -> PlainTextResponse:
+    if not _TEXT_ARTIFACT_RE.match(name):
+        raise HTTPException(status_code=400, detail="unsupported artifact name")
+    settings = get_settings()
+    root = settings.logs_root.resolve()
+    sample_dir = await _sample_logs_dir(batch_id, sample_id)
+    if sample_dir is None:
+        sample_dir = (root / batch_id / sample_id).resolve()
+    target = (sample_dir / name).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="path traversal blocked") from e
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="artifact not found")
+    return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"))
 
 
 @router.get("/{batch_id}/samples/{sample_id}/logs.zip")

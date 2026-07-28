@@ -71,6 +71,11 @@ class SampleResult(BaseModel):
     # can be reconstructed later by querying every Sample row that shares
     # one — None for samples that never set it (the overwhelming majority).
     session_id: str | None = None
+    # Copied verbatim from the originating Sample.new_session — without
+    # this, SampleDetail's "New session" field always read the request-only
+    # Sample.new_session (never populated on a result) and displayed False
+    # unconditionally regardless of what was actually submitted.
+    new_session: bool = False
 
 
 class BatchCreateJSON(BaseModel):

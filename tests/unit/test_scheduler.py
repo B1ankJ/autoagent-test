@@ -128,6 +128,10 @@ async def test_agent_android_mode_acquires_device_and_passes_ctx_serial():
     # separate requests can be reconstructed later by session_id.
     results = await list_samples_for_batch(batch_id)
     assert results[0].session_id == "conv-1"
+    # Same for new_session — SampleResult never carried this before, so
+    # SampleDetail's "New session" field always displayed False regardless
+    # of what the caller actually submitted.
+    assert results[0].new_session is True
 
 
 async def test_session_id_omitted_persists_as_none(scheduler):
@@ -138,6 +142,7 @@ async def test_session_id_omitted_persists_as_none(scheduler):
     await scheduler.wait_done(batch_id, timeout_sec=5)
     results = await list_samples_for_batch(batch_id)
     assert results[0].session_id is None
+    assert results[0].new_session is False
 
 
 def test_resolve_concurrency_capped_by_bound_pool():

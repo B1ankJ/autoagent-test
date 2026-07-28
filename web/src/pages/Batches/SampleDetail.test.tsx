@@ -1,6 +1,6 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
 import { renderWithProviders } from '../../test/test-utils'
 import { SampleDetail } from './SampleDetail'
@@ -8,6 +8,8 @@ import { SampleDetail } from './SampleDetail'
 const useBatchStream = vi.fn()
 const listScreenshots = vi.fn()
 const downloadSampleLogs = vi.fn()
+const useSampleArtifactList = vi.fn()
+const useSampleArtifactContent = vi.fn()
 
 vi.mock('../../hooks/useBatchStream', () => ({
   useBatchStream: (...args: unknown[]) => useBatchStream(...args),
@@ -21,6 +23,11 @@ vi.mock('../../api/screenshots', () => ({
     }`,
 }))
 
+vi.mock('../../api/artifacts', () => ({
+  useSampleArtifactList: (...args: unknown[]) => useSampleArtifactList(...args),
+  useSampleArtifactContent: (...args: unknown[]) => useSampleArtifactContent(...args),
+}))
+
 vi.mock('../../api/batches', async () => {
   const actual = await vi.importActual('../../api/batches')
   return {
@@ -30,6 +37,17 @@ vi.mock('../../api/batches', async () => {
 })
 
 describe('SampleDetail', () => {
+  beforeEach(() => {
+    useSampleArtifactList.mockReturnValue({ data: [], isLoading: false, isError: false })
+    useSampleArtifactContent.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+  })
+
   async function ensureRoundExpanded(label: RegExp) {
     const toggle = screen.getByText(label)
     const panelHeader = toggle.closest('.ant-collapse-header')
@@ -92,6 +110,79 @@ describe('SampleDetail', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /下载日志包/i }))
     expect(downloadSampleLogs).toHaveBeenCalledWith('b1', 's1')
+  })
+
+  it('shows Profile/New session correctly and fetches an artifact only once its panel is expanded', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Batch 1',
+        mode: 'gui_android',
+        status: 'done',
+        total: 1,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        seq: 2,
+        samples: [
+          {
+            id: 's1',
+            prompts: ['hello'],
+            mode: 'gui_android',
+            target_profile: 'android_demo',
+            status: 'done',
+            new_session: true,
+            responses: ['world'],
+            metadata: {},
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    listScreenshots.mockResolvedValue([])
+    useSampleArtifactList.mockReturnValue({
+      data: ['executor.log', 'after_result_1.xml'],
+      isLoading: false,
+      isError: false,
+    })
+    useSampleArtifactContent.mockReturnValue({
+      data: '2026-07-28 INFO started',
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id/samples/:sid" element={<SampleDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1/samples/s1' },
+    )
+
+    await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
+    const profileContainer = screen
+      .getByText('Profile')
+      .closest('.ant-descriptions-item-container') as HTMLElement
+    expect(within(profileContainer).getByText('android_demo')).toBeInTheDocument()
+
+    const newSessionContainer = screen
+      .getByText('New session')
+      .closest('.ant-descriptions-item-container') as HTMLElement
+    expect(within(newSessionContainer).getByText('true')).toBeInTheDocument()
+
+    expect(screen.getByText('日志文件')).toBeInTheDocument()
+    expect(screen.getByText('executor.log')).toBeInTheDocument()
+    // AntD Collapse doesn't render a collapsed panel's children at all, so
+    // ArtifactViewer (and thus the content hook) never even mounts until
+    // the user actually expands it.
+    expect(useSampleArtifactContent).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByText('executor.log'))
+    await waitFor(() => {
+      expect(useSampleArtifactContent).toHaveBeenCalledWith('b1', 's1', 'executor.log', true)
+    })
+    expect(await screen.findByText('2026-07-28 INFO started')).toBeInTheDocument()
   })
 
   it('shows an error toast when the log download fails', async () => {
