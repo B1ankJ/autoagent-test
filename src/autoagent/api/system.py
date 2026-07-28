@@ -11,14 +11,17 @@ import asyncio
 import logging
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
+from autoagent.config.settings import get_settings
 from autoagent.models.api import DefaultsConfig
 from autoagent.storage.batches import count_active_batches
 from autoagent.storage.configs import get_config
 from autoagent.system import updater
+from autoagent.utils.tail import tail_lines
 
 _log = logging.getLogger(__name__)
 
@@ -87,3 +90,33 @@ async def update_apply(body: _ApplyRequest) -> dict:
     if not result.ok:
         raise HTTPException(status_code=500, detail=payload)
     return payload
+
+
+@router.get("/log")
+async def read_app_log(lines: int = Query(default=1000, ge=50, le=10000)) -> dict:
+    """Tail the app's own runtime log (Settings.log_file).
+
+    That file is the raw stdout+stderr of the whole uvicorn/FastAPI process
+    (app log lines plus uvicorn's own startup/access/error output) —
+    written by run.sh's `>>"$LOG_FILE" 2>&1` redirect, not by Python itself.
+    It has no rotation, so this always tails rather than risking loading a
+    multi-GB file into memory.
+    """
+    path = get_settings().log_file
+    content, truncated = await asyncio.to_thread(tail_lines, path, lines)
+    exists = path.exists()
+    return {
+        "path": str(path.resolve()),
+        "exists": exists,
+        "size_bytes": path.stat().st_size if exists else 0,
+        "truncated": truncated,
+        "content": content,
+    }
+
+
+@router.get("/log/download")
+async def download_app_log() -> FileResponse:
+    path = get_settings().log_file
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="log file not found")
+    return FileResponse(path, filename="autoagent.log", media_type="text/plain")

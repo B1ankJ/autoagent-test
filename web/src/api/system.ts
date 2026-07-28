@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { client } from './client'
+import { parseContentDisposition, triggerDownload } from '../utils/download'
 
 export interface UpdateStatus {
   enabled: boolean
@@ -87,4 +88,33 @@ export async function probeHealth(): Promise<HealthInfo | null> {
   } catch {
     return null
   }
+}
+
+export interface AppLog {
+  path: string
+  exists: boolean
+  size_bytes: number
+  // True when the file has more lines before what's returned — either it
+  // was cut off mid-read, or the whole (small) file was read but still has
+  // more lines than requested.
+  truncated: boolean
+  content: string
+}
+
+/** Tail the app's own runtime log (Settings.log_file — the whole
+ * uvicorn/FastAPI process's stdout+stderr, not just this app's logger). */
+export function useAppLog(lines: number, refetchInterval: number | false = false) {
+  return useQuery({
+    queryKey: ['system', 'log', lines],
+    queryFn: async () => (await client.get<AppLog>('/system/log', { params: { lines } })).data,
+    refetchInterval,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export async function downloadAppLog(): Promise<void> {
+  const response = await client.get('/system/log/download', { responseType: 'blob' })
+  const filename =
+    parseContentDisposition(response.headers['content-disposition']) ?? 'autoagent.log'
+  triggerDownload(response.data as Blob, filename)
 }

@@ -13,6 +13,7 @@ import { Login } from './pages/Login'
 import BuilderHub from './pages/Profiles/BuilderHub'
 import { ProfileEdit } from './pages/Profiles/Edit'
 import { ProfileList } from './pages/Profiles/List'
+import { LogsPage } from './pages/System/Logs'
 import { TestsQuick } from './pages/Tests/Quick'
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="batches/:id" element={<BatchDetail />} />
           <Route path="batches/:id/samples/:sid" element={<SampleDetail />} />
           <Route path="config" element={<ConfigPage />} />
+          <Route path="system/logs" element={<LogsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

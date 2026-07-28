@@ -111,3 +111,67 @@ def _fake_active(n: int):
         return n
 
     return _count
+
+
+def _set_log_file(monkeypatch, path) -> None:
+    from autoagent.config.settings import get_settings
+
+    monkeypatch.setenv("LOG_FILE", str(path))
+    get_settings.cache_clear()
+
+
+async def test_log_requires_auth(client):
+    r = await client.get("/api/v1/system/log")
+    assert r.status_code == 401
+
+
+async def test_log_reports_not_exists_for_missing_file(client, monkeypatch, tmp_path):
+    _set_log_file(monkeypatch, tmp_path / "does-not-exist.log")
+    r = await client.get("/api/v1/system/log", headers=await _h(client))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["exists"] is False
+    assert body["content"] == ""
+    assert body["size_bytes"] == 0
+
+
+async def test_log_tails_last_n_lines(client, monkeypatch, tmp_path):
+    log_path = tmp_path / "app.log"
+    log_path.write_text("\n".join(f"line {i}" for i in range(1, 201)) + "\n")
+    _set_log_file(monkeypatch, log_path)
+
+    r = await client.get("/api/v1/system/log", params={"lines": 50}, headers=await _h(client))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["exists"] is True
+    assert body["truncated"] is True
+    assert body["content"].splitlines() == [f"line {i}" for i in range(151, 201)]
+
+
+async def test_log_not_truncated_when_file_has_fewer_lines_than_requested(
+    client, monkeypatch, tmp_path
+):
+    log_path = tmp_path / "app.log"
+    log_path.write_text("only line\n")
+    _set_log_file(monkeypatch, log_path)
+
+    r = await client.get("/api/v1/system/log", params={"lines": 500}, headers=await _h(client))
+    body = r.json()
+    assert body["truncated"] is False
+    assert body["content"] == "only line"
+
+
+async def test_log_download_streams_the_file(client, monkeypatch, tmp_path):
+    log_path = tmp_path / "app.log"
+    log_path.write_text("hello world\n")
+    _set_log_file(monkeypatch, log_path)
+
+    r = await client.get("/api/v1/system/log/download", headers=await _h(client))
+    assert r.status_code == 200
+    assert r.text == "hello world\n"
+
+
+async def test_log_download_404_when_missing(client, monkeypatch, tmp_path):
+    _set_log_file(monkeypatch, tmp_path / "nope.log")
+    r = await client.get("/api/v1/system/log/download", headers=await _h(client))
+    assert r.status_code == 404

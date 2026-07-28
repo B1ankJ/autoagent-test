@@ -24,6 +24,12 @@ class Settings(BaseSettings):
 
     data_root: Path = Path("./data")
     logs_root: Path = Path("./logs")
+    # Runtime app log file — written by run.sh's `>>"$LOG_FILE" 2>&1` redirect
+    # (raw stdout+stderr of the whole uvicorn/FastAPI process), not by Python
+    # itself (utils/logging.py::configure_logging() only logs to stdout).
+    # Field name matches the LOG_FILE env var run.sh already respects, so
+    # both agree on the same path without extra wiring.
+    log_file: Path = Path("./logs/uvicorn.log")
     adb_keyboard_apk_path: Path = Path(__file__).parent.parent / "fixtures" / "ADBKeyboard.apk"
 
     default_api_timeout_sec: int = 60
