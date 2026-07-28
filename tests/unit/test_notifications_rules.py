@@ -178,6 +178,84 @@ async def test_failed_status_ignored(monkeypatch):
     assert sent == []
 
 
+async def test_empty_streak_auto_reinit_when_enabled(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 1,
+        "empty_response_auto_reinit": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    # Stub the lazily-imported reinit dependencies.
+    import autoagent.api._deps as deps
+    import autoagent.devices.init_jobs as init_jobs
+    import autoagent.profiles.registry as registry
+
+    monkeypatch.setattr(registry, "load_profile", lambda _n: _android_profile())
+    monkeypatch.setattr(deps, "get_device_pool", lambda: object())
+
+    def _fake_start(profile, serials, **kwargs):
+        started.append((serials, kwargs))
+
+    monkeypatch.setattr(init_jobs, "start_job", _fake_start)
+
+    await rules.on_sample_result(_make_sample(serial="A", response=""), batch_id="b")
+
+    assert len(sent) == 1
+    assert "自动复位" in sent[0]["text"]
+    assert started == [(["A"], {"pool": started[0][1]["pool"], "hold_timeout_sec": 300.0})]
+
+
+async def test_empty_streak_no_reinit_when_disabled(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 1,
+        # empty_response_auto_reinit omitted → default False
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    import autoagent.devices.init_jobs as init_jobs
+
+    monkeypatch.setattr(init_jobs, "start_job", lambda *a, **k: started.append((a, k)))
+
+    await rules.on_sample_result(_make_sample(serial="A", response=""), batch_id="b")
+
+    assert len(sent) == 1
+    assert "自动复位" not in sent[0]["text"]
+    assert started == []
+
+
+async def test_empty_streak_reinit_independent_of_same_response_flag(monkeypatch):
+    """Regression: the two rules' auto-reinit opt-ins must stay independent
+    — enabling one must not silently enable the other."""
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 1,
+        "empty_response_auto_reinit": False,
+        "same_response_auto_reinit": True,  # the *other* rule's flag is on
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    import autoagent.devices.init_jobs as init_jobs
+
+    monkeypatch.setattr(init_jobs, "start_job", lambda *a, **k: started.append((a, k)))
+
+    await rules.on_sample_result(_make_sample(serial="A", response=""), batch_id="b")
+
+    assert len(sent) == 1
+    assert "自动复位" not in sent[0]["text"]
+    assert started == []
+
+
 # --- Same-response streak rule ---
 
 def _stub_vlm_config(value):

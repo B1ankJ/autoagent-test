@@ -460,6 +460,14 @@ export function ConfigPage() {
             <InputNumber min={1} max={20} />
           </Form.Item>
           <Form.Item
+            name="empty_response_auto_reinit"
+            label="连续空响应时自动重新初始化设备"
+            valuePropName="checked"
+            extra="规则 1 触发通知时,自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。与规则 2 的自动复位开关相互独立。"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
             name="same_response_enabled"
             label="启用重复响应检测"
             valuePropName="checked"

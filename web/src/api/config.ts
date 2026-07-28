@@ -53,6 +53,7 @@ export interface DingTalkConfig {
   webhook_url: string
   secret: string
   empty_response_threshold: number
+  empty_response_auto_reinit: boolean
   same_response_enabled: boolean
   same_response_threshold: number
   same_response_auto_reinit: boolean

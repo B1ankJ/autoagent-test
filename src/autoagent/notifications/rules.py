@@ -348,15 +348,24 @@ async def _judge_and_act(
     )
 
 
-async def _maybe_auto_reinit(config: dict[str, Any], serial: str, profile_name: str) -> bool:
+async def _maybe_auto_reinit(
+    config: dict[str, Any], serial: str, profile_name: str, *, config_key: str
+) -> bool:
     """If configured, run the profile's init playbook on the device to reset it.
+
+    `config_key` picks which rule's opt-in flag gates this
+    (`same_response_auto_reinit` / `empty_response_auto_reinit`) — the two
+    rules are independent opt-ins, not one shared switch, since a false
+    empty-response streak (raw extraction genuinely empty but LLM review
+    recovered real text) and a real same-response streak aren't the same
+    kind of anomaly, and a user may only trust auto-recovery for one of them.
 
     Uses a generous device-lock hold timeout so the reinit waits for the
     in-flight sample to finish (the device is by definition busy — that's
     how the streak formed) then resets before the next sample. Returns True
     when a reinit job was actually started.
     """
-    if not bool(config.get("same_response_auto_reinit")):
+    if not bool(config.get(config_key)):
         return False
     try:
         from autoagent.profiles.registry import load_profile
@@ -376,7 +385,7 @@ async def _maybe_auto_reinit(config: dict[str, Any], serial: str, profile_name: 
             # to a few minutes to grab the lock before the next sample.
             hold_timeout_sec=300.0,
         )
-        _log.info("auto-reinit started for %s/%s (same-response rule)", serial, profile_name)
+        _log.info("auto-reinit started for %s/%s (%s)", serial, profile_name, config_key)
         return True
     except Exception:  # noqa: BLE001
         _log.exception("auto-reinit failed to start for %s/%s", serial, profile_name)
@@ -408,7 +417,9 @@ async def _fire_same_response_alert(
     normal: bool | None,
     reason: str | None,
 ) -> None:
-    reinit = await _maybe_auto_reinit(config, serial, profile)
+    reinit = await _maybe_auto_reinit(
+        config, serial, profile, config_key="same_response_auto_reinit"
+    )
     excerpt = response.replace("\n", " ")
     if len(excerpt) > 160:
         excerpt = excerpt[:160] + "…"
@@ -463,18 +474,25 @@ async def _fire_empty_streak_alert(
     batch_id: str,
     result: SampleResult,
 ) -> None:
+    reinit = await _maybe_auto_reinit(
+        config, serial, result.target_profile, config_key="empty_response_auto_reinit"
+    )
     prompt_excerpt = ""
     if result.prompts_sent:
         first = result.prompts_sent[0] if isinstance(result.prompts_sent[0], str) else ""
         prompt_excerpt = (first[:120] + ("…" if len(first) > 120 else "")).replace("\n", " ")
     app_base_url = str(config.get("app_base_url") or "").strip()
     sample_ref = _sample_ref_md(app_base_url, batch_id, result.id)
+    reinit_line = (
+        "- **自动复位**: 已触发初始化剧本,设备将在当前任务结束后复位\n" if reinit else ""
+    )
     text = (
         f"### ⚠️ 设备连续 {count} 次响应为空\n\n"
         f"- **设备**: `{serial}`\n"
         f"- **Profile**: `{result.target_profile}`\n"
         f"- **最新样本**: {sample_ref}\n"
-        f"- **最新 prompt**: {prompt_excerpt or '_(空)_'}\n\n"
+        f"- **最新 prompt**: {prompt_excerpt or '_(空)_'}\n"
+        f"{reinit_line}\n"
         "可能是设备卡死 / 自动化点到了奇怪的页面,需要人工介入排查。"
     )
     sr = await send_markdown(

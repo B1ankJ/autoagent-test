@@ -238,6 +238,12 @@ class DingTalkNotificationConfig(BaseModel):
     # Rule 1: alert when a single device produces N consecutive empty
     # responses (status=done, responses[0] is empty/whitespace).
     empty_response_threshold: int = 3
+    # When Rule 1 fires, also auto-run the profile's init playbook on that
+    # device to reset it — same mechanics as same_response_auto_reinit
+    # below, but its own independent opt-in: an empty-response streak and a
+    # same-response streak aren't the same kind of anomaly, so a user may
+    # only trust auto-recovery for one of them. Off by default.
+    empty_response_auto_reinit: bool = False
     # Rule 2: when the SAME response repeats N times on (device, profile),
     # ask the global VLM "is this still a normal chat page?". VLM says no
     # → alert. VLM says yes → whitelist that response so it never trips
