@@ -15,6 +15,21 @@ export interface DeviceStreamHandle {
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
 
+// Every stream hook below closes its VideoDecoder from two independent
+// places that can both fire on unmount: the effect cleanup, and the async
+// read loop's own finally/onclose handler reacting to the abort/close that
+// cleanup just triggered. WebCodecs throws InvalidStateError ("Cannot call
+// 'close' on a closed codec") on a double-close, so whichever of those two
+// runs second needs this guard instead of calling decoder.close() directly.
+export function safeCloseDecoder(decoder: VideoDecoder | null | undefined): void {
+  if (!decoder || decoder.state === 'closed') return
+  try {
+    decoder.close()
+  } catch {
+    // Lost the race anyway (closed between the check above and this call) — ignore.
+  }
+}
+
 export function useDeviceStream(serial: string | null): DeviceStreamHandle {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [state, setState] = useState<StreamState>('closed')
@@ -100,7 +115,7 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
     }
 
     ws.onclose = () => {
-      decoder.close()
+      safeCloseDecoder(decoder)
       if (retryCount.current < MAX_RETRIES) {
         retryCount.current++
         setTimeout(connect, RETRY_DELAY_MS)
@@ -126,7 +141,7 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
     return () => {
       retryCount.current = MAX_RETRIES
       wsRef.current?.close()
-      decoderRef.current?.close()
+      safeCloseDecoder(decoderRef.current)
     }
   }, [serial, connect])
 
@@ -326,11 +341,7 @@ export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
         if ((err as Error).name === 'AbortError') return
         console.warn('[http-stream] read failed', err)
       } finally {
-        try {
-          decoder.close()
-        } catch {
-          // ignore
-        }
+        safeCloseDecoder(decoder)
         if (retryCount.current < MAX_RETRIES) {
           retryCount.current++
           setTimeout(connect, RETRY_DELAY_MS)
@@ -353,7 +364,7 @@ export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
     return () => {
       retryCount.current = MAX_RETRIES
       abortRef.current?.abort()
-      decoderRef.current?.close()
+      safeCloseDecoder(decoderRef.current)
     }
   }, [serial, connect])
 
