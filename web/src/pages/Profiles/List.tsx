@@ -61,49 +61,65 @@ export function ProfileList() {
     if (withDevices) {
       cols.push({
         title: '绑定设备',
-        width: 260,
+        width: 220,
         render: (_v, row) => {
           const serials = row.serials ?? []
+          // Device chips and the action buttons used to share one wrapped
+          // <Space>, so a profile with several bound devices pushed 修改/
+          // 初始化/查看画面 into a ragged, hard-to-scan mess. Chips now sit on
+          // their own row; actions collapse to a compact icon-only toolbar
+          // below. Both title (hover tooltip) and aria-label are set —
+          // AntD's icon itself carries its own generic aria-label ("mobile",
+          // "desktop", ...) which otherwise wins over `title` in the
+          // accessible-name computation.
+          const bindLabel = serials.length ? '修改绑定设备' : '绑定设备'
+          const initLabel = serials.length === 0 ? '先绑定设备再初始化' : '运行初始化剧本'
+          const screensLabel =
+            serials.length === 0
+              ? '先绑定设备再查看画面'
+              : '查看画面：该 profile 绑定设备的实时画面'
           return (
-            <Space size={4} wrap>
-              {serials.length === 0 ? (
-                <Tag>任意在线设备</Tag>
-              ) : (
-                serials.map((s) => (
-                  <Tag key={s} className="aa-mono" color="blue">
-                    {s}
-                  </Tag>
-                ))
-              )}
-              <Button
-                size="small"
-                type="link"
-                icon={<MobileOutlined />}
-                onClick={() => setBindTarget({ name: row.name, serials })}
-              >
-                {serials.length ? '修改' : '绑定'}
-              </Button>
-              <Button
-                size="small"
-                type="link"
-                icon={<PlayCircleOutlined />}
-                disabled={serials.length === 0}
-                title={serials.length === 0 ? '先绑定设备' : '运行初始化剧本'}
-                onClick={() => setInitTarget({ name: row.name, serials })}
-              >
-                初始化
-              </Button>
-              <Button
-                size="small"
-                type="link"
-                icon={<DesktopOutlined />}
-                disabled={serials.length === 0}
-                title={serials.length === 0 ? '先绑定设备' : '查看该 profile 绑定设备的实时画面'}
-                onClick={() => setScreensTarget({ name: row.name, serials })}
-              >
-                查看画面
-              </Button>
-            </Space>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Space size={4} wrap>
+                {serials.length === 0 ? (
+                  <Tag>任意在线设备</Tag>
+                ) : (
+                  serials.map((s) => (
+                    <Tag key={s} className="aa-mono" color="blue">
+                      {s}
+                    </Tag>
+                  ))
+                )}
+              </Space>
+              <Space size={0}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MobileOutlined />}
+                  title={bindLabel}
+                  aria-label={bindLabel}
+                  onClick={() => setBindTarget({ name: row.name, serials })}
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlayCircleOutlined />}
+                  disabled={serials.length === 0}
+                  title={initLabel}
+                  aria-label={initLabel}
+                  onClick={() => setInitTarget({ name: row.name, serials })}
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DesktopOutlined />}
+                  disabled={serials.length === 0}
+                  title={screensLabel}
+                  aria-label={screensLabel}
+                  onClick={() => setScreensTarget({ name: row.name, serials })}
+                />
+              </Space>
+            </div>
           )
         },
       })
