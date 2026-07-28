@@ -46,6 +46,7 @@ import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { BatchStatus, BatchSummary, ExecutionMode } from '../../types/api'
 
 // Filter state is mirrored to the URL query so refresh / share / back-button
@@ -524,6 +525,10 @@ export function BatchList() {
     const key = c.key as string | undefined
     return !key || visibleCols.has(key)
   })
+  const { columns: resizableColumns, components: resizableComponents } = useResizableColumns(
+    visibleColumns,
+    'autoagent_batches_col_widths',
+  )
 
   // Active (non-search) filters, rendered as removable chips + counted on
   // the 筛选 button badge. Search stays on the main row.
@@ -826,7 +831,8 @@ export function BatchList() {
             size="small"
             loading={isLoading}
             dataSource={rows}
-            columns={visibleColumns}
+            columns={resizableColumns}
+            components={resizableComponents}
             rowSelection={{
               selectedRowKeys: selectedIds,
               onChange: (keys) => setSelectedIds(keys as string[]),

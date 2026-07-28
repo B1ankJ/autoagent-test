@@ -44,6 +44,7 @@ import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { Sample } from '../../types/api'
 
 type SampleFilter = 'all' | 'running' | 'done' | 'failed' | 'cancelled' | 'queued'
@@ -105,6 +106,53 @@ export function BatchDetail() {
       return false
     })
   }, [allSamples, filter, search])
+
+  const sampleColumns: ColumnsType<Sample> = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      render: (value: string) => (
+        <a
+          className="aa-mono"
+          onClick={() =>
+            navigate(`/batches/${data?.batch_id}/samples/${encodeURIComponent(value)}`)
+          }
+        >
+          {value}
+        </a>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (status: Sample['status']) => (status ? <StatusTag status={status} /> : '-'),
+    },
+    {
+      title: '耗时 (ms)',
+      dataIndex: 'duration_ms',
+      width: 120,
+      render: (value?: number) => (
+        <span className="aa-mono aa-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {value ?? '-'}
+        </span>
+      ),
+    },
+    {
+      title: '错误',
+      dataIndex: 'error',
+      render: (value?: string) =>
+        value ? (
+          <span className="aa-mono" title={value} style={{ color: 'var(--aa-amber)' }}>
+            {value.slice(0, 80)}
+          </span>
+        ) : (
+          <span className="aa-muted">-</span>
+        ),
+    },
+  ]
+  const { columns: resizableSampleColumns, components: sampleTableComponents } =
+    useResizableColumns(sampleColumns, 'autoagent_batch_samples_col_widths')
 
   if (isError) {
     return (
@@ -200,49 +248,6 @@ export function BatchDetail() {
         : notifyPerm === 'unsupported'
           ? '当前浏览器不支持通知'
           : '开启批次完成通知'
-
-  const sampleColumns: ColumnsType<Sample> = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      render: (value: string) => (
-        <a
-          className="aa-mono"
-          onClick={() => navigate(`/batches/${data.batch_id}/samples/${encodeURIComponent(value)}`)}
-        >
-          {value}
-        </a>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 110,
-      render: (status: Sample['status']) => (status ? <StatusTag status={status} /> : '-'),
-    },
-    {
-      title: '耗时 (ms)',
-      dataIndex: 'duration_ms',
-      width: 120,
-      render: (value?: number) => (
-        <span className="aa-mono aa-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {value ?? '-'}
-        </span>
-      ),
-    },
-    {
-      title: '错误',
-      dataIndex: 'error',
-      render: (value?: string) =>
-        value ? (
-          <span className="aa-mono" title={value} style={{ color: 'var(--aa-amber)' }}>
-            {value.slice(0, 80)}
-          </span>
-        ) : (
-          <span className="aa-muted">-</span>
-        ),
-    },
-  ]
 
   return (
     <div>
@@ -442,7 +447,8 @@ export function BatchDetail() {
               rowKey="id"
               size="small"
               dataSource={filteredSamples}
-              columns={sampleColumns}
+              columns={resizableSampleColumns}
+              components={sampleTableComponents}
               pagination={{ pageSize: 50, showSizeChanger: true }}
             />
           )}

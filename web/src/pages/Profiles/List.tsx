@@ -21,6 +21,7 @@ import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { ProfileSummary } from '../../types/api'
 
 export function ProfileList() {
@@ -60,6 +61,7 @@ export function ProfileList() {
     ]
     if (withDevices) {
       cols.push({
+        key: 'devices',
         title: '绑定设备',
         width: 220,
         render: (_v, row) => {
@@ -125,6 +127,7 @@ export function ProfileList() {
       })
     }
     cols.push({
+      key: 'actions',
       title: '操作',
       width: 200,
       render: (_value, row) => (
@@ -157,6 +160,14 @@ export function ProfileList() {
     return cols
   }
 
+  // Precomputed once per render (not inside renderTab) since useResizableColumns
+  // is a hook — it can't be called conditionally/per-invocation from a plain
+  // closure called multiple times.
+  const { columns: resizableColumnsNoDevices, components: componentsNoDevices } =
+    useResizableColumns(makeColumns(false), 'autoagent_profiles_col_widths')
+  const { columns: resizableColumnsWithDevices, components: componentsWithDevices } =
+    useResizableColumns(makeColumns(true), 'autoagent_profiles_col_widths_devices')
+
   const renderTab = (rows: ProfileSummary[], withDevices = false) =>
     rows.length === 0 ? (
       <EmptyState
@@ -180,7 +191,8 @@ export function ProfileList() {
         rowKey="name"
         size="small"
         dataSource={rows}
-        columns={makeColumns(withDevices)}
+        columns={withDevices ? resizableColumnsWithDevices : resizableColumnsNoDevices}
+        components={withDevices ? componentsWithDevices : componentsNoDevices}
         pagination={false}
       />
     )
