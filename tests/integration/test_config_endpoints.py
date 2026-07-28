@@ -101,6 +101,37 @@ async def test_backup_run_and_list(client):
     assert listed[0]["bytes"] == body["bytes_written"]
 
 
+async def test_backup_download_and_delete(client):
+    h = await _h(client)
+    r = await client.post("/api/v1/config/backup/run", headers=h)
+    assert r.status_code == 200
+    name = Path(r.json()["path"]).name
+
+    r = await client.get(f"/api/v1/config/backup/download/{name}", headers=h)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    assert len(r.content) > 0
+
+    r = await client.delete(f"/api/v1/config/backup/{name}", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"deleted": True}
+
+    r = await client.get("/api/v1/config/backup/list", headers=h)
+    assert r.json() == []
+
+    # Already deleted — a repeat delete/download 404s instead of erroring.
+    r = await client.delete(f"/api/v1/config/backup/{name}", headers=h)
+    assert r.status_code == 404
+    r = await client.get(f"/api/v1/config/backup/download/{name}", headers=h)
+    assert r.status_code == 404
+
+
+async def test_backup_download_rejects_path_traversal(client):
+    h = await _h(client)
+    r = await client.get("/api/v1/config/backup/download/..%2F..%2Fetc%2Fpasswd", headers=h)
+    assert r.status_code == 404
+
+
 async def test_backup_run_respects_zero_retention_by_not_pruning(client):
     from autoagent.config.settings import get_settings
 

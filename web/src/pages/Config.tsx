@@ -1,3 +1,4 @@
+import { DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import {
   Alert,
   App,
@@ -9,18 +10,21 @@ import {
   InputNumber,
   List,
   Popconfirm,
+  Select,
   Space,
   Switch,
   Tabs,
   Typography,
 } from 'antd'
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   DingTalkConfig,
   LLMCheckResult,
+  downloadBackup,
   useBackupList,
   useDefaults,
+  useDeleteBackup,
   useNotifications,
   usePreviewLogsCleanup,
   useRemoveWhitelist,
@@ -109,11 +113,26 @@ export function ConfigPage() {
   const saveNotifications = useSaveNotifications()
   const testNotifications = useTestNotifications()
   const whitelist = useWhitelist()
+  const [whitelistProfileFilter, setWhitelistProfileFilter] = useState<string | undefined>(
+    undefined,
+  )
+  const whitelistProfiles = useMemo(
+    () => Array.from(new Set((whitelist.data ?? []).map((e) => e.target_profile))).sort(),
+    [whitelist.data],
+  )
+  const filteredWhitelist = useMemo(
+    () =>
+      whitelistProfileFilter
+        ? (whitelist.data ?? []).filter((e) => e.target_profile === whitelistProfileFilter)
+        : (whitelist.data ?? []),
+    [whitelist.data, whitelistProfileFilter],
+  )
   const removeWhitelist = useRemoveWhitelist()
   const previewLogsCleanup = usePreviewLogsCleanup()
   const runLogsCleanup = useRunLogsCleanup()
   const backupList = useBackupList()
   const runBackup = useRunBackup()
+  const deleteBackup = useDeleteBackup()
   const [vlmForm] = Form.useForm<VLMConfig>()
   const [defaultsForm] = Form.useForm<GlobalDefaults>()
   const [notifyForm] = Form.useForm<DingTalkConfig>()
@@ -408,21 +427,57 @@ export function ConfigPage() {
               >
                 已有备份({backupList.data.length})
               </Typography.Text>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
                 {backupList.data.map((b) => (
                   <div
                     key={b.name}
                     style={{
                       display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'space-between',
                       fontSize: 12,
-                      padding: '4px 8px',
+                      padding: '4px 4px 4px 8px',
                       border: '1px solid var(--aa-border, #eee)',
                       borderRadius: 4,
                     }}
                   >
                     <span className="aa-mono">{b.name}</span>
-                    <span className="aa-muted">{humanBytes(b.bytes)}</span>
+                    <Space size={4}>
+                      <span className="aa-muted">{humanBytes(b.bytes)}</span>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        title="下载该备份"
+                        aria-label="下载该备份"
+                        onClick={() => void downloadBackup(b.name)}
+                      />
+                      <Popconfirm
+                        title="删除该备份"
+                        description="删除后不可恢复。"
+                        okText="删除"
+                        okButtonProps={{ danger: true }}
+                        cancelText="取消"
+                        onConfirm={async () => {
+                          try {
+                            await deleteBackup.mutateAsync(b.name)
+                            message.success('已删除')
+                          } catch (e) {
+                            message.error((e as Error).message)
+                          }
+                        }}
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          title="删除该备份"
+                          aria-label="删除该备份"
+                          loading={deleteBackup.isPending}
+                        />
+                      </Popconfirm>
+                    </Space>
                   </div>
                 ))}
               </div>
@@ -576,9 +631,19 @@ export function ConfigPage() {
         title="重复响应白名单"
         size="small"
         extra={
-          <Button size="small" onClick={() => whitelist.refetch()}>
-            刷新
-          </Button>
+          <Space size={8}>
+            <Select
+              allowClear
+              placeholder="按 Profile 筛选"
+              style={{ width: 200 }}
+              value={whitelistProfileFilter}
+              onChange={setWhitelistProfileFilter}
+              options={whitelistProfiles.map((p) => ({ value: p, label: p }))}
+            />
+            <Button size="small" onClick={() => whitelist.refetch()}>
+              刷新
+            </Button>
+          </Space>
         }
       >
         <Alert
@@ -601,8 +666,17 @@ export function ConfigPage() {
           />
         ) : (
           <List
-            dataSource={whitelist.data ?? []}
-            locale={{ emptyText: <Empty description="还没有白名单记录" /> }}
+            dataSource={filteredWhitelist}
+            pagination={{ pageSize: 8, hideOnSinglePage: true, size: 'small' }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={
+                    whitelistProfileFilter ? '该 Profile 下没有白名单记录' : '还没有白名单记录'
+                  }
+                />
+              ),
+            }}
             renderItem={(entry, idx) => (
               <List.Item
                 key={`${entry.target_profile}-${idx}`}

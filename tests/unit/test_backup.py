@@ -6,7 +6,12 @@ import time
 import zipfile
 from pathlib import Path
 
-from autoagent.maintenance.backup import list_backups, run_backup
+from autoagent.maintenance.backup import (
+    delete_backup,
+    list_backups,
+    resolve_backup_path,
+    run_backup,
+)
 
 
 def _make_db(data_root: Path) -> None:
@@ -95,3 +100,40 @@ async def test_list_backups_returns_newest_first(tmp_path):
         Path(first.path).name,
     ]
     assert listed[0]["bytes"] == second.bytes_written
+
+
+async def test_resolve_backup_path_finds_existing_backup(tmp_path):
+    _make_db(tmp_path)
+    report = await run_backup(data_root=tmp_path, retention_days=14)
+    name = Path(report.path).name
+
+    resolved = resolve_backup_path(tmp_path, name)
+
+    assert resolved == Path(report.path).resolve()
+
+
+def test_resolve_backup_path_none_for_missing_file(tmp_path):
+    assert resolve_backup_path(tmp_path, "nope.zip") is None
+
+
+def test_resolve_backup_path_rejects_traversal(tmp_path):
+    (tmp_path / "backups").mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("shh")
+
+    assert resolve_backup_path(tmp_path, "../secret.txt") is None
+    assert resolve_backup_path(tmp_path, "..%2Fsecret.txt") is None
+
+
+async def test_delete_backup_removes_file(tmp_path):
+    _make_db(tmp_path)
+    report = await run_backup(data_root=tmp_path, retention_days=14)
+    name = Path(report.path).name
+
+    assert delete_backup(tmp_path, name) is True
+    assert not Path(report.path).exists()
+    assert list_backups(tmp_path) == []
+
+
+def test_delete_backup_false_for_missing_file(tmp_path):
+    assert delete_backup(tmp_path, "nope.zip") is False

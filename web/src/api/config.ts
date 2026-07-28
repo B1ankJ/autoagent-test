@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { GlobalDefaults, VLMConfig } from '../types/api'
 import { client } from './client'
+import { parseContentDisposition, triggerDownload } from '../utils/download'
 
 export interface LLMCheckResult {
   ok: boolean
@@ -165,6 +166,24 @@ export function useRunBackup() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => (await client.post<BackupRunResult>('/config/backup/run')).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'backup', 'list'] }),
+  })
+}
+
+export async function downloadBackup(name: string): Promise<void> {
+  const response = await client.get(`/config/backup/download/${encodeURIComponent(name)}`, {
+    responseType: 'blob',
+  })
+  const filename = parseContentDisposition(response.headers['content-disposition']) ?? name
+  triggerDownload(response.data as Blob, filename)
+}
+
+export function useDeleteBackup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) => {
+      await client.delete(`/config/backup/${encodeURIComponent(name)}`)
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'backup', 'list'] }),
   })
 }

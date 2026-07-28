@@ -63,6 +63,28 @@ def _prune_old_backups(backups_dir: Path, retention_days: int) -> int:
     return pruned
 
 
+def resolve_backup_path(data_root: Path, name: str) -> Path | None:
+    """Resolve `name` to a backup zip inside data_root/backups.
+
+    Returns None if it doesn't exist or (guarding against path traversal —
+    `name` comes straight from a URL path segment) doesn't actually resolve
+    to a direct child of the backups dir.
+    """
+    backups_dir = (data_root / "backups").resolve()
+    candidate = (backups_dir / Path(name).name).resolve()
+    if candidate.parent != backups_dir or not candidate.is_file():
+        return None
+    return candidate
+
+
+def delete_backup(data_root: Path, name: str) -> bool:
+    path = resolve_backup_path(data_root, name)
+    if path is None:
+        return False
+    path.unlink(missing_ok=True)
+    return True
+
+
 def list_backups(data_root: Path) -> list[dict]:
     backups_dir = data_root / "backups"
     if not backups_dir.exists():

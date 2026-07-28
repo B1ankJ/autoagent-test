@@ -2,12 +2,18 @@ import asyncio
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
 from autoagent.executors.llm_checker import check_llm_api
-from autoagent.maintenance.backup import list_backups, run_backup
+from autoagent.maintenance.backup import (
+    delete_backup,
+    list_backups,
+    resolve_backup_path,
+    run_backup,
+)
 from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import (
@@ -195,6 +201,22 @@ async def run_backup_now() -> dict:
         "bytes_written": report.bytes_written,
         "pruned": report.pruned,
     }
+
+
+@router.get("/backup/download/{name}")
+async def download_backup(name: str) -> FileResponse:
+    path = resolve_backup_path(get_settings().data_root, name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="backup not found")
+    return FileResponse(path, filename=path.name, media_type="application/zip")
+
+
+@router.delete("/backup/{name}")
+async def delete_backup_route(name: str) -> dict:
+    ok = delete_backup(get_settings().data_root, name)
+    if not ok:
+        raise HTTPException(status_code=404, detail="backup not found")
+    return {"deleted": True}
 
 
 @router.get("/notifications/whitelist", response_model=list[WhitelistEntry])
