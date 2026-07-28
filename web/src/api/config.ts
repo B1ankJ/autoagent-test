@@ -57,6 +57,7 @@ export interface DingTalkConfig {
   same_response_enabled: boolean
   same_response_threshold: number
   same_response_auto_reinit: boolean
+  anr_check_enabled: boolean
   at_mobiles: string[]
   at_all: boolean
   app_base_url: string

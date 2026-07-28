@@ -256,6 +256,16 @@ class DingTalkNotificationConfig(BaseModel):
     # in-flight sample to finish (it shares the scheduler's device lock)
     # then reinitializes before the next sample runs. Off by default.
     same_response_auto_reinit: bool = False
+    # Rule 3: after each gui_android sample finishes (done/failed/timeout/
+    # extraction_failed — unlike rules 1/2, this checks failures too, since
+    # an ANR is a plausible *cause* of a timeout), check the device's
+    # ActivityManager log for an ANR (Application Not Responding) in the
+    # profile's package since the last check. Unlike rules 1/2's separate
+    # opt-in *_auto_reinit flags, enabling this rule at all is the consent —
+    # a hit always triggers the profile's init playbook immediately, no
+    # extra toggle, since an ANR'd app can't be recovered by anything short
+    # of a restart. Off by default like rule 2.
+    anr_check_enabled: bool = False
     # Optional @-mentions on alert (mobile numbers / "all").
     at_mobiles: list[str] = Field(default_factory=list)
     at_all: bool = False

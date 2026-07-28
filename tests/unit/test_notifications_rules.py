@@ -6,13 +6,15 @@ from autoagent.models.api import SampleResult
 from autoagent.notifications import rules
 
 
-def _make_sample(*, serial: str | None, response: str, status: str = "done") -> SampleResult:
+def _make_sample(
+    *, serial: str | None, response: str, status: str = "done", mode: str = "gui_android"
+) -> SampleResult:
     return SampleResult(
         id="s1",
         status=status,  # type: ignore[arg-type]
         prompts_sent=["hi"],
         responses=[response],
-        mode="gui_android",
+        mode=mode,  # type: ignore[arg-type]
         target_profile="p",
         metadata={"device_serial": serial} if serial else {},
     )
@@ -649,6 +651,158 @@ async def test_same_response_whitelisted_skips(monkeypatch):
         await rules.on_sample_result(
             _make_sample(serial="A", response="same"), batch_id="b"
         )
+    assert sent == []
+
+
+# --- ANR check rule (rule 3) ---
+
+
+def _patch_reinit_deps(monkeypatch, started: list[tuple]):
+    import autoagent.api._deps as deps
+    import autoagent.devices.init_jobs as init_jobs
+    import autoagent.profiles.registry as registry
+
+    monkeypatch.setattr(registry, "load_profile", lambda _n: _android_profile())
+    monkeypatch.setattr(deps, "get_device_pool", lambda: object())
+
+    def _fake_start(profile, serials, **kwargs):
+        started.append((serials, kwargs))
+
+    monkeypatch.setattr(init_jobs, "start_job", _fake_start)
+
+
+async def test_anr_check_disabled_by_default_no_fire(monkeypatch):
+    sent: list[dict] = []
+    cfg = {"enabled": True, "webhook_url": "x", "empty_response_threshold": 99}
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", lambda serial, package: True)
+
+    await rules.on_sample_result(_make_sample(serial="A", response="hi"), batch_id="b")
+    assert sent == []
+
+
+async def test_anr_check_fires_and_reinits_on_hit(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "anr_check_enabled": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", lambda serial, package: True)
+    _patch_reinit_deps(monkeypatch, started)
+
+    await rules.on_sample_result(_make_sample(serial="A", response="hi"), batch_id="b")
+
+    assert len(sent) == 1
+    assert "ANR" in sent[0]["text"]
+    assert "自动复位" in sent[0]["text"]
+    assert len(started) == 1
+    serials, kwargs = started[0]
+    assert serials == ["A"]
+    assert kwargs["hold_timeout_sec"] == 300.0
+
+
+async def test_anr_check_no_fire_when_no_hit(monkeypatch):
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "anr_check_enabled": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", lambda serial, package: False)
+    _patch_reinit_deps(monkeypatch, started)
+
+    await rules.on_sample_result(_make_sample(serial="A", response="hi"), batch_id="b")
+
+    assert sent == []
+    assert started == []
+
+
+async def test_anr_check_runs_even_when_sample_failed(monkeypatch):
+    """Unlike rules 1/2, an ANR check must still run on a failed/timeout
+    sample — an ANR is a plausible *cause* of the failure, not something
+    that only matters once a sample cleanly succeeds."""
+    sent: list[dict] = []
+    started: list[tuple] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "anr_check_enabled": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", lambda serial, package: True)
+    _patch_reinit_deps(monkeypatch, started)
+
+    await rules.on_sample_result(
+        _make_sample(serial="A", response="", status="timeout"), batch_id="b"
+    )
+
+    assert len(sent) == 1
+    assert started != []
+
+
+async def test_anr_check_skips_cancelled_sample(monkeypatch):
+    """A cancelled sample never reached the executor/device at all, so
+    there's nothing on the device's logcat to check."""
+    sent: list[dict] = []
+    calls: list[str] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "anr_check_enabled": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    def _tracked(serial, package):
+        calls.append(serial)
+        return True
+
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", _tracked)
+
+    await rules.on_sample_result(
+        _make_sample(serial="A", response="", status="cancelled"), batch_id="b"
+    )
+
+    assert calls == []
+    assert sent == []
+
+
+async def test_anr_check_skips_non_android_mode(monkeypatch):
+    sent: list[dict] = []
+    calls: list[str] = []
+    cfg = {
+        "enabled": True,
+        "webhook_url": "x",
+        "empty_response_threshold": 99,
+        "anr_check_enabled": True,
+    }
+    monkeypatch.setattr(rules, "_load_config", _stub_config(cfg))
+    monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
+
+    def _tracked(serial, package):
+        calls.append(serial)
+        return True
+
+    monkeypatch.setattr(rules.adb, "logcat_anr_check", _tracked)
+
+    await rules.on_sample_result(
+        _make_sample(serial="A", response="hi", mode="agent_android"), batch_id="b"
+    )
+
+    assert calls == []
     assert sent == []
 
 

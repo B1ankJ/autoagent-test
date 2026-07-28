@@ -15,7 +15,7 @@ vi.mock('../api/config', () => ({
   useTestLLM: () => ({ isPending: false, mutateAsync: testLlmMock }),
   useDefaults: () => ({ data: { api_timeout_sec: 60, gui_timeout_sec: 180, retry: 2, concurrency: 1, verbose_logs: true } }),
   useSaveDefaults: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
-  useNotifications: () => ({ data: { enabled: false, webhook_url: '', secret: '', empty_response_threshold: 3, empty_response_auto_reinit: false, same_response_enabled: false, same_response_threshold: 3, same_response_auto_reinit: false, at_mobiles: [], at_all: false, app_base_url: '' } }),
+  useNotifications: () => ({ data: { enabled: false, webhook_url: '', secret: '', empty_response_threshold: 3, empty_response_auto_reinit: false, same_response_enabled: false, same_response_threshold: 3, same_response_auto_reinit: false, anr_check_enabled: false, at_mobiles: [], at_all: false, app_base_url: '' } }),
   useSaveNotifications: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
   useTestNotifications: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useWhitelist: () => ({ data: [], refetch: vi.fn() }),

@@ -3,6 +3,14 @@
   - empty_response_streak: when N samples in a row from the same device
     return an empty response, fire a DingTalk alert. Useful for catching
     "device wedged / automation lost the page" without a human watching.
+  - same_response_streak: when N samples in a row from the same (device,
+    profile) return the identical response, ask a VLM whether the page
+    still looks like a normal chat page before alerting.
+  - anr_check: after each gui_android sample finishes (including failures/
+    timeouts, unlike the two rules above), check the device's own
+    ActivityManager log for an ANR in the profile's package. A hit always
+    triggers the profile's init playbook (no separate opt-in — enabling
+    the rule is the consent) plus a DingTalk alert.
 """
 from __future__ import annotations
 
@@ -12,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from autoagent.config.settings import get_settings
+from autoagent.devices import adb
 from autoagent.models.api import SampleResult
 from autoagent.notifications import whitelist
 from autoagent.notifications.dingtalk import send_markdown
@@ -112,6 +121,18 @@ def _is_terminal_done(result: SampleResult) -> bool:
     return result.status == "done"
 
 
+# Statuses where the sample actually reached a device (as opposed to being
+# cancelled or rejected before the executor ever ran) — the ANR rule cares
+# about failures/timeouts too (an ANR is a plausible *cause* of a timeout),
+# unlike the empty/same-response rules which only make sense for a cleanly
+# completed sample.
+_DEVICE_EXECUTED_STATUSES = {"done", "failed", "timeout", "extraction_failed"}
+
+
+def _sample_reached_device(result: SampleResult) -> bool:
+    return result.status in _DEVICE_EXECUTED_STATUSES
+
+
 def _effective_response(result: SampleResult) -> str:
     """The response this system actually stands behind (see
     select_effective_response) — prefers the LLM-reviewed extraction over
@@ -142,7 +163,7 @@ async def on_sample_result(result: SampleResult, batch_id: str) -> None:
     exception is swallowed; this must never affect batch progress.
     """
     try:
-        if not _is_terminal_done(result):
+        if not _sample_reached_device(result):
             return
         serial = _device_serial_of(result)
         if not serial:
@@ -155,10 +176,14 @@ async def on_sample_result(result: SampleResult, batch_id: str) -> None:
         if not webhook:
             return
 
-        await _rule_empty_streak(
-            config=config, webhook=webhook, serial=serial, batch_id=batch_id, result=result
-        )
-        await _rule_same_response_streak(
+        if _is_terminal_done(result):
+            await _rule_empty_streak(
+                config=config, webhook=webhook, serial=serial, batch_id=batch_id, result=result
+            )
+            await _rule_same_response_streak(
+                config=config, webhook=webhook, serial=serial, batch_id=batch_id, result=result
+            )
+        await _rule_anr_check(
             config=config, webhook=webhook, serial=serial, batch_id=batch_id, result=result
         )
     except Exception:  # noqa: BLE001
@@ -271,6 +296,52 @@ async def _rule_same_response_streak(
     )
 
 
+async def _rule_anr_check(
+    *,
+    config: dict[str, Any],
+    webhook: str,
+    serial: str,
+    batch_id: str,
+    result: SampleResult,
+) -> None:
+    if not bool(config.get("anr_check_enabled")):
+        return
+    # Only gui_android profiles declare a `package` — agent_android is a
+    # free-roaming LLM agent with no fixed target app (and no init_action
+    # to recover with), same restriction _maybe_auto_reinit already applies.
+    if result.mode != "gui_android":
+        return
+    profile_name = result.target_profile
+    if not profile_name:
+        return
+
+    try:
+        from autoagent.profiles.registry import load_profile
+        from autoagent.profiles.schemas import AndroidProfile
+
+        profile = load_profile(profile_name)
+    except Exception:  # noqa: BLE001
+        return
+    if not isinstance(profile, AndroidProfile):
+        return
+    package = profile.package
+    if not package:
+        return
+
+    hit = await asyncio.to_thread(adb.logcat_anr_check, serial, package)
+    if not hit:
+        return
+
+    await _fire_anr_alert(
+        config=config,
+        serial=serial,
+        profile_name=profile_name,
+        package=package,
+        batch_id=batch_id,
+        result=result,
+    )
+
+
 async def _judge_and_act(
     *,
     config: dict[str, Any],
@@ -348,25 +419,14 @@ async def _judge_and_act(
     )
 
 
-async def _maybe_auto_reinit(
-    config: dict[str, Any], serial: str, profile_name: str, *, config_key: str
-) -> bool:
-    """If configured, run the profile's init playbook on the device to reset it.
-
-    `config_key` picks which rule's opt-in flag gates this
-    (`same_response_auto_reinit` / `empty_response_auto_reinit`) — the two
-    rules are independent opt-ins, not one shared switch, since a false
-    empty-response streak (raw extraction genuinely empty but LLM review
-    recovered real text) and a real same-response streak aren't the same
-    kind of anomaly, and a user may only trust auto-recovery for one of them.
+async def _start_reinit_job(serial: str, profile_name: str) -> bool:
+    """Run the profile's init playbook on the device to reset it.
 
     Uses a generous device-lock hold timeout so the reinit waits for the
     in-flight sample to finish (the device is by definition busy — that's
-    how the streak formed) then resets before the next sample. Returns True
-    when a reinit job was actually started.
+    how the streak/ANR was detected) then resets before the next sample.
+    Returns True when a reinit job was actually started.
     """
-    if not bool(config.get(config_key)):
-        return False
     try:
         from autoagent.profiles.registry import load_profile
         from autoagent.profiles.schemas import AndroidProfile
@@ -385,11 +445,28 @@ async def _maybe_auto_reinit(
             # to a few minutes to grab the lock before the next sample.
             hold_timeout_sec=300.0,
         )
-        _log.info("auto-reinit started for %s/%s (%s)", serial, profile_name, config_key)
+        _log.info("auto-reinit started for %s/%s", serial, profile_name)
         return True
     except Exception:  # noqa: BLE001
         _log.exception("auto-reinit failed to start for %s/%s", serial, profile_name)
         return False
+
+
+async def _maybe_auto_reinit(
+    config: dict[str, Any], serial: str, profile_name: str, *, config_key: str
+) -> bool:
+    """If configured, run the profile's init playbook on the device to reset it.
+
+    `config_key` picks which rule's opt-in flag gates this
+    (`same_response_auto_reinit` / `empty_response_auto_reinit`) — the two
+    rules are independent opt-ins, not one shared switch, since a false
+    empty-response streak (raw extraction genuinely empty but LLM review
+    recovered real text) and a real same-response streak aren't the same
+    kind of anomaly, and a user may only trust auto-recovery for one of them.
+    """
+    if not bool(config.get(config_key)):
+        return False
+    return await _start_reinit_job(serial, profile_name)
 
 
 def _sample_ref_md(app_base_url: str, batch_id: str, sample_id: str) -> str:
@@ -513,6 +590,59 @@ async def _fire_empty_streak_alert(
     else:
         _log.warning(
             "dingtalk empty-streak alert failed: status=%s errcode=%s errmsg=%r",
+            sr.status_code,
+            sr.errcode,
+            sr.errmsg,
+        )
+
+
+async def _fire_anr_alert(
+    *,
+    config: dict[str, Any],
+    serial: str,
+    profile_name: str,
+    package: str,
+    batch_id: str,
+    result: SampleResult,
+) -> None:
+    # Unlike rules 1/2, there's no separate opt-in flag here — enabling
+    # anr_check_enabled at all is the consent to auto-reinit on a hit, per
+    # the user's own framing of this rule ("如果发现失去响应直接触发初始化脚本").
+    reinit = await _start_reinit_job(serial, profile_name)
+    app_base_url = str(config.get("app_base_url") or "").strip()
+    sample_ref = _sample_ref_md(app_base_url, batch_id, result.id)
+    reinit_line = (
+        "- **自动复位**: 已触发初始化剧本,设备将在当前任务结束后复位\n"
+        if reinit
+        else "- **自动复位**: 触发失败,请人工检查设备\n"
+    )
+    text = (
+        f"### 🛑 设备 {serial} 应用无响应(ANR)\n\n"
+        f"- **设备**: `{serial}`\n"
+        f"- **Profile**: `{profile_name}`\n"
+        f"- **包名**: `{package}`\n"
+        f"- **触发样本**: {sample_ref}\n"
+        f"{reinit_line}\n"
+        "系统日志检测到该应用触发了 ANR(Application Not Responding),已自动重启初始化。"
+    )
+    sr = await send_markdown(
+        webhook_url=str(config["webhook_url"]).strip(),
+        secret=(str(config.get("secret")).strip() or None) if config.get("secret") else None,
+        title=f"[AutoAgent] {serial} 应用无响应(ANR)",
+        text=text,
+        at_mobiles=list(config.get("at_mobiles") or []),
+        at_all=bool(config.get("at_all")),
+    )
+    if sr.ok:
+        _log.info(
+            "dingtalk anr alert sent: device=%s profile=%s package=%s",
+            serial,
+            profile_name,
+            package,
+        )
+    else:
+        _log.warning(
+            "dingtalk anr alert failed: status=%s errcode=%s errmsg=%r",
             sr.status_code,
             sr.errcode,
             sr.errmsg,

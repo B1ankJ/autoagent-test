@@ -152,6 +152,36 @@ def is_package_installed(serial: str, package: str) -> bool:
     return f"package:{package}" in shell(serial, "pm", "list", "packages")
 
 
+def logcat_anr_check(serial: str, package: str) -> bool:
+    """Best-effort ANR probe for the DingTalk "rule 3" notification.
+
+    True if the device's ActivityManager log recorded an ANR
+    (Application Not Responding) for `package` since the last check.
+    Android always logs "ANR in <package>" via ActivityManager when its
+    own watchdog fires (input-dispatch/broadcast/service timeout), even on
+    OEM builds that suppress the user-facing dialog — so this is a real
+    system-level signal, not a heuristic, and far cheaper than probing the
+    UI (no screenshot, no UI-tree dump, no injected tap).
+
+    Always clears the buffer afterward (hit or not) so each call reflects
+    "since the last check" rather than re-firing on the same historical
+    entry forever — this sidesteps reconciling the device's clock against
+    ours for a time-window filter.
+    """
+    try:
+        out = _run_adb(
+            "-s", serial, "logcat", "-d", "-b", "system", "ActivityManager:I", "*:S"
+        ).stdout
+    except AdbCommandError:
+        return False
+    hit = f"ANR in {package}" in out
+    try:
+        _run_adb("-s", serial, "logcat", "-c")
+    except AdbCommandError:
+        pass
+    return hit
+
+
 def is_ime_enabled(serial: str, ime_id: str) -> bool:
     return ime_id in shell(serial, "ime", "list", "-s")
 

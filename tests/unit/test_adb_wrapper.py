@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autoagent.devices.adb import AdbCommandError, list_devices
+from autoagent.devices.adb import AdbCommandError, list_devices, logcat_anr_check
 
 
 def test_list_devices_parses_adb_devices_l(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -144,3 +144,65 @@ def test_list_devices_swallows_android_version_probe_failure(
     rows = list_devices()
 
     assert rows[0].android_version is None
+
+
+def test_logcat_anr_check_true_on_hit_and_clears_buffer(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple] = []
+
+    anr_cmd = (
+        "adb",
+        "-s",
+        "emulator-5554",
+        "logcat",
+        "-d",
+        "-b",
+        "system",
+        "ActivityManager:I",
+        "*:S",
+    )
+
+    def fake_run(args, **_kwargs):
+        cmd = tuple(args)
+        calls.append(cmd)
+        if cmd == anr_cmd:
+            return MagicMock(
+                returncode=0,
+                stdout=(
+                    "E ActivityManager: ANR in com.example.app "
+                    "(com.example.app/.MainActivity)\n"
+                ),
+                stderr="",
+            )
+        if cmd == ("adb", "-s", "emulator-5554", "logcat", "-c"):
+            return MagicMock(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected adb command: {cmd}")
+
+    monkeypatch.setattr("autoagent.devices.adb.subprocess.run", fake_run)
+
+    assert logcat_anr_check("emulator-5554", "com.example.app") is True
+    # Buffer is cleared after every check (hit or not) so the next call
+    # only sees new entries.
+    assert ("adb", "-s", "emulator-5554", "logcat", "-c") in calls
+
+
+def test_logcat_anr_check_false_when_no_matching_anr(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(args, **_kwargs):
+        cmd = tuple(args)
+        if cmd[3] == "logcat" and "-d" in cmd:
+            return MagicMock(
+                returncode=0,
+                stdout="E ActivityManager: ANR in com.other.app\n",
+                stderr="",
+            )
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("autoagent.devices.adb.subprocess.run", fake_run)
+
+    assert logcat_anr_check("emulator-5554", "com.example.app") is False
+
+
+def test_logcat_anr_check_false_on_adb_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    proc = MagicMock(returncode=1, stdout="", stderr="device offline")
+    monkeypatch.setattr("autoagent.devices.adb.subprocess.run", lambda *a, **k: proc)
+
+    assert logcat_anr_check("emulator-5554", "com.example.app") is False

@@ -531,6 +531,20 @@ export function ConfigPage() {
             </Form.Item>
           </RuleSection>
 
+          <RuleSection
+            title="规则 3 · 应用无响应(ANR)"
+            description="仅 gui_android 模式。每个 sample 结束后(含失败/超时)读取设备 ActivityManager 日志,若该 profile 包名出现 ANR(系统自身判定,不受弹窗是否显示影响)则立即触发初始化剧本并报警——启用本规则即视为同意自动复位,不再有单独开关。"
+          >
+            <Form.Item
+              name="anr_check_enabled"
+              label="启用 ANR 检测"
+              valuePropName="checked"
+              extra="只能检测系统自身判定为 ANR 的情况(即使弹窗被厂商 ROM 隐藏也能检测到);无法检测未触发系统 ANR 判定的纯界面卡死。"
+            >
+              <Switch />
+            </Form.Item>
+          </RuleSection>
+
           <Space>
             <Button type="primary" htmlType="submit" loading={saveNotifications.isPending}>
               保存
