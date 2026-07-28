@@ -99,18 +99,36 @@ function SampleBody({ batchId, sample }: { batchId: string; sample: Sample }) {
         })
         return (
           <Card key={i} size="small" title={`第 ${i + 1} 轮`}>
-            <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
-              Prompt
-            </div>
+            <Typography.Text
+              strong
+              style={{
+                display: 'block',
+                fontSize: 12,
+                marginBottom: 4,
+                color: 'var(--aa-cobalt)',
+                letterSpacing: 0.4,
+              }}
+            >
+              PROMPT
+            </Typography.Text>
             <Typography.Paragraph
               style={{ whiteSpace: 'pre-wrap', margin: 0, marginBottom: 12 }}
               copyable={!!prompts[i]}
             >
               {prompts[i] ?? <Typography.Text type="secondary">(空)</Typography.Text>}
             </Typography.Paragraph>
-            <div style={{ fontSize: 12, color: 'var(--aa-text-muted)', marginBottom: 4 }}>
-              Response
-            </div>
+            <Typography.Text
+              strong
+              style={{
+                display: 'block',
+                fontSize: 12,
+                marginBottom: 4,
+                color: 'var(--aa-cobalt)',
+                letterSpacing: 0.4,
+              }}
+            >
+              RESPONSE
+            </Typography.Text>
             <Typography.Paragraph
               style={{ whiteSpace: 'pre-wrap', margin: 0 }}
               copyable={!!response}
