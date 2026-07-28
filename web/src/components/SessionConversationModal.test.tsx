@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 
 import { renderWithProviders } from '../test/test-utils'
@@ -13,8 +13,19 @@ vi.mock('../api/batches', () => ({
   useSessionConversation: mockUseSessionConversation,
 }))
 
+const { listScreenshots } = vi.hoisted(() => ({ listScreenshots: vi.fn() }))
+
+vi.mock('../api/screenshots', () => ({
+  listScreenshots: (...args: unknown[]) => listScreenshots(...args),
+  screenshotUrl: (batchId: string, sampleId: string, name: string, width?: number) =>
+    `/api/v1/media/batches/${batchId}/samples/${sampleId}/screenshot/${name}${
+      width ? `?w=${width}` : ''
+    }`,
+}))
+
 beforeEach(() => {
   mockUseSessionConversation.mockReturnValue({ data: undefined, isLoading: false })
+  listScreenshots.mockResolvedValue([])
 })
 
 it('renders nothing when closed', () => {
@@ -62,6 +73,27 @@ it('renders turns in order with prompt, response, and status', () => {
   expect(screen.getByText('hello!')).toBeInTheDocument()
   expect(screen.getByText('how are you')).toBeInTheDocument()
   expect(screen.getByText('good, thanks')).toBeInTheDocument()
+})
+
+it('fetches each turn\'s screenshots and bolds the Prompt/Response labels', async () => {
+  const turns: SessionTurn[] = [
+    {
+      batch_id: 'b1',
+      sample_id: 's1',
+      status: 'done',
+      prompt: 'hi',
+      response: 'hello!',
+      started_at: '2026-01-01T00:00:00Z',
+    },
+  ]
+  mockUseSessionConversation.mockReturnValue({ data: turns, isLoading: false })
+  renderWithProviders(<SessionConversationModal sessionId="conv-1" onClose={vi.fn()} />)
+
+  expect(screen.getByText('PROMPT')).toBeInTheDocument()
+  expect(screen.getByText('RESPONSE')).toBeInTheDocument()
+  await waitFor(() => {
+    expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
+  })
 })
 
 it('shows a no-op note for a turn that never ran (e.g. end_session)', () => {

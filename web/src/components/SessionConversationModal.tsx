@@ -1,8 +1,18 @@
 import { Empty, Modal, Space, Spin, Typography } from 'antd'
+import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useSessionConversation } from '../api/batches'
+import { ScreenshotStrip } from './ScreenshotStrip'
 import { StatusTag } from './StatusTag'
+
+const FIELD_LABEL_STYLE: CSSProperties = {
+  display: 'block',
+  fontSize: 12,
+  marginBottom: 4,
+  color: 'var(--aa-cobalt)',
+  letterSpacing: 0.4,
+}
 
 interface Props {
   // session_id to show, or null when closed
@@ -64,8 +74,8 @@ export function SessionConversationModal({ sessionId, onClose }: Props) {
               </Space>
               {turn.prompt !== null ? (
                 <div style={{ marginBottom: turn.response !== null ? 8 : 0 }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    Prompt
+                  <Typography.Text strong style={FIELD_LABEL_STYLE}>
+                    PROMPT
                   </Typography.Text>
                   <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
                     {turn.prompt}
@@ -73,9 +83,9 @@ export function SessionConversationModal({ sessionId, onClose }: Props) {
                 </div>
               ) : null}
               {turn.response !== null ? (
-                <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    Response
+                <div style={{ marginBottom: 8 }}>
+                  <Typography.Text strong style={FIELD_LABEL_STYLE}>
+                    RESPONSE
                   </Typography.Text>
                   <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
                     {turn.response ? turn.response : <span className="aa-muted">(空)</span>}
@@ -86,7 +96,9 @@ export function SessionConversationModal({ sessionId, onClose }: Props) {
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   未执行(如释放设备的空操作)
                 </Typography.Text>
-              ) : null}
+              ) : (
+                <ScreenshotStrip batchId={turn.batch_id} sampleId={turn.sample_id} />
+              )}
             </div>
           ))}
         </Space>
