@@ -125,6 +125,40 @@ async def test_end_session_noop_excluded_from_empty_filter():
     assert not any(b.id == "b_end_session" for b in hits)
 
 
+async def test_exclude_end_session_filters_out_end_session_batches():
+    await init_db()
+    await _single_sample_batch(
+        "b_end_session_2",
+        SampleResult(
+            id="s1",
+            status="done",
+            prompts_sent=[],
+            mode="agent_android",
+            target_profile="p",
+            metadata={"session_released": True},
+        ),
+    )
+    await _single_sample_batch(
+        "b_normal_2",
+        SampleResult(
+            id="s1", status="done", prompts_sent=["hi"], responses=["fine"],
+            mode="api", target_profile="p",
+        ),
+    )
+
+    all_hits = await list_batches(limit=100)
+    assert any(b.id == "b_end_session_2" for b in all_hits)
+    assert any(b.id == "b_normal_2" for b in all_hits)
+
+    filtered = await list_batches(limit=100, exclude_end_session=True)
+    assert not any(b.id == "b_end_session_2" for b in filtered)
+    assert any(b.id == "b_normal_2" for b in filtered)
+
+    counts = await count_batches_by_status(exclude_end_session=True)
+    all_counts = await count_batches_by_status()
+    assert counts["total"] < all_counts["total"]
+
+
 async def test_non_empty_raw_response_never_matches_filter():
     await init_db()
     await _single_sample_batch(

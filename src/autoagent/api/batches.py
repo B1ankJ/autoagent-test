@@ -213,6 +213,7 @@ async def batch_stats(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    exclude_end_session: bool = False,
     mode: list[Mode] | None = Query(default=None),
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
@@ -230,6 +231,7 @@ async def batch_stats(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
+        exclude_end_session=exclude_end_session,
         mode=mode or None,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
@@ -286,6 +288,7 @@ async def list_all(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    exclude_end_session: bool = False,
     status: list[BatchStatus] | None = Query(default=None),
     mode: list[Mode] | None = Query(default=None),
 ) -> list[BatchSummary]:
@@ -298,6 +301,7 @@ async def list_all(
         target_profile=target_profile or None,
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
+        exclude_end_session=exclude_end_session,
         status=status or None,
         mode=mode or None,
     )
@@ -313,9 +317,11 @@ async def list_all(
             sample = next(iter(samples_map.get(r.id, [])), None)
             preview, response = _single_sample_preview(sample)
             session_id = sample.session_id if sample else None
+            is_end_session = bool(sample and sample.metadata.get("session_released") is not None)
         else:
             preview, response = None, None
             session_id = None
+            is_end_session = False
         profiles, devices = pd_map.get(r.id, ([], []))
         summaries.append(
             BatchSummary(
@@ -335,6 +341,7 @@ async def list_all(
                 profiles=profiles,
                 devices=devices,
                 session_id=session_id,
+                is_end_session=is_end_session,
             )
         )
     return summaries

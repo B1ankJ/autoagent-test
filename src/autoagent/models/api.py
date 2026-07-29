@@ -127,6 +127,12 @@ class BatchSummary(BaseModel):
     # preview_prompt — lets the Batches list flag a batch as one turn of a
     # multi-turn conversation and link to the reconstructed thread.
     session_id: str | None = None
+    # True when the sole sample (total == 1) is a Sample.end_session=true
+    # no-op — it released a device-session pin and never sent a real turn,
+    # so it's not a real conversation/response, just conversation-teardown
+    # bookkeeping. Lets the Batches list tag it distinctly instead of it
+    # looking like an ordinary (empty-response) batch.
+    is_end_session: bool = False
 
 
 class BatchDetail(BatchSummary):

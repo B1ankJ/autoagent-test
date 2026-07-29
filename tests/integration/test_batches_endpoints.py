@@ -365,6 +365,44 @@ async def test_list_batches_exposes_session_id_for_single_sample_batches(client)
     assert row["session_id"] == "conv-1"
 
 
+async def test_list_batches_flags_and_can_exclude_end_session_no_ops(client):
+    h = await _login(client)
+    await create_batch(
+        batch_id="b_end_session", name="b_end_session", mode="agent_android", concurrency=1,
+        total=1, target_profile_default=None,
+    )
+    await upsert_sample(
+        "b_end_session",
+        SampleResult(
+            id="s1", status="done", prompts_sent=[], mode="agent_android", target_profile="p",
+            metadata={"session_released": True},
+        ),
+    )
+    await create_batch(
+        batch_id="b_normal_turn", name="b_normal_turn", mode="agent_android", concurrency=1,
+        total=1, target_profile_default=None,
+    )
+    await upsert_sample(
+        "b_normal_turn",
+        SampleResult(
+            id="s1", status="done", prompts_sent=["hi"], responses=["ok"],
+            mode="agent_android", target_profile="p",
+        ),
+    )
+
+    r = await client.get("/api/v1/batches", headers=h)
+    rows = {b["batch_id"]: b for b in r.json()}
+    assert rows["b_end_session"]["is_end_session"] is True
+    assert rows["b_normal_turn"]["is_end_session"] is False
+
+    r_excluded = await client.get(
+        "/api/v1/batches", params={"exclude_end_session": True}, headers=h
+    )
+    excluded_ids = [b["batch_id"] for b in r_excluded.json()]
+    assert "b_end_session" not in excluded_ids
+    assert "b_normal_turn" in excluded_ids
+
+
 async def test_session_conversation_endpoint_reconstructs_turns_across_batches(client):
     h = await _login(client)
     turns = [

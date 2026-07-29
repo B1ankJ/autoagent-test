@@ -127,6 +127,7 @@ async def list_batches(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    exclude_end_session: bool = False,
     status: list[str] | None = None,
     mode: list[str] | None = None,
 ) -> list[Batch]:
@@ -179,6 +180,8 @@ async def list_batches(
             # this filter is for.
             stmt = stmt.where(Batch.total == 1, Batch.status == "done")
             stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
+        if exclude_end_session:
+            stmt = ensure_samples_join(stmt).where(~_is_end_session_noop_clause())
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
@@ -196,6 +199,7 @@ async def count_batches_by_status(
     target_profile: str | None = None,
     device_serial: str | None = None,
     empty_response_only: bool = False,
+    exclude_end_session: bool = False,
     mode: list[str] | None = None,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
@@ -240,6 +244,8 @@ async def count_batches_by_status(
         if empty_response_only:
             stmt = stmt.where(Batch.total == 1, Batch.status == "done")
             stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
+        if exclude_end_session:
+            stmt = ensure_samples_join(stmt).where(~_is_end_session_noop_clause())
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:

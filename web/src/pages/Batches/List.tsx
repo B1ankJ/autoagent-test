@@ -61,6 +61,7 @@ const QP_TO = 'to'       // ISO string, inclusive upper bound on Batch.created_a
 const QP_PROFILE = 'profile' // target_profile_default exact match
 const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
+const QP_HIDE_END_SESSION = 'hide_end_session' // "1" = hide Sample.end_session=true no-ops
 
 // Column visibility: 名称/操作 always show; these six can be hidden and the
 // choice is remembered per browser so different people can trim the table to
@@ -134,6 +135,7 @@ export function BatchList() {
   const profileFilter = searchParams.get(QP_PROFILE) || undefined
   const deviceFilter = searchParams.get(QP_DEVICE) || undefined
   const emptyResponseOnly = searchParams.get(QP_EMPTY) === '1'
+  const hideEndSession = searchParams.get(QP_HIDE_END_SESSION) === '1'
 
   const profilesQ = useProfiles()
   const devicesQ = useDevices()
@@ -179,6 +181,9 @@ export function BatchList() {
   const setEmptyResponseOnly = (v: boolean) => {
     updateParams({ [QP_EMPTY]: v ? '1' : undefined, [QP_PAGE]: undefined })
   }
+  const setHideEndSession = (v: boolean) => {
+    updateParams({ [QP_HIDE_END_SESSION]: v ? '1' : undefined, [QP_PAGE]: undefined })
+  }
   const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
     const [from, to] = range ?? [null, null]
     updateParams({
@@ -209,6 +214,7 @@ export function BatchList() {
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
     emptyResponseOnly,
+    excludeEndSession: hideEndSession,
     status: statusFilter,
     mode: modeFilter,
   })
@@ -219,6 +225,7 @@ export function BatchList() {
     targetProfile: profileFilter,
     deviceSerial: deviceFilter,
     emptyResponseOnly,
+    excludeEndSession: hideEndSession,
     mode: modeFilter,
   })
 
@@ -322,6 +329,11 @@ export function BatchList() {
                   }}
                 >
                   多轮对话
+                </Tag>
+              ) : null}
+              {row.is_end_session ? (
+                <Tag title="Sample.end_session=true:仅释放设备会话占用,不是真实对话轮次">
+                  结束会话
                 </Tag>
               ) : null}
             </Space>
@@ -565,6 +577,12 @@ export function BatchList() {
     })
   if (emptyResponseOnly)
     activeFilters.push({ key: 'e', label: '仅响应为空', onClear: () => setEmptyResponseOnly(false) })
+  if (hideEndSession)
+    activeFilters.push({
+      key: 'hes',
+      label: '已隐藏结束会话记录',
+      onClear: () => setHideEndSession(false),
+    })
 
   const clearAllFilters = () => {
     setStatusFilter([])
@@ -573,6 +591,7 @@ export function BatchList() {
     setDeviceFilter(undefined)
     setDateRange(null)
     setEmptyResponseOnly(false)
+    setHideEndSession(false)
   }
 
   const filterPopover = (
@@ -657,6 +676,15 @@ export function BatchList() {
         <Switch checked={emptyResponseOnly} onChange={setEmptyResponseOnly} size="small" />
         <span style={{ fontSize: 13 }} title="只看 total=1 / done / 响应为空的批次">
           只看响应为空
+        </span>
+      </Space>
+      <Space size={6}>
+        <Switch checked={hideEndSession} onChange={setHideEndSession} size="small" />
+        <span
+          style={{ fontSize: 13 }}
+          title="隐藏 Sample.end_session=true 的批次(仅释放设备,不是真实对话轮次)"
+        >
+          隐藏结束会话记录
         </span>
       </Space>
     </Space>

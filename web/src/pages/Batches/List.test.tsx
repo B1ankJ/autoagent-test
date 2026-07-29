@@ -267,3 +267,64 @@ describe('BatchList multi-turn conversation link', () => {
     expect(mockUseSessionConversation).toHaveBeenCalledWith('conv-1')
   })
 })
+
+describe('BatchList end_session tag and filter', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockUseBatchStats.mockReturnValue({
+      data: { total: 1, queued: 0, running: 0, done: 1, failed: 0, cancelled: 0 },
+    })
+    mockUseSessionConversation.mockReturnValue({ data: undefined, isLoading: false })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows a 结束会话 tag for a batch whose sample was an end_session no-op', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [{ ...batch, is_end_session: true }],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+    expect(screen.getByText('结束会话')).toBeInTheDocument()
+  })
+
+  it('does not show the tag for a normal batch', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [batch],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+    expect(screen.queryByText('结束会话')).not.toBeInTheDocument()
+  })
+
+  it('sends exclude_end_session to the backend when the URL hides end_session records', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [batch],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />, { initialPath: '/batches?hide_end_session=1' })
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ excludeEndSession: true }),
+      )
+      expect(mockUseBatchStats).toHaveBeenLastCalledWith(
+        expect.objectContaining({ excludeEndSession: true }),
+      )
+    })
+    expect(screen.getByText('已隐藏结束会话记录')).toBeInTheDocument()
+  })
+})
