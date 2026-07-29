@@ -12,7 +12,12 @@ from pytest_httpx import HTTPXMock
 from autoagent.auth.passwords import hash_password
 from autoagent.models.api import Sample, SampleResult
 from autoagent.profiles.registry import save_profile_yaml
-from autoagent.storage.batches import create_batch, get_batch, update_batch_status
+from autoagent.storage.batches import (
+    create_batch,
+    get_batch,
+    update_batch_progress,
+    update_batch_status,
+)
 from autoagent.storage.database import get_sessionmaker, init_db
 from autoagent.storage.samples import upsert_sample
 from autoagent.storage.users import upsert_user
@@ -401,6 +406,40 @@ async def test_list_batches_flags_and_can_exclude_end_session_no_ops(client):
     excluded_ids = [b["batch_id"] for b in r_excluded.json()]
     assert "b_end_session" not in excluded_ids
     assert "b_normal_turn" in excluded_ids
+
+
+async def test_list_batches_flags_and_can_filter_duration_anomalies(client):
+    h = await _login(client)
+
+    async def _single_sample_batch(batch_id: str, profile: str, duration: int) -> None:
+        await create_batch(
+            batch_id=batch_id, name=batch_id, mode="api", concurrency=1, total=1,
+            target_profile_default=None,
+        )
+        await update_batch_status(batch_id, "done")
+        await update_batch_progress(batch_id, done=1, failed=0, avg_duration_ms=duration)
+        await upsert_sample(
+            batch_id,
+            SampleResult(
+                id="s1", status="done", prompts_sent=["hi"], responses=["ok"],
+                mode="api", target_profile=profile, duration_ms=duration,
+            ),
+        )
+
+    for i in range(3):
+        await _single_sample_batch(f"dur_baseline_{i}", "p_api", 100)
+    await _single_sample_batch("dur_slow", "p_api", 500)
+
+    r = await client.get("/api/v1/batches", headers=h)
+    rows = {b["batch_id"]: b for b in r.json()}
+    assert rows["dur_slow"]["is_duration_anomaly"] is True
+    assert rows["dur_baseline_0"]["is_duration_anomaly"] is False
+
+    r_filtered = await client.get(
+        "/api/v1/batches", params={"duration_anomaly_only": True}, headers=h
+    )
+    filtered_ids = [b["batch_id"] for b in r_filtered.json()]
+    assert filtered_ids == ["dur_slow"]
 
 
 async def test_session_conversation_endpoint_reconstructs_turns_across_batches(client):

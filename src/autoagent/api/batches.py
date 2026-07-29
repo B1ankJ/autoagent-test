@@ -47,10 +47,12 @@ from autoagent.storage.batches import (
     count_batches_by_status,
     delete_batch_rows,
     get_batch,
+    is_duration_anomaly,
     list_batches,
     update_batch_status,
 )
 from autoagent.storage.samples import (
+    avg_duration_by_profile,
     list_samples_by_session_id,
     list_samples_for_batch,
     list_samples_for_batches,
@@ -214,6 +216,7 @@ async def batch_stats(
     device_serial: str | None = None,
     empty_response_only: bool = False,
     exclude_end_session: bool = False,
+    duration_anomaly_only: bool = False,
     mode: list[Mode] | None = Query(default=None),
 ) -> dict[str, int]:
     """Aggregate counts across all batches, independent of list pagination.
@@ -232,6 +235,7 @@ async def batch_stats(
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
         exclude_end_session=exclude_end_session,
+        duration_anomaly_only=duration_anomaly_only,
         mode=mode or None,
     )
     for status in ("queued", "running", "done", "failed", "cancelled"):
@@ -289,6 +293,7 @@ async def list_all(
     device_serial: str | None = None,
     empty_response_only: bool = False,
     exclude_end_session: bool = False,
+    duration_anomaly_only: bool = False,
     status: list[BatchStatus] | None = Query(default=None),
     mode: list[Mode] | None = Query(default=None),
 ) -> list[BatchSummary]:
@@ -302,15 +307,18 @@ async def list_all(
         device_serial=device_serial or None,
         empty_response_only=empty_response_only,
         exclude_end_session=exclude_end_session,
+        duration_anomaly_only=duration_anomaly_only,
         status=status or None,
         mode=mode or None,
     )
-    # One aggregate query for the whole page's profiles + devices, and one
-    # more for single-sample batches' previews — avoids N+1 per-batch
-    # queries when a page is full of ad-hoc single-sample (api mode) runs.
+    # One aggregate query for the whole page's profiles + devices, one more
+    # for single-sample batches' previews, and one for the per-profile
+    # duration baseline — avoids N+1 per-batch queries when a page is full
+    # of ad-hoc single-sample (api mode) runs.
     pd_map = await batch_profiles_and_devices([r.id for r in rows])
     single_ids = [r.id for r in rows if r.total == 1]
     samples_map = await list_samples_for_batches(single_ids)
+    profile_averages = await avg_duration_by_profile()
     summaries: list[BatchSummary] = []
     for r in rows:
         if r.total == 1:
@@ -318,10 +326,15 @@ async def list_all(
             preview, response = _single_sample_preview(sample)
             session_id = sample.session_id if sample else None
             is_end_session = bool(sample and sample.metadata.get("session_released") is not None)
+            duration_anomaly = is_duration_anomaly(
+                r.avg_duration_ms,
+                profile_averages.get(sample.target_profile) if sample else None,
+            )
         else:
             preview, response = None, None
             session_id = None
             is_end_session = False
+            duration_anomaly = False
         profiles, devices = pd_map.get(r.id, ([], []))
         summaries.append(
             BatchSummary(
@@ -342,6 +355,7 @@ async def list_all(
                 devices=devices,
                 session_id=session_id,
                 is_end_session=is_end_session,
+                is_duration_anomaly=duration_anomaly,
             )
         )
     return summaries

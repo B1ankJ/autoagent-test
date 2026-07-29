@@ -63,6 +63,7 @@ export interface BatchSummary {
   devices?: string[]
   session_id?: string | null
   is_end_session?: boolean
+  is_duration_anomaly?: boolean
 }
 
 export interface SessionTurn {

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, delete, desc, func, or_, select
+from sqlalchemy import and_, case, delete, desc, false, func, or_, select
 
 from autoagent.models.db import Batch, Sample
 from autoagent.storage.database import get_sessionmaker
+from autoagent.storage.samples import avg_duration_by_profile
 
 
 def _like_term(q: str) -> str:
@@ -85,6 +86,54 @@ def _is_end_session_noop_clause():
     return func.json_extract(Sample.metadata_json, "$.session_released").is_not(None)
 
 
+# A batch's duration is "anomalous" if it's more than 2x or less than 0.5x
+# its profile's own historical average (across every sample ever run under
+# that profile) — an arbitrary but reasonable threshold, tune if it proves
+# too noisy/quiet in practice.
+ANOMALY_HIGH_RATIO = 2.0
+ANOMALY_LOW_RATIO = 0.5
+
+
+def is_duration_anomaly(batch_avg_ms: float | None, profile_avg_ms: float | None) -> bool:
+    """Plain-Python twin of _duration_anomaly_clause's condition, for the
+    API layer to compute the same "anomalous?" flag it displays per row
+    without going back to SQL — same ANOMALY_HIGH_RATIO/ANOMALY_LOW_RATIO
+    thresholds, so the two never drift apart.
+    """
+    if batch_avg_ms is None or not profile_avg_ms or profile_avg_ms <= 0:
+        return False
+    return (
+        batch_avg_ms > ANOMALY_HIGH_RATIO * profile_avg_ms
+        or batch_avg_ms < ANOMALY_LOW_RATIO * profile_avg_ms
+    )
+
+
+def _duration_anomaly_clause(profile_averages: dict[str, float]):
+    """SQL clause matching Batch rows whose own avg_duration_ms is far from
+    their profile's historical average.
+
+    Scoped to total==1 batches by the caller (same precedent as
+    empty_response_only) — Batch.avg_duration_ms is an aggregate across
+    every sample in the batch, and a multi-sample/multi-profile batch has
+    no single well-defined "this batch's profile" to compare against.
+    """
+    if not profile_averages:
+        # No baseline to compare against at all — nothing can be flagged.
+        return false()
+    threshold_avg = case(
+        *[(Sample.target_profile == name, avg) for name, avg in profile_averages.items()],
+        else_=None,
+    )
+    return and_(
+        threshold_avg.is_not(None),
+        threshold_avg > 0,
+        or_(
+            Batch.avg_duration_ms > ANOMALY_HIGH_RATIO * threshold_avg,
+            Batch.avg_duration_ms < ANOMALY_LOW_RATIO * threshold_avg,
+        ),
+    )
+
+
 def _is_empty_response_clause():
     """SQL clause matching sample rows whose *effective* response is empty.
 
@@ -128,9 +177,11 @@ async def list_batches(
     device_serial: str | None = None,
     empty_response_only: bool = False,
     exclude_end_session: bool = False,
+    duration_anomaly_only: bool = False,
     status: list[str] | None = None,
     mode: list[str] | None = None,
 ) -> list[Batch]:
+    profile_averages = await avg_duration_by_profile() if duration_anomaly_only else None
     sm = get_sessionmaker()
     async with sm() as s:
         stmt = select(Batch)
@@ -182,6 +233,14 @@ async def list_batches(
             stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
         if exclude_end_session:
             stmt = ensure_samples_join(stmt).where(~_is_end_session_noop_clause())
+        if duration_anomaly_only:
+            # Same total==1 scoping as empty_response_only — Batch.avg_duration_ms
+            # is an aggregate across every sample in the batch, so only a
+            # single-sample batch has one well-defined profile to compare against.
+            stmt = stmt.where(Batch.total == 1, Batch.avg_duration_ms.is_not(None))
+            stmt = ensure_samples_join(stmt).where(
+                _duration_anomaly_clause(profile_averages or {})
+            )
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:
@@ -200,6 +259,7 @@ async def count_batches_by_status(
     device_serial: str | None = None,
     empty_response_only: bool = False,
     exclude_end_session: bool = False,
+    duration_anomaly_only: bool = False,
     mode: list[str] | None = None,
 ) -> dict[str, int]:
     """Return {status: count}, plus a 'total' aggregate.
@@ -209,6 +269,7 @@ async def count_batches_by_status(
     grouping by status is the whole point, so the caller reads the count for
     whichever status it cares about out of the returned breakdown instead.
     """
+    profile_averages = await avg_duration_by_profile() if duration_anomaly_only else None
     sm = get_sessionmaker()
     async with sm() as s:
         stmt = select(Batch.status, func.count(func.distinct(Batch.id)))
@@ -246,6 +307,11 @@ async def count_batches_by_status(
             stmt = ensure_samples_join(stmt).where(_is_empty_response_clause())
         if exclude_end_session:
             stmt = ensure_samples_join(stmt).where(~_is_end_session_noop_clause())
+        if duration_anomaly_only:
+            stmt = stmt.where(Batch.total == 1, Batch.avg_duration_ms.is_not(None))
+            stmt = ensure_samples_join(stmt).where(
+                _duration_anomaly_clause(profile_averages or {})
+            )
         if created_after is not None:
             stmt = stmt.where(Batch.created_at >= created_after)
         if created_before is not None:

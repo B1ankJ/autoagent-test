@@ -133,6 +133,11 @@ class BatchSummary(BaseModel):
     # bookkeeping. Lets the Batches list tag it distinctly instead of it
     # looking like an ordinary (empty-response) batch.
     is_end_session: bool = False
+    # True when total == 1 and this batch's avg_duration_ms is far (see
+    # storage/batches.py::ANOMALY_HIGH_RATIO/ANOMALY_LOW_RATIO) from its
+    # profile's historical average across every sample ever run under it —
+    # lets the Batches list highlight a suspiciously slow/fast run.
+    is_duration_anomaly: bool = False
 
 
 class BatchDetail(BatchSummary):

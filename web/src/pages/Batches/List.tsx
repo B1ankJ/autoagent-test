@@ -48,6 +48,7 @@ import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { BatchStatus, BatchSummary, ExecutionMode } from '../../types/api'
+import { formatDurationMs } from '../../utils/duration'
 
 // Filter state is mirrored to the URL query so refresh / share / back-button
 // all retain the user's view. Keys are intentionally short to keep URLs scannable.
@@ -62,8 +63,9 @@ const QP_PROFILE = 'profile' // target_profile_default exact match
 const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
 const QP_HIDE_END_SESSION = 'hide_end_session' // "1" = hide Sample.end_session=true no-ops
+const QP_DURATION_ANOMALY = 'duration_anomaly' // "1" = only show duration-anomalous batches
 
-// Column visibility: 名称/操作 always show; these six can be hidden and the
+// Column visibility: 名称/操作 always show; these can be hidden and the
 // choice is remembered per browser so different people can trim the table to
 // what they care about (device-heavy vs. timing-heavy workflows differ).
 const TOGGLEABLE_COLUMNS = [
@@ -72,6 +74,7 @@ const TOGGLEABLE_COLUMNS = [
   { key: 'response', label: '响应(单条)' },
   { key: 'status', label: '状态' },
   { key: 'progress', label: '进度' },
+  { key: 'duration', label: '耗时' },
   { key: 'started_at', label: '开始时间' },
 ] as const
 
@@ -136,6 +139,7 @@ export function BatchList() {
   const deviceFilter = searchParams.get(QP_DEVICE) || undefined
   const emptyResponseOnly = searchParams.get(QP_EMPTY) === '1'
   const hideEndSession = searchParams.get(QP_HIDE_END_SESSION) === '1'
+  const durationAnomalyOnly = searchParams.get(QP_DURATION_ANOMALY) === '1'
 
   const profilesQ = useProfiles()
   const devicesQ = useDevices()
@@ -184,6 +188,9 @@ export function BatchList() {
   const setHideEndSession = (v: boolean) => {
     updateParams({ [QP_HIDE_END_SESSION]: v ? '1' : undefined, [QP_PAGE]: undefined })
   }
+  const setDurationAnomalyOnly = (v: boolean) => {
+    updateParams({ [QP_DURATION_ANOMALY]: v ? '1' : undefined, [QP_PAGE]: undefined })
+  }
   const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
     const [from, to] = range ?? [null, null]
     updateParams({
@@ -215,6 +222,7 @@ export function BatchList() {
     deviceSerial: deviceFilter,
     emptyResponseOnly,
     excludeEndSession: hideEndSession,
+    durationAnomalyOnly,
     status: statusFilter,
     mode: modeFilter,
   })
@@ -226,6 +234,7 @@ export function BatchList() {
     deviceSerial: deviceFilter,
     emptyResponseOnly,
     excludeEndSession: hideEndSession,
+    durationAnomalyOnly,
     mode: modeFilter,
   })
 
@@ -486,6 +495,31 @@ export function BatchList() {
       ),
     },
     {
+      key: 'duration',
+      title: '耗时',
+      width: 110,
+      render: (_value, row) =>
+        row.avg_duration_ms == null ? (
+          <span className="aa-mono aa-muted">-</span>
+        ) : (
+          <span
+            className="aa-mono"
+            style={
+              row.is_duration_anomaly
+                ? { color: 'var(--aa-red, #cf1322)', fontWeight: 600 }
+                : undefined
+            }
+            title={
+              row.is_duration_anomaly
+                ? '耗时明显偏离该 profile 的历史平均耗时'
+                : undefined
+            }
+          >
+            {formatDurationMs(row.avg_duration_ms)}
+          </span>
+        ),
+    },
+    {
       key: 'started_at',
       title: '开始时间',
       dataIndex: 'started_at',
@@ -583,6 +617,12 @@ export function BatchList() {
       label: '已隐藏结束会话记录',
       onClear: () => setHideEndSession(false),
     })
+  if (durationAnomalyOnly)
+    activeFilters.push({
+      key: 'da',
+      label: '仅耗时异常',
+      onClear: () => setDurationAnomalyOnly(false),
+    })
 
   const clearAllFilters = () => {
     setStatusFilter([])
@@ -592,6 +632,7 @@ export function BatchList() {
     setDateRange(null)
     setEmptyResponseOnly(false)
     setHideEndSession(false)
+    setDurationAnomalyOnly(false)
   }
 
   const filterPopover = (
@@ -685,6 +726,15 @@ export function BatchList() {
           title="隐藏 Sample.end_session=true 的批次(仅释放设备,不是真实对话轮次)"
         >
           隐藏结束会话记录
+        </span>
+      </Space>
+      <Space size={6}>
+        <Switch checked={durationAnomalyOnly} onChange={setDurationAnomalyOnly} size="small" />
+        <span
+          style={{ fontSize: 13 }}
+          title="只看单样本批次中,耗时明显偏离该 profile 历史平均耗时(>2倍或<0.5倍)的批次"
+        >
+          只看耗时异常
         </span>
       </Space>
     </Space>

@@ -328,3 +328,68 @@ describe('BatchList end_session tag and filter', () => {
     expect(screen.getByText('已隐藏结束会话记录')).toBeInTheDocument()
   })
 })
+
+describe('BatchList duration column and anomaly filter', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockUseBatchStats.mockReturnValue({
+      data: { total: 1, queued: 0, running: 0, done: 1, failed: 0, cancelled: 0 },
+    })
+    mockUseSessionConversation.mockReturnValue({ data: undefined, isLoading: false })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the formatted duration and highlights an anomalous one in red', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [{ ...batch, avg_duration_ms: 5000, is_duration_anomaly: true }],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    const durationCell = screen.getByText('5.0s')
+    expect(durationCell).toHaveStyle({ color: 'var(--aa-red, #cf1322)' })
+  })
+
+  it('shows a plain (non-highlighted) duration for a normal batch', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [{ ...batch, avg_duration_ms: 500, is_duration_anomaly: false }],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    const durationCell = screen.getByText('500ms')
+    expect(durationCell.style.color).toBe('')
+  })
+
+  it('sends duration_anomaly_only to the backend when the URL enables it', async () => {
+    mockUseBatches.mockReturnValue({
+      data: [batch],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    renderWithProviders(<BatchList />, { initialPath: '/batches?duration_anomaly=1' })
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ durationAnomalyOnly: true }),
+      )
+      expect(mockUseBatchStats).toHaveBeenLastCalledWith(
+        expect.objectContaining({ durationAnomalyOnly: true }),
+      )
+    })
+    expect(screen.getByText('仅耗时异常')).toBeInTheDocument()
+  })
+})

@@ -22,6 +22,7 @@ interface BatchQueryFilters {
   deviceSerial?: string
   emptyResponseOnly?: boolean
   excludeEndSession?: boolean
+  durationAnomalyOnly?: boolean
   status?: BatchStatus[]
   mode?: ExecutionMode[]
 }
@@ -38,6 +39,7 @@ function buildBatchParams(p: BatchQueryFilters) {
   if (p.deviceSerial) params.device_serial = p.deviceSerial
   if (p.emptyResponseOnly) params.empty_response_only = true
   if (p.excludeEndSession) params.exclude_end_session = true
+  if (p.durationAnomalyOnly) params.duration_anomaly_only = true
   // Repeated query params (?status=a&status=b) — axios's default params
   // serializer emits arrays this way, matching FastAPI's Query(list[...]).
   if (p.status?.length) params.status = p.status
@@ -55,10 +57,11 @@ export function useBatches(params?: BatchQueryFilters) {
   const ds = params?.deviceSerial ?? null
   const eo = !!params?.emptyResponseOnly
   const xes = !!params?.excludeEndSession
+  const dao = !!params?.durationAnomalyOnly
   const status = params?.status ?? null
   const mode = params?.mode ?? null
   return useQuery({
-    queryKey: ['batches', limit, offset, q ?? null, ca, cb, tp, ds, eo, xes, status, mode],
+    queryKey: ['batches', limit, offset, q ?? null, ca, cb, tp, ds, eo, xes, dao, status, mode],
     queryFn: async () =>
       (
         await client.get<BatchSummary[]>('/batches', {
@@ -72,6 +75,7 @@ export function useBatches(params?: BatchQueryFilters) {
             deviceSerial: params?.deviceSerial,
             emptyResponseOnly: eo,
             excludeEndSession: xes,
+            durationAnomalyOnly: dao,
             status: params?.status,
             mode: params?.mode,
           }),
@@ -106,6 +110,7 @@ export function useBatchStats(params?: {
   deviceSerial?: string
   emptyResponseOnly?: boolean
   excludeEndSession?: boolean
+  durationAnomalyOnly?: boolean
   mode?: ExecutionMode[]
 }) {
   const q = params?.q?.trim() || undefined
@@ -115,9 +120,10 @@ export function useBatchStats(params?: {
   const ds = params?.deviceSerial ?? null
   const eo = !!params?.emptyResponseOnly
   const xes = !!params?.excludeEndSession
+  const dao = !!params?.durationAnomalyOnly
   const mode = params?.mode ?? null
   return useQuery({
-    queryKey: ['batches', 'stats', q ?? null, ca, cb, tp, ds, eo, xes, mode],
+    queryKey: ['batches', 'stats', q ?? null, ca, cb, tp, ds, eo, xes, dao, mode],
     queryFn: async () =>
       (
         await client.get<BatchStats>('/batches/stats', {
@@ -129,6 +135,7 @@ export function useBatchStats(params?: {
             deviceSerial: params?.deviceSerial,
             emptyResponseOnly: eo,
             excludeEndSession: xes,
+            durationAnomalyOnly: dao,
             mode: params?.mode,
           }),
         })
