@@ -7,7 +7,7 @@ import type { Device, ProfileSummary } from '../../types/api'
 import { ProfileList } from './List'
 
 const profiles: ProfileSummary[] = [
-  { name: 'android_bound', platform: 'android', serials: ['dev-1'] },
+  { name: 'android_bound', platform: 'android', serials: ['dev-1'], avg_duration_ms: 12300 },
   { name: 'android_unbound', platform: 'android', serials: [] },
 ]
 
@@ -76,4 +76,15 @@ it('opens the device screens modal scoped to the profile\'s bound serials', asyn
     '.ant-modal-content',
   ) as HTMLElement
   expect(within(dialog).getByText('dev-1')).toBeInTheDocument()
+})
+
+it('shows the formatted average duration per profile, or "-" when there is none yet', async () => {
+  renderWithProviders(<ProfileList />)
+  await userEvent.click(screen.getByRole('tab', { name: /^Android \(/ }))
+
+  const boundRow = screen.getByText('android_bound').closest('tr') as HTMLElement
+  expect(within(boundRow).getByText('12.3s')).toBeInTheDocument()
+
+  const unboundRow = screen.getByText('android_unbound').closest('tr') as HTMLElement
+  expect(within(unboundRow).getByText('-')).toBeInTheDocument()
 })

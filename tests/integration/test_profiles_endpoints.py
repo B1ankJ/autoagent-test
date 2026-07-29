@@ -3,7 +3,10 @@ import yaml
 from httpx import ASGITransport, AsyncClient
 
 from autoagent.auth.passwords import hash_password
+from autoagent.models.api import SampleResult
+from autoagent.storage.batches import create_batch
 from autoagent.storage.database import init_db
+from autoagent.storage.samples import upsert_sample
 from autoagent.storage.users import upsert_user
 
 
@@ -51,7 +54,9 @@ async def test_profiles_crud(client):
 
     # List shows it
     r = await client.get("/api/v1/profiles", headers=h)
-    assert r.json() == [{"name": "openai_gpt4", "platform": "api", "serials": []}]
+    assert r.json() == [
+        {"name": "openai_gpt4", "platform": "api", "serials": [], "avg_duration_ms": None}
+    ]
 
     # Get
     r = await client.get("/api/v1/profiles/openai_gpt4", headers=h)
@@ -67,6 +72,40 @@ async def test_profiles_crud(client):
         "/api/v1/profiles/validate", json={"yaml": "name: x\nplatform: ios\n"}, headers=h
     )
     assert r.json()["ok"] is False
+
+
+async def test_profiles_expose_avg_duration_across_samples(client):
+    token = await _login(client)
+    h = {"Authorization": f"Bearer {token}"}
+    profile_yaml = yaml.safe_dump(
+        {
+            "name": "openai_gpt4",
+            "platform": "api",
+            "api": {
+                "base_url": "https://api.openai.com/v1",
+                "model": "gpt-4o",
+                "api_key": "OPENAI_KEY",
+            },
+        }
+    )
+    await client.post("/api/v1/profiles/openai_gpt4", json={"yaml": profile_yaml}, headers=h)
+
+    for batch_id, duration in [("b1", 100), ("b2", 300)]:
+        await create_batch(
+            batch_id=batch_id, name=batch_id, mode="api", concurrency=1, total=1,
+            target_profile_default=None,
+        )
+        await upsert_sample(
+            batch_id,
+            SampleResult(
+                id="s1", status="done", prompts_sent=["hi"], responses=["ok"],
+                mode="api", target_profile="openai_gpt4", duration_ms=duration,
+            ),
+        )
+
+    r = await client.get("/api/v1/profiles", headers=h)
+    row = next(p for p in r.json() if p["name"] == "openai_gpt4")
+    assert row["avg_duration_ms"] == 200.0
 
     # Delete
     r = await client.delete("/api/v1/profiles/openai_gpt4", headers=h)

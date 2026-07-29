@@ -16,6 +16,7 @@ from autoagent.profiles.registry import (
     validate_yaml,
 )
 from autoagent.profiles.schemas import AndroidProfile
+from autoagent.storage.samples import avg_duration_by_profile
 
 router = APIRouter(prefix="/profiles", tags=["profiles"], dependencies=[Depends(require_user)])
 
@@ -30,6 +31,10 @@ class ProfileSummary(BaseModel):
     # Effective device pool (serial + serials merged). Empty for
     # non-android platforms or an unbound android profile.
     serials: list[str] = []
+    # Average Sample.duration_ms across every sample ever run under this
+    # profile (storage/samples.py::avg_duration_by_profile) — None when the
+    # profile has no samples with a recorded duration yet.
+    avg_duration_ms: float | None = None
 
 
 class DeviceBindingBody(BaseModel):
@@ -48,6 +53,7 @@ class ValidateResponse(BaseModel):
 
 @router.get("", response_model=list[ProfileSummary])
 async def list_profiles() -> list[ProfileSummary]:
+    avg_durations = await avg_duration_by_profile()
     profiles: list[ProfileSummary] = []
     for name in list_profile_names():
         profile = load_profile(name)
@@ -58,7 +64,12 @@ async def list_profiles() -> list[ProfileSummary]:
         if serial and serial not in serials:
             serials = [serial, *serials]
         profiles.append(
-            ProfileSummary(name=profile.name, platform=profile.platform, serials=serials)
+            ProfileSummary(
+                name=profile.name,
+                platform=profile.platform,
+                serials=serials,
+                avg_duration_ms=avg_durations.get(profile.name),
+            )
         )
     return profiles
 

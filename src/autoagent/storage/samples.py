@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from autoagent.models.api import SampleResult
 from autoagent.models.db import Sample as SampleRow
@@ -109,3 +109,22 @@ async def list_samples_for_batches(batch_ids: list[str]) -> dict[str, list[Sampl
         for row in r.scalars().all():
             out.setdefault(row.batch_id, []).append(_row_to_result(row))
     return out
+
+
+async def avg_duration_by_profile() -> dict[str, float]:
+    """Average Sample.duration_ms across every recorded sample, grouped by
+    target_profile — the one number the Profiles list column and the
+    Batches list's duration-anomaly highlight/filter both compare against.
+
+    Samples with no duration_ms (never finished, or the branches that skip
+    execution entirely — cancelled, end_session, device-acquisition
+    failures) are excluded so they don't drag the average toward zero.
+    """
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(SampleRow.target_profile, func.avg(SampleRow.duration_ms))
+            .where(SampleRow.duration_ms.is_not(None))
+            .group_by(SampleRow.target_profile)
+        )
+        return {profile: float(avg) for profile, avg in r.all() if avg is not None}

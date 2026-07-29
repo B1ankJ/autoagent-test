@@ -106,6 +106,7 @@ export interface ProfileSummary {
   name: string
   platform: ProfilePlatform
   serials?: string[]
+  avg_duration_ms?: number | null
 }
 
 export interface Device {

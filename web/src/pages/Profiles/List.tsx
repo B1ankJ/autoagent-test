@@ -23,6 +23,7 @@ import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { ProfileSummary } from '../../types/api'
+import { formatDurationMs } from '../../utils/duration'
 
 export function ProfileList() {
   const navigate = useNavigate()
@@ -57,6 +58,17 @@ export function ProfileList() {
         dataIndex: 'platform',
         width: 140,
         render: (platform: ProfileSummary['platform']) => <ModeTag mode={platform} />,
+      },
+      {
+        key: 'avg_duration',
+        title: '平均耗时',
+        dataIndex: 'avg_duration_ms',
+        width: 110,
+        render: (value: number | null | undefined) => (
+          <span className="aa-mono aa-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {value == null ? '-' : formatDurationMs(value)}
+          </span>
+        ),
       },
     ]
     if (withDevices) {
