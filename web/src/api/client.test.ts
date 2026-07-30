@@ -34,4 +34,29 @@ describe('api client', () => {
 
     expect(AxiosHeaders.from(config?.headers).get('Authorization')).toBe('Bearer xyz')
   })
+
+  it('unwraps a JSON error body delivered as a Blob (responseType: blob downloads)', async () => {
+    // axios respects the requested responseType regardless of status code,
+    // so a failed download's error body arrives as a Blob even though the
+    // server sent a normal JSON { detail } error — without unwrapping it,
+    // normalizeError can't read `.detail` off a Blob and falls back to a
+    // generic "未知错误", hiding the real backend reason.
+    const handler = client.interceptors.response.handlers?.[0]
+    if (!handler?.rejected) {
+      throw new Error('response interceptor is not registered')
+    }
+
+    const blob = new Blob([JSON.stringify({ detail: '结果已归档,无法下载' })], {
+      type: 'application/json',
+    })
+    const error = {
+      response: { status: 409, data: blob },
+      isAxiosError: true,
+    } as never
+
+    await expect(handler.rejected(error)).rejects.toMatchObject({
+      status: 409,
+      message: '结果已归档,无法下载',
+    })
+  })
 })
