@@ -50,7 +50,11 @@ def _reset(monkeypatch):
     async def _no_blacklist(*args, **kwargs):
         return False
 
+    async def _noop_blacklist_add(*args, **kwargs):
+        return None
+
     monkeypatch.setattr(rules.blacklist, "contains", _no_blacklist)
+    monkeypatch.setattr(rules.blacklist, "add", _noop_blacklist_add)
 
 
 async def test_no_config_no_fire(monkeypatch):
@@ -392,6 +396,7 @@ async def test_same_response_no_reinit_when_disabled(monkeypatch):
 async def test_same_response_fires_when_vlm_abnormal(monkeypatch):
     sent: list[dict] = []
     added: list[tuple[str, str, str]] = []
+    blacklisted: list[tuple[str, str]] = []
     cfg = {
         "enabled": True,
         "webhook_url": "x",
@@ -405,6 +410,11 @@ async def test_same_response_fires_when_vlm_abnormal(monkeypatch):
     ))
     monkeypatch.setattr(rules.whitelist, "contains", _stub_wl_contains_false)
     monkeypatch.setattr(rules.whitelist, "add", await _stub_wl_add_record(added))
+
+    async def _record_blacklist_add(profile, response):
+        blacklisted.append((profile, response))
+
+    monkeypatch.setattr(rules.blacklist, "add", _record_blacklist_add)
     monkeypatch.setattr(rules, "is_normal_chat_page", _stub_judge(normal=False))
     monkeypatch.setattr(rules, "send_markdown", _capture_send(sent))
 
@@ -414,6 +424,9 @@ async def test_same_response_fires_when_vlm_abnormal(monkeypatch):
         )
     assert len(sent) == 1
     assert added == []  # not whitelisted when abnormal
+    # VLM-confirmed anomaly auto-blacklists so the next occurrence skips the
+    # streak wait and VLM judge entirely (symmetric with auto-whitelisting).
+    assert blacklisted == [("p", "same answer")]
 
 
 async def test_same_response_whitelists_when_vlm_normal(monkeypatch):

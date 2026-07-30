@@ -430,6 +430,11 @@ async def _judge_and_act(
         )
         return
 
+    # VLM confirmed this is a real anomaly, not just a coincidentally static
+    # reply — blacklist it so the next occurrence skips the streak wait and
+    # the VLM judge entirely and alerts immediately (symmetric with the
+    # normal-judgement branch above auto-whitelisting).
+    await blacklist.add(profile, response)
     await _fire_same_response_alert(
         config=config,
         serial=serial,
