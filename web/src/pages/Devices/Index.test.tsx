@@ -127,6 +127,31 @@ it('toggles a single device via the per-row 启用/禁用 button', async () => {
   expect(connectMutateAsync).toHaveBeenCalledWith('emulator-5556')
 })
 
+it('only shows a loading spinner on the row actually being toggled, not every row', async () => {
+  // Regression: the per-row button's `loading` prop read
+  // connectDevice.isPending/disconnectDevice.isPending directly — those are
+  // shared across every row (one mutation hook for the whole table), so
+  // toggling one device made every other row's button spin too.
+  let resolveDisconnect!: () => void
+  disconnectMutateAsync.mockImplementationOnce(
+    () => new Promise<void>((resolve) => (resolveDisconnect = resolve)),
+  )
+  const user = userEvent.setup()
+  renderPage()
+
+  const enabledRow = within(rowFor('emulator-5554'))
+  const disabledRow = within(rowFor('emulator-5556'))
+  await user.click(enabledRow.getByRole('button', { name: /禁用/ }))
+
+  expect(enabledRow.getByRole('button', { name: /禁用/ })).toHaveClass('ant-btn-loading')
+  expect(disabledRow.getByRole('button', { name: /启用/ })).not.toHaveClass('ant-btn-loading')
+
+  resolveDisconnect()
+  await waitFor(() =>
+    expect(enabledRow.getByRole('button', { name: /禁用/ })).not.toHaveClass('ant-btn-loading'),
+  )
+})
+
 it('bulk-enables selected devices via the checkbox toolbar', async () => {
   const user = userEvent.setup()
   renderPage()

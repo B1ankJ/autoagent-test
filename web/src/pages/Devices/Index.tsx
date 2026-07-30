@@ -101,7 +101,15 @@ export function DevicesPage() {
     }
   }
 
+  // connectDevice.isPending/disconnectDevice.isPending are shared across
+  // every row (one mutation hook, called for whichever device is toggled) —
+  // using them directly as a row's `loading` prop made every row's button
+  // spin/disable whenever any one device was being toggled. Track which
+  // serial is actually in flight instead.
+  const [togglingSerial, setTogglingSerial] = useState<string | null>(null)
+
   const onToggleEnabled = async (row: Device) => {
+    setTogglingSerial(row.serial)
     try {
       if (row.enabled) {
         await disconnectDevice.mutateAsync(row.serial)
@@ -112,6 +120,8 @@ export function DevicesPage() {
       }
     } catch (e) {
       message.error((e as Error).message)
+    } finally {
+      setTogglingSerial(null)
     }
   }
 
@@ -352,7 +362,7 @@ export function DevicesPage() {
           <Button
             size="small"
             icon={row.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
-            loading={connectDevice.isPending || disconnectDevice.isPending}
+            loading={togglingSerial === row.serial}
             onClick={() => onToggleEnabled(row)}
             title={row.enabled ? '禁用后该设备不再参与批次调度' : '启用后该设备可被批次调度'}
           >
