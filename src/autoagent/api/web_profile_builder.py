@@ -358,6 +358,7 @@ async def create_session(req: SessionCreateRequest) -> SessionView:
         page = await context.new_page()
         await page.goto(req.url, timeout=30_000)
     except Exception as exc:
+        _log.exception("web profile builder: browser launch failed for %s", req.url)
         await pw.stop()
         raise HTTPException(status_code=502, detail=f"browser launch failed: {exc}") from exc
 
@@ -381,6 +382,7 @@ async def get_screenshot(session_id: str) -> dict[str, str]:
     try:
         img_b64 = await _take_screenshot_b64(s["page"])
     except Exception as exc:
+        _log.exception("web profile builder: screenshot failed for session %s", session_id)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"image": img_b64}
 

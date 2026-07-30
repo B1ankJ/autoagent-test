@@ -442,7 +442,7 @@ async def test_profile_builder_capture_rejects_unknown_step(client):
     assert capture.json()["detail"] == "unknown capture step: bad-step"
 
 
-async def test_profile_builder_capture_wraps_device_failures(client, monkeypatch):
+async def test_profile_builder_capture_wraps_device_failures(client, monkeypatch, caplog):
     headers = await _h(client)
     create = await client.post(
         "/api/v1/profile-builder/sessions",
@@ -456,15 +456,19 @@ async def test_profile_builder_capture_wraps_device_failures(client, monkeypatch
 
     monkeypatch.setattr("autoagent.api.profile_builder.u2.connect", _boom)
 
-    capture = await client.post(
-        f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
-        headers=headers,
-    )
+    with caplog.at_level("ERROR", logger="autoagent.api.profile_builder"):
+        capture = await client.post(
+            f"/api/v1/profile-builder/sessions/{session['id']}/capture/idle",
+            headers=headers,
+        )
     assert capture.status_code == 502
     assert (
         capture.json()["detail"]
         == "profile builder capture connect failed: cannot connect to serial-1"
     )
+    # Regression: this router had no logger at all — a 502 reached the
+    # client but nothing was ever recorded server-side to debug from.
+    assert any("device connect failed" in r.message for r in caplog.records)
 
 
 async def test_profile_builder_session_reload_from_persisted_json(client, monkeypatch):

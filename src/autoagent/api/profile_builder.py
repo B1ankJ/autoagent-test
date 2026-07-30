@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +52,8 @@ router = APIRouter(
     tags=["profile-builder"],
     dependencies=[Depends(require_user)],
 )
+
+_log = logging.getLogger(__name__)
 
 _SESSIONS: dict[str, ProfileBuilderSessionView] = {}
 _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
@@ -1026,6 +1029,11 @@ async def create_session(payload: ProfileBuilderSessionCreate) -> ProfileBuilder
     try:
         await _activate_builder_adb_keyboard(stored)
     except Exception as exc:
+        _log.exception(
+            "profile builder: ADB keyboard activation failed for session %s (device %s)",
+            session_id,
+            payload.device_serial,
+        )
         raise HTTPException(
             status_code=502,
             detail=f"profile builder session setup failed: {exc}",
@@ -1077,6 +1085,11 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
     try:
         device = await asyncio.to_thread(u2.connect, session.device_serial)
     except Exception as exc:
+        _log.exception(
+            "profile builder: device connect failed for session %s (device %s)",
+            session.id,
+            session.device_serial,
+        )
         _store_runtime(
             session.id,
             _upsert_capture_runtime(
@@ -1116,6 +1129,11 @@ async def capture_session_step(session_id: str, step: str) -> ProfileBuilderSess
                 enable_adb_keyboard=False,
             )
         except Exception as exc:
+            _log.exception(
+                "profile builder: capture failed for session %s step %s",
+                stored_archived.id,
+                step,
+            )
             _store_runtime(
                 stored_archived.id,
                 _upsert_capture_runtime(
@@ -1196,6 +1214,11 @@ async def capture_new_session_step(
     try:
         device = await asyncio.to_thread(u2.connect, session.device_serial)
     except Exception as exc:
+        _log.exception(
+            "profile builder: device connect failed for session %s (device %s)",
+            session_id,
+            session.device_serial,
+        )
         raise HTTPException(
             status_code=502,
             detail=f"profile builder capture connect failed: {exc}",
@@ -1217,6 +1240,11 @@ async def capture_new_session_step(
                 enable_adb_keyboard=False,
             )
         except Exception as exc:
+            _log.exception(
+                "profile builder: new-session step capture failed for session %s step %s",
+                session_id,
+                step_index,
+            )
             _restore_staged_new_session_step_artifacts(staged_artifacts)
             raise HTTPException(
                 status_code=502,
