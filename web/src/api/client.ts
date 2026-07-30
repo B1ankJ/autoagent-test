@@ -2,6 +2,12 @@ import axios, { AxiosError, AxiosHeaders } from 'axios'
 import { ApiError, normalizeError } from '../utils/errors'
 
 const TOKEN_KEY = 'autoagent_token'
+// Set right before the hard redirect below so Login can show a "your
+// session expired" message — the redirect destroys the whole React tree
+// (and any in-memory antd `message` instance with it), so there's no way
+// to show a toast from here; a flag Login checks on mount is the simplest
+// way to carry that context across the navigation.
+export const SESSION_EXPIRED_KEY = 'autoagent_session_expired'
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -67,6 +73,10 @@ client.interceptors.response.use(
     if (apiError.status === 401) {
       clearToken()
       if (window.location.pathname !== '/login') {
+        // Only a mid-session expiry lands here — a failed login attempt's
+        // 401 never reaches this branch since the user is already on
+        // /login when that happens.
+        sessionStorage.setItem(SESSION_EXPIRED_KEY, '1')
         window.location.assign('/login')
       }
     }

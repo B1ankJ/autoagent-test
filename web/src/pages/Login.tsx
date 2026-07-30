@@ -1,6 +1,7 @@
 import { App, Button, Card, Form, Input, Typography } from 'antd'
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { SESSION_EXPIRED_KEY } from '../api/client'
 import { useLogin } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
 
@@ -31,6 +32,16 @@ export function Login() {
       navigate(safeTarget, { replace: true })
     }
   }, [isAuthenticated, navigate, safeTarget])
+
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+      sessionStorage.removeItem(SESSION_EXPIRED_KEY)
+      message.warning('登录已过期,请重新登录')
+    }
+    // Only ever check once on mount — this flag exists specifically to
+    // survive the hard-redirect that follows a mid-session 401.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onFinish = async (values: FormValues) => {
     try {
