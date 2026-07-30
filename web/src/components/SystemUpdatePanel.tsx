@@ -49,7 +49,11 @@ export function SystemUpdatePanel() {
   const [pf, setPf] = useState<PreflightResult | null>(null)
 
   const s = status.data
-  const disabled = s ? !s.enabled : false
+  // Fail closed: if status couldn't be loaded at all, we don't actually
+  // know whether self-update is enabled or what state the app is in — this
+  // used to default to `false` (buttons enabled), silently offering apply
+  // and letting the version tag just show "未知" as if that were normal.
+  const disabled = s ? !s.enabled : true
 
   const runApply = async (force: boolean) => {
     setSteps([])
@@ -96,7 +100,20 @@ export function SystemUpdatePanel() {
         message="从 origin/main 拉取最新代码并原地重启。这等同于远程代码执行,请仅在信任来源时启用。"
       />
 
-      {disabled ? (
+      {status.isError ? (
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="error"
+          showIcon
+          message="状态加载失败,版本/更新信息不可靠"
+          description={(status.error as Error)?.message}
+          action={
+            <Button size="small" onClick={() => status.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : disabled ? (
         <Alert
           style={{ marginBottom: 12 }}
           type="info"

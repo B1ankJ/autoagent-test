@@ -62,6 +62,23 @@ describe('SystemUpdatePanel', () => {
     expect(screen.getByRole('button', { name: '应用并重启' })).toBeEnabled()
   })
 
+  it('fails closed (buttons disabled) and shows an error when the status fetch itself fails', async () => {
+    // Regression: status.isError was never checked, and `disabled` defaulted
+    // to `false` when status was unavailable — check/apply buttons stayed
+    // clickable and the version tag just showed "未知" as if that were a
+    // normal, safe state instead of "we don't actually know what's going on".
+    vi.spyOn(client, 'get').mockRejectedValue(new Error('network down'))
+    renderWithProviders(<SystemUpdatePanel />)
+
+    await waitFor(() =>
+      expect(screen.getByText('状态加载失败,版本/更新信息不可靠')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('network down')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '检查更新' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '应用并重启' })).toBeDisabled()
+    expect(screen.queryByText(/自更新当前未启用/)).not.toBeInTheDocument()
+  })
+
   it('runs preflight and shows the checklist with a failure surfaced', async () => {
     // URL-aware mock: /status returns status, /preflight returns a failing report.
     vi.spyOn(client, 'get').mockImplementation((url: string) => {
