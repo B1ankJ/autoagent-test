@@ -317,7 +317,7 @@ export default function Builder() {
   const confirmNewSessionStep = useConfirmProfileBuilderNewSessionStep()
   const saveProfile = useSaveProfile()
   const { data: vlm } = useVLM()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
 
   const [selectedDevice, setSelectedDevice] = useState<string>()
   const [profileName, setProfileName] = useState('qwen_android')
@@ -582,21 +582,31 @@ export default function Builder() {
     }
   }, [currentScreen?.path, session?.id])
 
-  const startSession = async () => {
+  const startSession = () => {
     if (!selectedDevice || !profileName.trim()) {
       message.warning('请选择设备并填写 profile 名称')
       return
     }
-    const confirmed = window.confirm(
-      '开始前请确认：\n1. 目标 App 中已经手动发送过一条测试消息，并停留在真实对话页。\n2. 接下来会保持 ADB Keyboard 开启，直到点击 Generate Draft。',
-    )
-    if (!confirmed) {
-      return
-    }
+    const deviceSerial = selectedDevice
+    modal.confirm({
+      title: '开始前请确认',
+      content: (
+        <ul style={{ paddingLeft: 18, margin: 0 }}>
+          <li>目标 App 中已经手动发送过一条测试消息，并停留在真实对话页。</li>
+          <li>接下来会保持 ADB Keyboard 开启，直到点击 Generate Draft。</li>
+        </ul>
+      ),
+      okText: '开始',
+      cancelText: '取消',
+      onOk: () => doStartSession(deviceSerial),
+    })
+  }
+
+  const doStartSession = async (deviceSerial: string) => {
     try {
       const nextSession = await createSession.mutateAsync({
         platform: 'android',
-        device_serial: selectedDevice,
+        device_serial: deviceSerial,
         name: profileName.trim(),
       })
       setSession(nextSession)

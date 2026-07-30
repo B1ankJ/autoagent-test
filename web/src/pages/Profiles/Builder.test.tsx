@@ -116,7 +116,6 @@ describe('Builder', () => {
   })
 
   it('passes rule draft mode and inject toggle independently', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -174,6 +173,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(await screen.findByLabelText('规则 Draft（需人工确认 Review）'))
     await userEvent.click(await screen.findByLabelText('生成时注入 LLM 响应抽取配置'))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
@@ -189,7 +189,6 @@ describe('Builder', () => {
   })
 
   it('disables smart draft and llm injection when global VLM config is incomplete', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     useVlmMock.mockImplementation(() => ({ data: { base_url: 'u', model: 'm', api_key: null } }))
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
@@ -227,6 +226,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('智能 Draft（LLM 自动选择 Review）')).toBeDisabled()
@@ -235,7 +235,6 @@ describe('Builder', () => {
   })
 
   it('allows connectivity immediately for smart drafts resolved by backend', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -302,6 +301,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(await screen.findByLabelText('智能 Draft（LLM 自动选择 Review）'))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
@@ -334,7 +334,6 @@ describe('Builder', () => {
   })
 
   it('creates session, captures steps, and renders draft yaml', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -494,6 +493,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
     await userEvent.click(captureButtons[0])
@@ -530,7 +530,6 @@ describe('Builder', () => {
   })
 
   it('loads manual editing evidence screenshots from review items', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -651,6 +650,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
     await userEvent.click(screen.getByRole('button', { name: '查看全部证据' }))
@@ -661,7 +661,6 @@ describe('Builder', () => {
   })
 
   it('keeps alternative evidence focus when clicking 查看备选', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -803,6 +802,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getAllByRole('button', { name: /Generate Draft/ })[0])
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
     await userEvent.click(screen.getByRole('button', { name: '查看备选 2' }))
@@ -812,7 +812,6 @@ describe('Builder', () => {
   })
 
   it('applies recommended input_focus_action review options', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -937,6 +936,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: /展开详情/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Apply Recommended' }))
@@ -952,7 +952,6 @@ describe('Builder', () => {
   })
 
   it('disables connectivity validation until all review items are confirmed', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1071,6 +1070,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
     await userEvent.click(captureButtons[0])
     await userEvent.click(captureButtons[1])
@@ -1087,7 +1087,6 @@ describe('Builder', () => {
   })
 
   it('allows confirming multiple ready_check texts', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1213,6 +1212,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     const captureButtons = await screen.findAllByRole('button', { name: 'Capture' })
     await userEvent.click(captureButtons[0])
     await userEvent.click(captureButtons[1])
@@ -1238,7 +1238,6 @@ describe('Builder', () => {
   })
 
   it('collapses review items by default and toggles details on demand', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1310,6 +1309,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     expect(screen.queryByRole('button', { name: 'Apply Recommended' })).not.toBeInTheDocument()
@@ -1324,7 +1324,6 @@ describe('Builder', () => {
   })
 
   it('filters review items to unresolved entries only', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1404,6 +1403,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     expect(screen.getByText(/send_action: Confirm send action/)).toBeInTheDocument()
@@ -1416,7 +1416,6 @@ describe('Builder', () => {
   })
 
   it('switches key screen preview when selecting a different review item', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1512,6 +1511,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     await waitFor(() => {
@@ -1526,7 +1526,6 @@ describe('Builder', () => {
   })
 
   it('renders key screens without nested internal scrolling', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1589,6 +1588,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     const keyScreensCard = screen.getByText('Key Screens').closest('.ant-card')
@@ -1597,20 +1597,19 @@ describe('Builder', () => {
   })
 
   it('requires explicit confirmation before starting builder session', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
-
     renderWithProviders(<Builder />, { initialPath: '/profiles/builder' })
 
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    const confirmButton = await screen.findByRole('button', { name: /开\s?始/ })
+    await userEvent.click(screen.getByRole('button', { name: /取\s?消/ }))
 
-    expect(confirmSpy).toHaveBeenCalled()
+    await waitFor(() => expect(confirmButton).not.toBeInTheDocument())
     expect(createSessionMock).not.toHaveBeenCalled()
   })
 
   it('renders input locator review evidence separately from action reviews', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -1702,6 +1701,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
 
     expect(screen.getByText(/input_locator: Multiple input candidates matched the editing capture\./)).toBeInTheDocument()
@@ -1751,6 +1751,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     expect(await screen.findByText('Runtime Status')).toBeInTheDocument()
     expect(screen.getByText('Current Step: connectivity')).toBeInTheDocument()
@@ -1775,7 +1776,6 @@ describe('Builder', () => {
   })
 
   it('renders guided new session steps when strategy is enabled', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -1797,13 +1797,13 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     expect(await screen.findByText('New Session Step 1')).toBeInTheDocument()
   })
 
   it('loads guided new session step previews from artifact downloads', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [],
@@ -1826,6 +1826,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(await screen.findByRole('button', { name: '展开图片' }))
@@ -1839,7 +1840,6 @@ describe('Builder', () => {
   })
 
   it('shows unavailable when VLM is missing', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     useVlmMock.mockImplementation(
       () => ({ data: { base_url: null, model: null, api_key: null } } as never),
     )
@@ -1865,6 +1865,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -1874,7 +1875,6 @@ describe('Builder', () => {
   })
 
   it('shows provider failure reason for new session recommendations', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -1897,6 +1897,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -1906,7 +1907,6 @@ describe('Builder', () => {
   })
 
   it('shows image capability failures for new session recommendations', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -1929,6 +1929,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -1938,7 +1939,6 @@ describe('Builder', () => {
   })
 
   it('shows unknown recommendation failures without English fallback text', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -1961,6 +1961,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
@@ -1969,7 +1970,6 @@ describe('Builder', () => {
   })
 
   it('accepts the recommended tap for one step', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2000,6 +2000,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(await screen.findByRole('button', { name: '接受推荐' }))
@@ -2010,7 +2011,6 @@ describe('Builder', () => {
   })
 
   it('renders the recommended point marker on the step preview', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2033,6 +2033,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(await screen.findByRole('button', { name: '展开图片' }))
@@ -2046,7 +2047,6 @@ describe('Builder', () => {
   })
 
   it('toggles new session step preview visibility', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2069,6 +2069,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
     expect(screen.getByRole('button', { name: '展开图片' })).toBeInTheDocument()
@@ -2082,7 +2083,6 @@ describe('Builder', () => {
   })
 
   it('collapses the preview after confirming a recommended point', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2114,6 +2114,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
 
     await userEvent.click(screen.getByRole('button', { name: '展开图片' }))
@@ -2128,7 +2129,6 @@ describe('Builder', () => {
   })
 
   it('allows manual override on the step image', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2159,6 +2159,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(await screen.findByRole('button', { name: '重新点选' }))
@@ -2174,7 +2175,6 @@ describe('Builder', () => {
   })
 
   it('updates Draft YAML after confirming all new session steps', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1', platform: 'android', device_serial: 'serial-1', name: 'qwen_android',
       status: 'draft', steps: ['idle', 'editing'], artifact_dir: '/tmp/pb_1', artifacts: [], captures: [],
@@ -2208,6 +2208,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(await screen.findByRole('button', { name: '接受推荐' }))
@@ -2222,7 +2223,6 @@ describe('Builder', () => {
   })
 
   it('uses edited Draft YAML when saving to Profiles', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -2280,6 +2280,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
     await userEvent.click(screen.getByRole('button', { name: /Generate Draft/ }))
     await userEvent.click(screen.getByRole('button', { name: '编辑 YAML' }))
 
@@ -2296,7 +2297,6 @@ describe('Builder', () => {
   })
 
   it('configures guided new session step count before capture', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     createSessionMock.mockResolvedValue({
       id: 'pb_1',
       platform: 'android',
@@ -2332,6 +2332,7 @@ describe('Builder', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(await screen.findByText(/Pixel 8/))
     await userEvent.click(screen.getByRole('button', { name: /Start Builder Session/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /开\s?始/ }))
 
     await userEvent.click(await screen.findByLabelText('配置多步新开对话'))
     await userEvent.click(screen.getByLabelText('Step Count 2'))
