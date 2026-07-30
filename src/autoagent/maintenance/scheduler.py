@@ -116,11 +116,18 @@ async def run_backup_loop() -> None:
     except asyncio.CancelledError:
         return
     while True:
+        # interval_hours defaults here so a config-read failure (e.g. a
+        # transient DB error) doesn't leave it unbound — this second read
+        # used to sit outside the try/except below entirely, so raising
+        # here killed the loop's task permanently (no more ticks until a
+        # process restart), unlike run_retention_loop's equivalent read,
+        # which was always inside its own guarded tick.
+        interval_hours = 24
         try:
             await _backup_tick_once()
+            _, interval_hours = await _current_backup_config()
         except Exception:  # noqa: BLE001
             _log.exception("backup tick failed")
-        _, interval_hours = await _current_backup_config()
         try:
             await asyncio.sleep(max(interval_hours, 1) * 3600.0)
         except asyncio.CancelledError:
