@@ -16,7 +16,7 @@ export function ProfileEdit() {
   const { name: routeName } = useParams()
   const isNew = !routeName
   const navigate = useNavigate()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
 
   const [name, setName] = useState(routeName ?? '')
   const [yaml, setYaml] = useState('')
@@ -35,6 +35,37 @@ export function ProfileEdit() {
       setYaml(data.yaml)
     }
   }, [data])
+
+  // An existing profile is dirty once its YAML diverges from what loaded;
+  // a brand-new one is dirty as soon as either field has anything in it.
+  const isDirty = isNew ? name !== '' || yaml !== '' : data?.yaml !== undefined && yaml !== data.yaml
+
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // Chrome ignores returnValue's actual text and shows its own generic
+      // prompt, but setting it is still required to trigger that prompt at all.
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
+
+  const goToProfiles = () => {
+    if (!isDirty) {
+      navigate('/profiles')
+      return
+    }
+    modal.confirm({
+      title: '放弃未保存的修改?',
+      content: '离开当前页面将丢失尚未保存的 YAML 改动。',
+      okText: '放弃并离开',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => navigate('/profiles'),
+    })
+  }
 
   const profileMode = useMemo(() => {
     if (/^platform:\s*android\b/m.test(yaml)) return 'gui_android' as const
@@ -75,7 +106,7 @@ export function ProfileEdit() {
       <PageHeader
         eyebrow={
           <Space size={6}>
-            <a onClick={() => navigate('/profiles')} style={{ color: 'var(--aa-text-muted)' }}>
+            <a onClick={goToProfiles} style={{ color: 'var(--aa-text-muted)' }}>
               <ArrowLeftOutlined /> 配置档
             </a>
             <span>/ {isNew ? '新建' : '编辑'}</span>

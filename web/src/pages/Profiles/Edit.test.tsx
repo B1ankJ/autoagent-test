@@ -57,6 +57,29 @@ describe('ProfileEdit', () => {
     expect(screen.getByText('modal:web_demo')).toBeInTheDocument()
   })
 
+  it('warns before leaving a dirty new-profile draft via the 配置档 breadcrumb', async () => {
+    renderWithProviders(<ProfileEdit />, { initialPath: '/profiles/new' })
+
+    await userEvent.type(await screen.findByTestId('yaml'), 'platform: api\n')
+    await userEvent.click(screen.getByText('配置档'))
+
+    const discardButton = await screen.findByRole('button', { name: /放弃并离开/ })
+
+    // Cancelling stays put — the editor (and its typed content) is still there.
+    await userEvent.click(screen.getByRole('button', { name: /取\s?消/ }))
+    await waitFor(() => expect(discardButton).not.toBeInTheDocument())
+    expect(screen.getByTestId('yaml')).toHaveValue('platform: api\n')
+  })
+
+  it('navigates straight to 配置档 with no warning when nothing has been typed', async () => {
+    renderWithProviders(<ProfileEdit />, { initialPath: '/profiles/new' })
+
+    await screen.findByTestId('yaml')
+    await userEvent.click(screen.getByText('配置档'))
+
+    expect(screen.queryByRole('button', { name: /放弃并离开/ })).not.toBeInTheDocument()
+  })
+
   it('enables connectivity test for android profiles', async () => {
     vi.spyOn(client, 'get').mockResolvedValueOnce({
       data: { yaml: 'platform: android\nname: fake_android\npackage: demo\n' },
