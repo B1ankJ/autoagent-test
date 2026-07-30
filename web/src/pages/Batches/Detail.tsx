@@ -49,6 +49,8 @@ import { Sample } from '../../types/api'
 
 type SampleFilter = 'all' | 'running' | 'done' | 'failed' | 'cancelled' | 'queued'
 
+const SAMPLE_PAGE_SIZE_KEY = 'autoagent_batch_samples_page_size'
+
 function formatEta(ms: number): string {
   const sec = Math.max(1, Math.round(ms / 1000))
   if (sec < 60) return `${sec} 秒`
@@ -70,6 +72,11 @@ export function BatchDetail() {
   const { message } = App.useApp()
   const [filter, setFilter] = useState<SampleFilter>('all')
   const [search, setSearch] = useState('')
+  const [samplePageSize, setSamplePageSize] = useState<number>(() => {
+    const raw = localStorage.getItem(SAMPLE_PAGE_SIZE_KEY)
+    const parsed = raw ? parseInt(raw, 10) : NaN
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 50
+  })
   const [notifyPerm, setNotifyPerm] = useState<NotificationPermissionState>(
     () => getNotificationPermission(),
   )
@@ -457,7 +464,14 @@ export function BatchDetail() {
               components={sampleTableComponents}
               scroll={sampleTableScroll}
               tableLayout="fixed"
-              pagination={{ pageSize: 50, showSizeChanger: true }}
+              pagination={{
+                pageSize: samplePageSize,
+                showSizeChanger: true,
+                onShowSizeChange: (_current, size) => {
+                  setSamplePageSize(size)
+                  localStorage.setItem(SAMPLE_PAGE_SIZE_KEY, String(size))
+                },
+              }}
             />
           )}
         </>
