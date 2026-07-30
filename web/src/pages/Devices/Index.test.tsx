@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
@@ -142,6 +142,30 @@ it('bulk-enables selected devices via the checkbox toolbar', async () => {
 
   expect(connectMutateAsync).toHaveBeenCalledWith('emulator-5554')
   expect(connectMutateAsync).toHaveBeenCalledWith('emulator-5556')
+})
+
+it('keeps only the failed device selected after a partial bulk-enable failure', async () => {
+  // Regression: runBulk used to unconditionally clear the whole selection
+  // after Promise.allSettled, even on partial failure — the only feedback
+  // was an aggregate "N succeeded, M failed" toast with no way to tell
+  // which device(s) failed short of manually comparing, so retrying meant
+  // re-picking from scratch. Now only the failed ones stay selected.
+  connectMutateAsync.mockImplementationOnce(() => Promise.resolve())
+  connectMutateAsync.mockImplementationOnce(() => Promise.reject(new Error('boom')))
+  const user = userEvent.setup()
+  renderPage()
+
+  const checkboxes = screen.getAllByRole('checkbox')
+  await user.click(checkboxes[1]) // emulator-5554
+  await user.click(checkboxes[2]) // emulator-5556
+
+  await user.click(screen.getByRole('button', { name: /批量启用/ }))
+
+  await waitFor(() => expect(connectMutateAsync).toHaveBeenCalledTimes(2))
+  await waitFor(() => {
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(false)
+    expect((checkboxes[2] as HTMLInputElement).checked).toBe(true)
+  })
 })
 
 it('bulk-deletes selected devices after confirmation', async () => {

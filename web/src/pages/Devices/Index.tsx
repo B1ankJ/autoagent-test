@@ -149,13 +149,17 @@ export function DevicesPage() {
   ) => {
     setBulkBusy(true)
     try {
-      const results = await Promise.allSettled(selectedSerials.map((serial) => fn(serial)))
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      const failed = results.length - ok
-      message[failed ? 'warning' : 'success'](
-        `已${verb} ${ok} 台设备${failed ? `,${failed} 台失败` : ''}`,
+      const targets = selectedSerials
+      const results = await Promise.allSettled(targets.map((serial) => fn(serial)))
+      const failedSerials = targets.filter((_serial, i) => results[i].status === 'rejected')
+      const ok = targets.length - failedSerials.length
+      message[failedSerials.length ? 'warning' : 'success'](
+        `已${verb} ${ok} 台设备${failedSerials.length ? `,${failedSerials.length} 台失败` : ''}`,
       )
-      setSelectedSerials([])
+      // Keep only the failed ones selected — on a partial failure this lets
+      // the user retry just those instead of having to re-pick which
+      // devices didn't go through out of the original selection.
+      setSelectedSerials(failedSerials)
     } finally {
       setBulkBusy(false)
     }
