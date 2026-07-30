@@ -41,6 +41,12 @@ async def install_adb_keyboard_for_device(serial: str) -> DeviceInfo:
 
     try:
         install_apk(serial, apk_path)
+        # A device that drops offline between the install and this status
+        # re-read (a real race for USB-tethered devices) used to raise
+        # AdbCommandError unguarded here and 500 the endpoint instead of
+        # reporting the same clean 502 as the action above.
+        installed = is_package_installed(serial, "com.android.adbkeyboard")
+        enabled = is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME")
     except AdbCommandError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
@@ -48,8 +54,8 @@ async def install_adb_keyboard_for_device(serial: str) -> DeviceInfo:
         serial=serial,
         model=None,
         android_version=None,
-        adb_keyboard_installed=is_package_installed(serial, "com.android.adbkeyboard"),
-        adb_keyboard_enabled=is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME"),
+        adb_keyboard_installed=installed,
+        adb_keyboard_enabled=enabled,
         online=True,
         seen_at=datetime.now(timezone.utc),
     )
@@ -110,6 +116,10 @@ async def enable_ime_route(serial: str) -> DeviceInfo:
     try:
         enable_ime(serial, "com.android.adbkeyboard/.AdbIME")
         set_ime(serial, "com.android.adbkeyboard/.AdbIME")
+        # See install_adb_keyboard_for_device: this status re-read can also
+        # raise if the device drops offline right after the action above.
+        installed = is_package_installed(serial, "com.android.adbkeyboard")
+        enabled = is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME")
     except AdbCommandError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
@@ -117,8 +127,8 @@ async def enable_ime_route(serial: str) -> DeviceInfo:
         serial=serial,
         model=None,
         android_version=None,
-        adb_keyboard_installed=is_package_installed(serial, "com.android.adbkeyboard"),
-        adb_keyboard_enabled=is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME"),
+        adb_keyboard_installed=installed,
+        adb_keyboard_enabled=enabled,
         online=True,
         seen_at=datetime.now(timezone.utc),
     )
@@ -160,12 +170,21 @@ async def disable_ime_route(serial: str) -> DeviceInfo:
     except AdbCommandError:
         pass  # best-effort; status is re-read below
 
+    try:
+        # Unlike the reset above, a failure here means we can't even
+        # determine current state (e.g. the device just dropped offline) —
+        # this used to raise unguarded and 500 the endpoint.
+        installed = is_package_installed(serial, "com.android.adbkeyboard")
+        enabled = is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME")
+    except AdbCommandError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
     return await upsert_discovered_device(
         serial=serial,
         model=None,
         android_version=None,
-        adb_keyboard_installed=is_package_installed(serial, "com.android.adbkeyboard"),
-        adb_keyboard_enabled=is_ime_enabled(serial, "com.android.adbkeyboard/.AdbIME"),
+        adb_keyboard_installed=installed,
+        adb_keyboard_enabled=enabled,
         online=True,
         seen_at=datetime.now(timezone.utc),
     )

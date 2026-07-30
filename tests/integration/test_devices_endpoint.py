@@ -63,6 +63,71 @@ async def test_install_adb_keyboard_route(client, monkeypatch):
     assert r.json()["adb_keyboard_installed"] is True
 
 
+async def test_install_adb_keyboard_status_reread_failure_is_502_not_500(
+    client, monkeypatch, tmp_path
+):
+    from autoagent.config.settings import get_settings
+    from autoagent.devices.adb import AdbCommandError
+
+    apk = tmp_path / "ADBKeyboard.apk"
+    apk.write_bytes(b"fake")
+    monkeypatch.setattr(get_settings(), "adb_keyboard_apk_path", apk)
+
+    from autoagent.api import devices as mod
+
+    # The install itself succeeds, but the device drops offline right after
+    # — before this fix, the unguarded status re-read below would raise
+    # AdbCommandError unguarded and 500 the endpoint instead of a clean 502.
+    monkeypatch.setattr(mod, "install_apk", lambda serial, path: None)
+
+    def _boom(serial: str, package: str) -> bool:
+        raise AdbCommandError("device offline")
+
+    monkeypatch.setattr(mod, "is_package_installed", _boom)
+
+    h = await _h(client)
+    r = await client.post("/api/v1/devices/emulator-5554/install-adb-keyboard", headers=h)
+    assert r.status_code == 502
+    assert "device offline" in r.json()["detail"]
+
+
+async def test_enable_ime_status_reread_failure_is_502_not_500(client, monkeypatch):
+    from autoagent.api import devices as mod
+    from autoagent.devices.adb import AdbCommandError
+
+    monkeypatch.setattr(mod, "enable_ime", lambda serial, ime: None)
+    monkeypatch.setattr(mod, "set_ime", lambda serial, ime: None)
+
+    def _boom(serial: str, package: str) -> bool:
+        raise AdbCommandError("device offline")
+
+    monkeypatch.setattr(mod, "is_package_installed", _boom)
+
+    h = await _h(client)
+    r = await client.post("/api/v1/devices/emulator-5554/enable-ime", headers=h)
+    assert r.status_code == 502
+    assert "device offline" in r.json()["detail"]
+
+
+async def test_disable_ime_status_reread_failure_is_502_not_500(client, monkeypatch):
+    from autoagent.api import devices as mod
+    from autoagent.devices.adb import AdbCommandError
+
+    # disable_ime_route imports get_current_ime/reset_ime locally (not at
+    # module level), so patch the real source module rather than `mod`.
+    monkeypatch.setattr("autoagent.devices.adb.get_current_ime", lambda serial: None)
+
+    def _boom(serial: str, package: str) -> bool:
+        raise AdbCommandError("device offline")
+
+    monkeypatch.setattr(mod, "is_package_installed", _boom)
+
+    h = await _h(client)
+    r = await client.post("/api/v1/devices/emulator-5554/disable-ime", headers=h)
+    assert r.status_code == 502
+    assert "device offline" in r.json()["detail"]
+
+
 async def test_patch_label_404(client):
     h = await _h(client)
     r = await client.patch("/api/v1/devices/missing", json={"label": "x"}, headers=h)
