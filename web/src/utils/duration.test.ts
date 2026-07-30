@@ -17,4 +17,10 @@ describe('formatDurationMs', () => {
     expect(formatDurationMs(65000)).toBe('1m 5s')
     expect(formatDurationMs(125000)).toBe('2m 5s')
   })
+
+  it('falls back to "-" for NaN/negative instead of rendering garbage like "NaNm NaNs"', () => {
+    expect(formatDurationMs(NaN)).toBe('-')
+    expect(formatDurationMs(-5)).toBe('-')
+    expect(formatDurationMs(Infinity)).toBe('-')
+  })
 })

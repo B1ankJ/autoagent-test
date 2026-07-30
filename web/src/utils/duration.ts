@@ -2,6 +2,7 @@
  * below 1min, "2m 5s" above that. Shared between Profiles List's average-
  * duration column and Batches List's duration column/anomaly highlight. */
 export function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '-'
   if (ms < 1000) return `${Math.round(ms)}ms`
   const totalSeconds = ms / 1000
   if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`
