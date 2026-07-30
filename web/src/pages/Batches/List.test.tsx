@@ -239,6 +239,42 @@ describe('BatchList status/mode filters', () => {
     })
   })
 
+  it('清除全部 clears every active filter, not just the last one applied', async () => {
+    // Regression: clearAllFilters used to call eight separate setters, each
+    // independently calling setSearchParams's functional-updater form —
+    // back-to-back calls in the same tick all read the same stale `prev`,
+    // so only the last call's change actually stuck and the rest silently
+    // stayed active.
+    renderWithProviders(<BatchList />, {
+      initialPath:
+        '/batches?status=failed&mode=api&profile=p1&device=dev-1' +
+        '&empty=1&hide_end_session=1&duration_anomaly=1',
+    })
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: ['failed'], mode: ['api'] }),
+      )
+    })
+
+    await userEvent.click(screen.getByText('清除全部'))
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: [],
+          mode: [],
+          targetProfile: undefined,
+          deviceSerial: undefined,
+          emptyResponseOnly: false,
+          excludeEndSession: false,
+          durationAnomalyOnly: false,
+        }),
+      )
+    })
+    expect(screen.queryByText('清除全部')).not.toBeInTheDocument()
+  })
+
   it('paginates against the filtered count, not the grand total, when a status filter is active', async () => {
     // /batches/stats groups by status rather than accepting one, so with
     // status=failed active the pagination total must come from stats.failed

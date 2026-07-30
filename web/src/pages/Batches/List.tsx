@@ -651,14 +651,24 @@ export function BatchList() {
     })
 
   const clearAllFilters = () => {
-    setStatusFilter([])
-    setModeFilter([])
-    setProfileFilter(undefined)
-    setDeviceFilter(undefined)
-    setDateRange(null)
-    setEmptyResponseOnly(false)
-    setHideEndSession(false)
-    setDurationAnomalyOnly(false)
+    // One updateParams call, not eight separate setter calls — each setter
+    // below independently calls updateParams(), which reads searchParams
+    // fresh via setSearchParams's functional-updater form. Calling all eight
+    // back-to-back races (see updateParams' own comment): every one of them
+    // computes its `next` from the same stale `prev`, so only the last call
+    // actually stuck and the other seven filters silently stayed active.
+    updateParams({
+      [QP_STATUS]: undefined,
+      [QP_MODE]: undefined,
+      [QP_PROFILE]: undefined,
+      [QP_DEVICE]: undefined,
+      [QP_FROM]: undefined,
+      [QP_TO]: undefined,
+      [QP_EMPTY]: undefined,
+      [QP_HIDE_END_SESSION]: undefined,
+      [QP_DURATION_ANOMALY]: undefined,
+      [QP_PAGE]: undefined,
+    })
   }
 
   const filterPopover = (
