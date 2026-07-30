@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
 import { renderWithProviders } from '../test/test-utils'
@@ -33,6 +34,28 @@ it('renders nothing when closed', () => {
     <SessionConversationModal sessionId={null} onClose={vi.fn()} />,
   )
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('shows an error alert (not the empty state) when the query fails', async () => {
+  // Regression: isError was never checked — a failed fetch rendered the
+  // exact same "没有找到属于这个会话的记录" empty state as a genuinely
+  // empty session, misleading users about a real fetch error.
+  const refetch = vi.fn()
+  mockUseSessionConversation.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: true,
+    error: new Error('network down'),
+    refetch,
+  })
+  renderWithProviders(<SessionConversationModal sessionId="conv-1" onClose={vi.fn()} />)
+
+  expect(screen.getByText('加载失败')).toBeInTheDocument()
+  expect(screen.getByText('network down')).toBeInTheDocument()
+  expect(screen.queryByText('没有找到属于这个会话的记录')).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: /重\s?试/ }))
+  expect(refetch).toHaveBeenCalled()
 })
 
 it('shows an empty state when the session has no turns', () => {

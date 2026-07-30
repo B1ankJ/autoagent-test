@@ -1,4 +1,4 @@
-import { Empty, Modal, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Modal, Space, Spin, Typography } from 'antd'
 import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -28,7 +28,7 @@ interface Props {
  */
 export function SessionConversationModal({ sessionId, onClose }: Props) {
   const navigate = useNavigate()
-  const { data, isLoading } = useSessionConversation(sessionId)
+  const { data, isLoading, isError, error, refetch } = useSessionConversation(sessionId)
   const turns = data ?? []
 
   return (
@@ -48,6 +48,18 @@ export function SessionConversationModal({ sessionId, onClose }: Props) {
         <div style={{ textAlign: 'center', padding: 24 }}>
           <Spin />
         </div>
+      ) : isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="加载失败"
+          description={(error as Error)?.message}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              重试
+            </Button>
+          }
+        />
       ) : turns.length === 0 ? (
         <Empty description="没有找到属于这个会话的记录" />
       ) : (
