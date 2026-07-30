@@ -152,7 +152,11 @@ export function ProfileList() {
             编辑
           </Button>
           <Popconfirm
-            title={`删除 ${row.name}?`}
+            title={`删除配置档 ${row.name}?`}
+            description="将删除 YAML 文件本身,不可恢复。已提交的批次不受影响。"
+            okText="删除"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
             onConfirm={async () => {
               try {
                 await removeProfile.mutateAsync(row.name)

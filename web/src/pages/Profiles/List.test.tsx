@@ -56,6 +56,17 @@ vi.mock('../../api/deviceStream', () => {
   }
 })
 
+it('shows an explicit, irreversible-consequence delete confirmation before removing a profile', async () => {
+  renderWithProviders(<ProfileList />)
+  await userEvent.click(screen.getByRole('tab', { name: /^Android \(/ }))
+
+  const row = screen.getByText('android_unbound').closest('tr') as HTMLElement
+  await userEvent.click(within(row).getByRole('button', { name: /删除/ }))
+
+  expect(screen.getByText('删除配置档 android_unbound?')).toBeInTheDocument()
+  expect(screen.getByText(/不可恢复/)).toBeInTheDocument()
+})
+
 it('disables 查看画面 for an android profile with no bound devices', async () => {
   renderWithProviders(<ProfileList />)
   await userEvent.click(screen.getByRole('tab', { name: /^Android \(/ }))
