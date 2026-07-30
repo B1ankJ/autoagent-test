@@ -109,6 +109,13 @@ export function BatchNew() {
   const [uploadForm] = Form.useForm<UploadFormValues>()
   const [pendingDraft, setPendingDraft] = useState<Draft | null>(() => readDraft())
   const draftSaveTimer = useRef<number | null>(null)
+  // A transient message.error toast disappears before anyone reads a detail
+  // like "sample s2 mode=api != batch mode=gui_android" — a persistent Alert
+  // above the form stays put and gives the user a chance to actually go find
+  // that row (the backend returns a plain string, not per-field errors, so
+  // this can't drive Form.Item-level validation display, just visibility).
+  const [jsonSubmitError, setJsonSubmitError] = useState<string | null>(null)
+  const [uploadSubmitError, setUploadSubmitError] = useState<string | null>(null)
 
   const availableProfiles = profiles.data ?? []
   const jsonMode = Form.useWatch('mode', jsonForm) ?? 'api'
@@ -158,6 +165,7 @@ export function BatchNew() {
   }
 
   const onJsonSubmit = async (values: JsonFormValues) => {
+    setJsonSubmitError(null)
     try {
       const result = await createJson.mutateAsync({
         name: values.name,
@@ -177,11 +185,12 @@ export function BatchNew() {
       message.success('已创建')
       navigate(`/batches/${result.batch_id}`)
     } catch (error) {
-      message.error((error as Error).message)
+      setJsonSubmitError((error as Error).message)
     }
   }
 
   const onUploadSubmit = async (values: UploadFormValues) => {
+    setUploadSubmitError(null)
     if (!uploaded?.originFileObj) {
       message.error('请选择文件')
       return
@@ -198,7 +207,7 @@ export function BatchNew() {
       message.success('已创建')
       navigate(`/batches/${result.batch_id}`)
     } catch (error) {
-      message.error((error as Error).message)
+      setUploadSubmitError((error as Error).message)
     }
   }
 
@@ -345,6 +354,17 @@ export function BatchNew() {
                       </>
                     )}
                   </Form.List>
+                  {jsonSubmitError ? (
+                    <Alert
+                      type="error"
+                      showIcon
+                      closable
+                      onClose={() => setJsonSubmitError(null)}
+                      message="创建失败"
+                      description={jsonSubmitError}
+                      style={{ marginTop: 12, marginBottom: 12 }}
+                    />
+                  ) : null}
                   <Button
                     type="primary"
                     htmlType="submit"
@@ -407,6 +427,17 @@ export function BatchNew() {
                       <p>点击或拖拽文件到此处</p>
                     </Upload.Dragger>
                   </Form.Item>
+                  {uploadSubmitError ? (
+                    <Alert
+                      type="error"
+                      showIcon
+                      closable
+                      onClose={() => setUploadSubmitError(null)}
+                      message="创建失败"
+                      description={uploadSubmitError}
+                      style={{ marginBottom: 12 }}
+                    />
+                  ) : null}
                   <Button type="primary" htmlType="submit" loading={uploadBatch.isPending}>
                     创建
                   </Button>
