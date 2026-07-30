@@ -259,7 +259,14 @@ export function DevicesPage() {
     {
       title: 'Serial',
       dataIndex: 'serial',
-      render: (value: string) => <span className="aa-mono">{value}</span>,
+      render: (value: string) => (
+        <Typography.Text
+          className="aa-mono"
+          copyable={{ text: value, tooltips: ['复制', '已复制'] }}
+        >
+          {value}
+        </Typography.Text>
+      ),
     },
     {
       title: '别名',
