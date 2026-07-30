@@ -112,14 +112,17 @@ export function BatchDetail() {
       title: 'ID',
       dataIndex: 'id',
       render: (value: string) => (
-        <a
-          className="aa-mono"
-          onClick={() =>
-            navigate(`/batches/${data?.batch_id}/samples/${encodeURIComponent(value)}`)
-          }
-        >
-          {value}
-        </a>
+        <Space size={4}>
+          <a
+            className="aa-mono"
+            onClick={() =>
+              navigate(`/batches/${data?.batch_id}/samples/${encodeURIComponent(value)}`)
+            }
+          >
+            {value}
+          </a>
+          <Typography.Text copyable={{ text: value, tooltips: ['复制', '已复制'] }} />
+        </Space>
       ),
     },
     {
