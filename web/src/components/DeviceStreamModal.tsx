@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { Alert, Button, Modal, Space, Tag } from 'antd'
+import { Alert, App, Button, Modal, Space, Tag } from 'antd'
 
 import { postDeviceInput, useDeviceHttpStream } from '../api/deviceStream'
 import type { DeviceInputKey } from '../types/api'
@@ -21,6 +21,16 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
   const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(serial)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragRef = useRef<{ x: number; y: number; t: number } | null>(null)
+  const { message } = App.useApp()
+
+  // postDeviceInput calls below used to only .catch(console.error) — if the
+  // device drops offline mid-session, taps/swipes/text just silently
+  // vanished with the canvas still showing "直播中", giving no indication
+  // the input was ever dropped.
+  const onInputFailed = useCallback(
+    (e: unknown) => message.error(`操作发送失败: ${(e as Error).message}`),
+    [message],
+  )
 
   const toDeviceCoords = useCallback(
     (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
@@ -63,21 +73,21 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
           x2: p2.x,
           y2: p2.y,
           duration_ms: durationMs,
-        }).catch(console.error)
+        }).catch(onInputFailed)
       } else {
         const p = toDeviceCoords(canvas, e.clientX, e.clientY)
-        postDeviceInput(serial, { type: 'tap', x: p.x, y: p.y }).catch(console.error)
+        postDeviceInput(serial, { type: 'tap', x: p.x, y: p.y }).catch(onInputFailed)
       }
     },
-    [serial, canvasRef, toDeviceCoords],
+    [serial, canvasRef, toDeviceCoords, onInputFailed],
   )
 
   const handleKeyButton = useCallback(
     (keycode: string) => {
       if (!serial) return
-      postDeviceInput(serial, { type: 'key', keycode }).catch(console.error)
+      postDeviceInput(serial, { type: 'key', keycode }).catch(onInputFailed)
     },
-    [serial],
+    [serial, onInputFailed],
   )
 
   const handleTextKeyDown = useCallback(
@@ -87,12 +97,12 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
         if (!serial || !textareaRef.current) return
         const value = textareaRef.current.value
         if (value) {
-          postDeviceInput(serial, { type: 'text', value }).catch(console.error)
+          postDeviceInput(serial, { type: 'text', value }).catch(onInputFailed)
           textareaRef.current.value = ''
         }
       }
     },
-    [serial],
+    [serial, onInputFailed],
   )
 
   return (
