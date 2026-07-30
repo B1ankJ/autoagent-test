@@ -25,7 +25,7 @@ from sse_starlette.sse import EventSourceResponse
 from autoagent.api._deps import get_scheduler
 from autoagent.auth.deps import require_user
 from autoagent.config.settings import get_settings
-from autoagent.events.bus import get_event_bus
+from autoagent.events.bus import Event, get_event_bus
 from autoagent.loaders.csv_loader import load_csv
 from autoagent.loaders.json_loader import load_json
 from autoagent.loaders.jsonl_loader import load_jsonl
@@ -634,24 +634,42 @@ async def cancel_active() -> dict:
     return {"cancelled": cancelled, "orphaned": orphaned, "total": len(active)}
 
 
+def _sse_frame(event: Event) -> dict:
+    return {
+        "id": str(event.seq),
+        "event": event.kind,
+        "data": _json_dumps(
+            {
+                "seq": event.seq,
+                "kind": event.kind,
+                "payload": event.payload,
+                "ts": event.ts,
+            }
+        ),
+    }
+
+
 @router.get("/{batch_id}/events")
-async def stream_batch_events(batch_id: str) -> EventSourceResponse:
+async def stream_batch_events(
+    batch_id: str, after_seq: int | None = Query(default=None)
+) -> EventSourceResponse:
     bus = get_event_bus()
 
     async def generator():
-        async for event in bus.subscribe(batch_id):
-            yield {
-                "id": str(event.seq),
-                "event": event.kind,
-                "data": _json_dumps(
-                    {
-                        "seq": event.seq,
-                        "kind": event.kind,
-                        "payload": event.payload,
-                        "ts": event.ts,
-                    }
-                ),
-            }
+        # Subscribe first so nothing published between here and the replay
+        # read below can fall in the gap — publish() has no await between
+        # buffering and delivering to live subscribers, so anything not yet
+        # in the replay buffer is guaranteed to arrive via the live
+        # subscription instead. The frontend already dedupes by seq, so a
+        # replayed event that also arrives live is harmless.
+        subscription = bus.subscribe(batch_id)
+        if after_seq is not None:
+            for event in bus.replay_since(batch_id, after_seq):
+                yield _sse_frame(event)
+                if event.kind == "batch_done":
+                    return
+        async for event in subscription:
+            yield _sse_frame(event)
             if event.kind == "batch_done":
                 break
 

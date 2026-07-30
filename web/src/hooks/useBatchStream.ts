@@ -9,6 +9,8 @@ type SseEvent = {
   ts: string
 }
 
+const RECONNECT_DELAY_MS = 1500
+
 export function useBatchStream(id: string | undefined) {
   const queryClient = useQueryClient()
   const seqRef = useRef(0)
@@ -39,48 +41,81 @@ export function useBatchStream(id: string | undefined) {
 
     const token = localStorage.getItem('autoagent_token') ?? ''
     const abort = new AbortController()
+    let stopped = false
 
-    const run = async () => {
-      const response = await fetch(`/api/v1/batches/${id}/events`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
-        signal: abort.signal,
-      })
-      if (!response.ok || !response.body) return
+    // Opens one /events connection and reads it to completion. Returns
+    // 'stop' once a batch_done event lands or the batch is confirmedly gone
+    // (404 — no point retrying), 'retry' for anything else (network blip,
+    // proxy timeout, server restart) so the caller reconnects instead of
+    // silently going stale. after_seq lets the backend replay whatever was
+    // published into its buffer during the gap (BatchEventBus.replay_since)
+    // — seqRef's own seq<=current guard below still de-dupes if a replayed
+    // event also arrives live.
+    const connectOnce = async (): Promise<'retry' | 'stop'> => {
+      let response: Response
+      try {
+        response = await fetch(`/api/v1/batches/${id}/events?after_seq=${seqRef.current}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+          signal: abort.signal,
+        })
+      } catch {
+        return 'retry'
+      }
+      if (abort.signal.aborted) return 'stop'
+      if (response.status === 404) return 'stop'
+      if (!response.ok || !response.body) return 'retry'
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let sawBatchDone = false
 
-      let active = true
-      while (active) {
-        const { value, done } = await reader.read()
-        if (done) {
-          active = false
-          continue
-        }
-        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-        const chunks = buffer.split('\n\n')
-        buffer = chunks.pop() ?? ''
+      try {
+        let active = true
+        while (active) {
+          const { value, done } = await reader.read()
+          if (done) {
+            active = false
+            continue
+          }
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+          const chunks = buffer.split('\n\n')
+          buffer = chunks.pop() ?? ''
 
-        for (const chunk of chunks) {
-          for (const line of chunk.split('\n')) {
-            if (!line.startsWith('data: ')) continue
-            const event = JSON.parse(line.slice(6)) as SseEvent
-            if (event.seq <= seqRef.current) continue
-            seqRef.current = event.seq
-            queryClient.setQueryData<BatchDetail | undefined>(['batch', id], (prev) =>
-              applyEvent(prev, event),
-            )
-            if (event.kind === 'batch_done') {
-              abort.abort()
+          for (const chunk of chunks) {
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue
+              const event = JSON.parse(line.slice(6)) as SseEvent
+              if (event.seq <= seqRef.current) continue
+              seqRef.current = event.seq
+              queryClient.setQueryData<BatchDetail | undefined>(['batch', id], (prev) =>
+                applyEvent(prev, event),
+              )
+              if (event.kind === 'batch_done') sawBatchDone = true
             }
           }
+          if (sawBatchDone) break
         }
+      } catch {
+        // Connection dropped mid-read — fall through and let the caller retry.
+      }
+      if (sawBatchDone) reader.cancel().catch(() => {})
+      return sawBatchDone ? 'stop' : 'retry'
+    }
+
+    const run = async () => {
+      while (!stopped && !abort.signal.aborted) {
+        const outcome = await connectOnce()
+        if (outcome === 'stop' || stopped || abort.signal.aborted) break
+        await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS))
       }
     }
 
     run().catch(() => {})
-    return () => abort.abort()
+    return () => {
+      stopped = true
+      abort.abort()
+    }
   }, [id, query.isSuccess, queryClient])
 
   return query

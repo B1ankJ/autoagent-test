@@ -26,7 +26,7 @@ beforeEach(() => {
   localStorage.setItem('autoagent_token', 'tok')
   global.fetch = vi.fn(async (url: string) => {
     fetchCalls.push(String(url))
-    if (String(url).endsWith('/events')) {
+    if (String(url).includes('/events')) {
       return new Response(encodeStream(readerFrames), {
         status: 200,
         headers: { 'content-type': 'text/event-stream' },
@@ -101,8 +101,64 @@ describe('useBatchStream', () => {
     })
     await waitFor(() => expect(result.current.data?.status).toBe('done'))
 
-    const eventsCalls = fetchCalls.filter((url) => url.endsWith('/events'))
+    const eventsCalls = fetchCalls.filter((url) => url.includes('/events'))
     expect(eventsCalls).toHaveLength(1)
+  })
+
+  it('reconnects with after_seq when the stream drops without batch_done', async () => {
+    let eventsCall = 0
+    global.fetch = vi.fn(async (url: string) => {
+      fetchCalls.push(String(url))
+      if (String(url).includes('/events')) {
+        eventsCall += 1
+        if (eventsCall === 1) {
+          // Connection drops mid-batch (network blip / server restart) —
+          // the stream just ends, no batch_done event.
+          return new Response(
+            encodeStream([
+              'data: {"seq":1,"kind":"batch_progress","payload":{"done":1,"failed":0,"total":3},"ts":"t"}\n\n',
+            ]),
+            { status: 200, headers: { 'content-type': 'text/event-stream' } },
+          )
+        }
+        // Reconnect: the backend replays whatever the buffer still has
+        // after seq 1, then the batch finishes normally.
+        return new Response(
+          encodeStream([
+            'data: {"seq":2,"kind":"batch_progress","payload":{"done":2,"failed":0,"total":3},"ts":"t"}\n\n',
+            'data: {"seq":3,"kind":"batch_done","payload":{"status":"done"},"ts":"t"}\n\n',
+          ]),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          batch_id: 'b1',
+          name: 'n',
+          mode: 'api',
+          status: 'running',
+          total: 3,
+          done: 0,
+          failed: 0,
+          seq: 0,
+          concurrency: 1,
+          samples: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+
+    const { result } = renderHook(() => useBatchStream('b1'), {
+      wrapper: ({ children }) => withProvider(children),
+    })
+    await waitFor(() => expect(result.current.data?.status).toBe('done'), { timeout: 5000 })
+    expect(result.current.data?.done).toBe(2)
+
+    const eventsCalls = fetchCalls.filter((url) => url.includes('/events'))
+    expect(eventsCalls).toHaveLength(2)
+    // The reconnect passes the last seq it actually saw so the backend can
+    // replay the gap instead of the client silently missing it forever.
+    expect(eventsCalls[1]).toContain('after_seq=1')
   })
 
   it('applies sample_update device fields', () => {
