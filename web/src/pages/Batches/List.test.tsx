@@ -208,6 +208,37 @@ describe('BatchList status/mode filters', () => {
     })
   })
 
+  it('sends sort params from the URL to the backend query', async () => {
+    renderWithProviders(<BatchList />, {
+      initialPath: '/batches?sort=avg_duration_ms&sort_dir=asc',
+    })
+
+    await waitFor(() => {
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortBy: 'avg_duration_ms', sortDir: 'asc' }),
+      )
+    })
+  })
+
+  it('clicking the 耗时 column header updates the sort URL params', async () => {
+    renderWithProviders(<BatchList />)
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    // Scoped to <thead>: rc-table also renders a hidden aria-hidden
+    // "measure row" mirroring column titles, which would otherwise
+    // double-match. Clicking the header title triggers the Table's
+    // onChange(sorter) path.
+    const thead = screen.getByRole('table').querySelector('thead')!
+    await userEvent.click(within(thead).getByText('耗时'))
+
+    await waitFor(() => {
+      // AntD's click cycle starts at "ascend" for a previously-unsorted column.
+      expect(mockUseBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortBy: 'avg_duration_ms', sortDir: 'asc' }),
+      )
+    })
+  })
+
   it('paginates against the filtered count, not the grand total, when a status filter is active', async () => {
     // /batches/stats groups by status rather than accepting one, so with
     // status=failed active the pagination total must come from stats.failed

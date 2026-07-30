@@ -64,6 +64,15 @@ const QP_DEVICE = 'device'   // device_serial substring on sample.metadata_json
 const QP_EMPTY = 'empty'     // "1" = only show total=1 done batches with empty response
 const QP_HIDE_END_SESSION = 'hide_end_session' // "1" = hide Sample.end_session=true no-ops
 const QP_DURATION_ANOMALY = 'duration_anomaly' // "1" = only show duration-anomalous batches
+const QP_SORT = 'sort'         // 'avg_duration_ms' | 'started_at'
+const QP_SORT_DIR = 'sort_dir' // 'asc' | 'desc'
+
+// Table column key -> backend sort_by value. Kept separate from the column
+// `key` itself so existing localStorage width/visibility keys don't shift.
+const SORT_FIELD_BY_COLUMN_KEY: Record<string, 'avg_duration_ms' | 'started_at'> = {
+  duration: 'avg_duration_ms',
+  started_at: 'started_at',
+}
 
 // Column visibility: 名称/操作 always show; these can be hidden and the
 // choice is remembered per browser so different people can trim the table to
@@ -140,6 +149,8 @@ export function BatchList() {
   const emptyResponseOnly = searchParams.get(QP_EMPTY) === '1'
   const hideEndSession = searchParams.get(QP_HIDE_END_SESSION) === '1'
   const durationAnomalyOnly = searchParams.get(QP_DURATION_ANOMALY) === '1'
+  const sortBy = searchParams.get(QP_SORT) as 'avg_duration_ms' | 'started_at' | null
+  const sortDir = (searchParams.get(QP_SORT_DIR) as 'asc' | 'desc' | null) ?? 'desc'
 
   const profilesQ = useProfiles()
   const devicesQ = useDevices()
@@ -191,6 +202,14 @@ export function BatchList() {
   const setDurationAnomalyOnly = (v: boolean) => {
     updateParams({ [QP_DURATION_ANOMALY]: v ? '1' : undefined, [QP_PAGE]: undefined })
   }
+  const setSort = (columnKey: string | undefined, order: 'ascend' | 'descend' | undefined) => {
+    const field = columnKey ? SORT_FIELD_BY_COLUMN_KEY[columnKey] : undefined
+    updateParams({
+      [QP_SORT]: field && order ? field : undefined,
+      [QP_SORT_DIR]: field && order ? (order === 'ascend' ? 'asc' : 'desc') : undefined,
+      [QP_PAGE]: undefined,
+    })
+  }
   const setDateRange = (range: [Dayjs | null, Dayjs | null] | null) => {
     const [from, to] = range ?? [null, null]
     updateParams({
@@ -225,6 +244,8 @@ export function BatchList() {
     durationAnomalyOnly,
     status: statusFilter,
     mode: modeFilter,
+    sortBy: sortBy ?? undefined,
+    sortDir,
   })
   const { data: stats } = useBatchStats({
     q: debouncedQ,
@@ -498,6 +519,8 @@ export function BatchList() {
       key: 'duration',
       title: '耗时',
       width: 110,
+      sorter: true,
+      sortOrder: sortBy === 'avg_duration_ms' ? (sortDir === 'asc' ? 'ascend' : 'descend') : null,
       render: (_value, row) =>
         row.avg_duration_ms == null ? (
           <span className="aa-mono aa-muted">-</span>
@@ -524,6 +547,8 @@ export function BatchList() {
       title: '开始时间',
       dataIndex: 'started_at',
       width: 200,
+      sorter: true,
+      sortOrder: sortBy === 'started_at' ? (sortDir === 'asc' ? 'ascend' : 'descend') : null,
       render: (value?: string) => (
         <span className="aa-mono aa-muted">{value ?? '-'}</span>
       ),
@@ -934,6 +959,11 @@ export function BatchList() {
             components={resizableComponents}
             scroll={resizableScroll}
             tableLayout="fixed"
+            onChange={(_pagination, _filters, sorter, extra) => {
+              if (extra.action !== 'sort') return
+              const s = Array.isArray(sorter) ? sorter[0] : sorter
+              setSort(s?.columnKey as string | undefined, s?.order ?? undefined)
+            }}
             rowSelection={{
               selectedRowKeys: selectedIds,
               onChange: (keys) => setSelectedIds(keys as string[]),

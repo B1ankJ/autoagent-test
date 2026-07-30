@@ -350,6 +350,33 @@ async def test_list_batches_rejects_limit_above_cap(client):
     assert r.status_code == 422
 
 
+async def test_list_batches_rejects_invalid_sort_params(client):
+    h = await _login(client)
+    r = await client.get("/api/v1/batches", params={"sort_by": "name"}, headers=h)
+    assert r.status_code == 422
+    r = await client.get(
+        "/api/v1/batches", params={"sort_by": "avg_duration_ms", "sort_dir": "up"}, headers=h
+    )
+    assert r.status_code == 422
+
+
+async def test_list_batches_sorts_by_avg_duration_ms(client):
+    h = await _login(client)
+    for batch_id, duration in [("b_fast", 100), ("b_slow", 5000), ("b_mid", 1000)]:
+        await create_batch(
+            batch_id=batch_id, name=batch_id, mode="api", concurrency=1, total=1,
+            target_profile_default=None,
+        )
+        await update_batch_progress(batch_id, done=1, failed=0, avg_duration_ms=duration)
+
+    r = await client.get(
+        "/api/v1/batches", params={"sort_by": "avg_duration_ms", "sort_dir": "desc"}, headers=h
+    )
+    assert r.status_code == 200
+    ids = [b["batch_id"] for b in r.json()]
+    assert ids.index("b_slow") < ids.index("b_mid") < ids.index("b_fast")
+
+
 async def test_list_batches_exposes_session_id_for_single_sample_batches(client):
     h = await _login(client)
     await create_batch(

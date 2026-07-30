@@ -25,6 +25,8 @@ interface BatchQueryFilters {
   durationAnomalyOnly?: boolean
   status?: BatchStatus[]
   mode?: ExecutionMode[]
+  sortBy?: 'avg_duration_ms' | 'started_at'
+  sortDir?: 'asc' | 'desc'
 }
 
 function buildBatchParams(p: BatchQueryFilters) {
@@ -44,6 +46,8 @@ function buildBatchParams(p: BatchQueryFilters) {
   // serializer emits arrays this way, matching FastAPI's Query(list[...]).
   if (p.status?.length) params.status = p.status
   if (p.mode?.length) params.mode = p.mode
+  if (p.sortBy) params.sort_by = p.sortBy
+  if (p.sortDir) params.sort_dir = p.sortDir
   return params
 }
 
@@ -60,8 +64,26 @@ export function useBatches(params?: BatchQueryFilters) {
   const dao = !!params?.durationAnomalyOnly
   const status = params?.status ?? null
   const mode = params?.mode ?? null
+  const sortBy = params?.sortBy ?? null
+  const sortDir = params?.sortDir ?? null
   return useQuery({
-    queryKey: ['batches', limit, offset, q ?? null, ca, cb, tp, ds, eo, xes, dao, status, mode],
+    queryKey: [
+      'batches',
+      limit,
+      offset,
+      q ?? null,
+      ca,
+      cb,
+      tp,
+      ds,
+      eo,
+      xes,
+      dao,
+      status,
+      mode,
+      sortBy,
+      sortDir,
+    ],
     queryFn: async () =>
       (
         await client.get<BatchSummary[]>('/batches', {
@@ -78,6 +100,8 @@ export function useBatches(params?: BatchQueryFilters) {
             durationAnomalyOnly: dao,
             status: params?.status,
             mode: params?.mode,
+            sortBy: params?.sortBy,
+            sortDir: params?.sortDir,
           }),
         })
       ).data,

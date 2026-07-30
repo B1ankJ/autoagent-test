@@ -7,6 +7,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import (
     APIRouter,
@@ -296,6 +297,8 @@ async def list_all(
     duration_anomaly_only: bool = False,
     status: list[BatchStatus] | None = Query(default=None),
     mode: list[Mode] | None = Query(default=None),
+    sort_by: Literal["avg_duration_ms", "started_at"] | None = Query(default=None),
+    sort_dir: Literal["asc", "desc"] = Query(default="desc"),
 ) -> list[BatchSummary]:
     rows = await list_batches(
         limit=limit,
@@ -310,6 +313,8 @@ async def list_all(
         duration_anomaly_only=duration_anomaly_only,
         status=status or None,
         mode=mode or None,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
     # One aggregate query for the whole page's profiles + devices, one more
     # for single-sample batches' previews, and one for the per-profile

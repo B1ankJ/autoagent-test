@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, case, delete, desc, false, func, or_, select
+from sqlalchemy import and_, asc, case, delete, desc, false, func, or_, select
 
 from autoagent.models.db import Batch, Sample
 from autoagent.storage.database import get_sessionmaker
@@ -13,6 +13,12 @@ def _like_term(q: str) -> str:
     # Escape LIKE metacharacters so a user typing "%foo" doesn't match everything.
     escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
+
+
+# Whitelisted columns the Batches List UI can sort by (server-side, so it
+# stays correct under pagination — a client-side Table sorter would only
+# reorder whatever page happened to be fetched).
+SORTABLE_COLUMNS = {"avg_duration_ms": Batch.avg_duration_ms, "started_at": Batch.started_at}
 
 
 async def create_batch(
@@ -180,6 +186,8 @@ async def list_batches(
     duration_anomaly_only: bool = False,
     status: list[str] | None = None,
     mode: list[str] | None = None,
+    sort_by: str | None = None,
+    sort_dir: str = "desc",
 ) -> list[Batch]:
     profile_averages = await avg_duration_by_profile() if duration_anomaly_only else None
     sm = get_sessionmaker()
@@ -247,7 +255,15 @@ async def list_batches(
             stmt = stmt.where(Batch.created_at <= created_before)
         if joined_samples:
             stmt = stmt.distinct()
-        result = await s.execute(stmt.order_by(desc(Batch.created_at)).limit(limit).offset(offset))
+        order_col = SORTABLE_COLUMNS.get(sort_by) if sort_by else None
+        if order_col is not None:
+            primary = asc(order_col) if sort_dir == "asc" else desc(order_col)
+            # created_at as a tiebreaker keeps ordering stable for rows that
+            # share the sorted value (e.g. many batches with avg_duration_ms=None).
+            stmt = stmt.order_by(primary, desc(Batch.created_at))
+        else:
+            stmt = stmt.order_by(desc(Batch.created_at))
+        result = await s.execute(stmt.limit(limit).offset(offset))
         return list(result.scalars().all())
 
 
