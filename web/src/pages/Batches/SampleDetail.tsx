@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSampleArtifactContent, useSampleArtifactList } from '../../api/artifacts'
 import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { ResponseComparison } from '../../components/ResponseComparison'
 import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
@@ -171,6 +172,43 @@ export function SampleDetail() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [goTo, prev, next])
+
+  const {
+    columns: actionLogColumns,
+    components: actionLogComponents,
+    scroll: actionLogScroll,
+  } = useResizableColumns(
+    [
+      {
+        key: 'action',
+        title: 'Action',
+        dataIndex: 'action',
+        width: 120,
+        render: (value?: string) => value ?? '-',
+      },
+      {
+        key: 'target',
+        title: 'Target',
+        width: 220,
+        render: (_value: unknown, record: Record<string, unknown>) => formatActionTarget(record),
+      },
+      {
+        key: 'result',
+        title: 'Result',
+        width: 220,
+        render: (_value: unknown, record: Record<string, unknown>) =>
+          record.ok === false ? `failed: ${String(record.error ?? '-')}` : 'ok',
+      },
+      {
+        key: 't_ms',
+        title: 't_ms',
+        dataIndex: 't_ms',
+        width: 90,
+        render: (value?: number) => value ?? '-',
+      },
+    ],
+    'autoagent_sample_action_log_col_widths',
+  )
 
   const breadcrumb = (
     <Space size={6}>
@@ -396,27 +434,10 @@ export function SampleDetail() {
             }
             pagination={false}
             dataSource={sample.metadata.action_log as Array<Record<string, unknown>>}
-            columns={[
-              {
-                title: 'Action',
-                dataIndex: 'action',
-                render: (value?: string) => value ?? '-',
-              },
-              {
-                title: 'Target',
-                render: (_value: unknown, record: Record<string, unknown>) => formatActionTarget(record),
-              },
-              {
-                title: 'Result',
-                render: (_value: unknown, record: Record<string, unknown>) =>
-                  record.ok === false ? `failed: ${String(record.error ?? '-')}` : 'ok',
-              },
-              {
-                title: 't_ms',
-                dataIndex: 't_ms',
-                render: (value?: number) => value ?? '-',
-              },
-            ]}
+            columns={actionLogColumns}
+            components={actionLogComponents}
+            scroll={actionLogScroll}
+            tableLayout="fixed"
           />
         </Card>
       ) : null}
