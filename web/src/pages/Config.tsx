@@ -43,6 +43,7 @@ import { PageHeader } from '../components/states/PageHeader'
 import { ResponseListPanel } from '../components/ResponseListPanel'
 import { SystemUpdatePanel } from '../components/SystemUpdatePanel'
 import { GlobalDefaults, VLMConfig } from '../types/api'
+import { ApiError } from '../utils/errors'
 
 const STAGE_TEXT: Record<LLMCheckResult['stage'], string> = {
   connect: '无法连接到该地址',
@@ -98,11 +99,24 @@ function RuleSection({
 }
 
 function saveErrorMessage(error: unknown): string {
-  const detail = (error as { response?: { data?: { detail?: LLMCheckResult } } })?.response?.data?.detail
-  if (detail?.stage) {
-    return `${STAGE_TEXT[detail.stage] ?? '未知错误'}：${detail.message}`
+  // The api/client.ts interceptor already normalizes any error into an
+  // ApiError before it reaches a mutation's catch block — there's no
+  // `.response` on it to read `.detail` off of the way a raw axios error
+  // would have. PUT /config/vlm's 400 body is a JSON-serialized
+  // LLMCheckResult (stage/message), which normalizeError stringifies into
+  // ApiError.detail — parse it back out for the friendlier Chinese message.
+  if (error instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(error.detail) as Partial<LLMCheckResult>
+      if (parsed && typeof parsed === 'object' && parsed.stage) {
+        return `${STAGE_TEXT[parsed.stage] ?? '未知错误'}：${parsed.message ?? ''}`
+      }
+    } catch {
+      // detail wasn't JSON — it's already a plain message string, fall through.
+    }
+    return error.message
   }
-  return (error as Error).message
+  return (error as Error).message ?? '未知错误'
 }
 
 export function ConfigPage() {

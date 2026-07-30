@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '../test/test-utils'
+import { ApiError } from '../utils/errors'
 import { ConfigPage } from './Config'
 
 interface WhitelistFixture {
@@ -14,6 +15,7 @@ interface WhitelistFixture {
 
 const {
   testLlmMock,
+  saveVlmMock,
   backupListMock,
   deleteBackupMock,
   downloadBackupMock,
@@ -21,6 +23,7 @@ const {
   blacklistMock,
 } = vi.hoisted(() => ({
   testLlmMock: vi.fn(),
+  saveVlmMock: vi.fn(async (body: unknown) => body),
   backupListMock: vi.fn(() => ({
     data: [] as { name: string; bytes: number; created_at: string }[],
   })),
@@ -32,7 +35,7 @@ const {
 
 vi.mock('../api/config', () => ({
   useVLM: () => ({ data: { base_url: 'https://old', model: 'old-model', api_key: 'old-key' } }),
-  useSaveVLM: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
+  useSaveVLM: () => ({ isPending: false, mutateAsync: saveVlmMock }),
   useTestLLM: () => ({ isPending: false, mutateAsync: testLlmMock }),
   useDefaults: () => ({ data: { api_timeout_sec: 60, gui_timeout_sec: 180, retry: 2, concurrency: 1, verbose_logs: true } }),
   useSaveDefaults: () => ({ isPending: false, mutateAsync: vi.fn(async (body) => body) }),
@@ -82,6 +85,26 @@ describe('ConfigPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/认证失败/)).toBeInTheDocument()
       expect(screen.getByText(/bad key/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows the friendly staged Chinese message, not raw JSON, when saving VLM config fails', async () => {
+    // Regression: saveErrorMessage read error.response.data.detail, but by
+    // the time an error reaches a mutation's catch block it's already been
+    // normalized into an ApiError with no .response — the check always
+    // fell through to the raw JSON-stringified detail blob.
+    saveVlmMock.mockRejectedValueOnce(
+      new ApiError(400, JSON.stringify({ stage: 'auth', message: 'bad key' })),
+    )
+    renderWithProviders(<ConfigPage />)
+
+    // AntD inserts a mid-word space between two-character CJK button labels
+    // ("保存" renders as "保 存"), and every tab has its own save button — VLM
+    // is the default-active tab, so its save button is the first match.
+    await userEvent.click(screen.getAllByRole('button', { name: /保\s?存/ })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('认证失败：bad key')).toBeInTheDocument()
     })
   })
 
