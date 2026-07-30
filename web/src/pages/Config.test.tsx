@@ -88,6 +88,21 @@ describe('ConfigPage', () => {
     })
   })
 
+  it('shows an error alert instead of a silently stuck spinner when the connectivity test request itself fails', async () => {
+    // Regression: handleTestLLM had no try/catch around mutateAsync, unlike
+    // its sibling handleTestNotify — a thrown request (network error/
+    // timeout) became an unhandled rejection with zero user feedback; the
+    // button just stopped spinning with nothing else shown.
+    testLlmMock.mockRejectedValue(new Error('network down'))
+    renderWithProviders(<ConfigPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: '测试连通性' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('network down')).toBeInTheDocument()
+    })
+  })
+
   it('shows the friendly staged Chinese message, not raw JSON, when saving VLM config fails', async () => {
     // Regression: saveErrorMessage read error.response.data.detail, but by
     // the time an error reaches a mutation's catch block it's already been

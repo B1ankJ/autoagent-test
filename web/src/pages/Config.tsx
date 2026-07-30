@@ -194,17 +194,22 @@ export function ConfigPage() {
       setLlmTestMessage('请先填写完整的 Base URL、Model 和 API Key')
       return
     }
-    const result = await testLlm.mutateAsync({
-      base_url: values.base_url,
-      model: values.model,
-      api_key: values.api_key,
-    })
-    setLlmTestOk(result.ok)
-    setLlmTestMessage(
-      result.ok
-        ? `${STAGE_TEXT[result.stage]}（${result.latency_ms} ms）`
-        : `${STAGE_TEXT[result.stage]}：${result.message}`,
-    )
+    try {
+      const result = await testLlm.mutateAsync({
+        base_url: values.base_url,
+        model: values.model,
+        api_key: values.api_key,
+      })
+      setLlmTestOk(result.ok)
+      setLlmTestMessage(
+        result.ok
+          ? `${STAGE_TEXT[result.stage]}（${result.latency_ms} ms）`
+          : `${STAGE_TEXT[result.stage]}：${result.message}`,
+      )
+    } catch (e) {
+      setLlmTestOk(false)
+      setLlmTestMessage((e as Error).message)
+    }
   }
 
   return (
