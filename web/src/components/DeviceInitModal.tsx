@@ -118,6 +118,20 @@ export function DeviceInitModal({ profileName, serials, onClose }: Props) {
           })}
         </Space>
       )}
+      {job.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginTop: 12 }}
+          message="状态查询失败,以上进度可能已过期"
+          description={(job.error as Error)?.message}
+          action={
+            <Button size="small" onClick={() => job.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
       {!jobId && serials.length > 0 ? (
         <Checkbox
           checked={reboot}
