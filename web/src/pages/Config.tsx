@@ -642,7 +642,7 @@ export function ConfigPage() {
         title="重复响应白名单"
         size="small"
         extra={
-          <Button size="small" onClick={() => whitelist.refetch()}>
+          <Button size="small" loading={whitelist.isFetching} onClick={() => whitelist.refetch()}>
             刷新
           </Button>
         }
@@ -660,7 +660,7 @@ export function ConfigPage() {
             message="白名单加载失败"
             description={(whitelist.error as Error)?.message}
             action={
-              <Button size="small" onClick={() => whitelist.refetch()}>
+              <Button size="small" loading={whitelist.isFetching} onClick={() => whitelist.refetch()}>
                 重试
               </Button>
             }
@@ -688,7 +688,7 @@ export function ConfigPage() {
         title="重复响应黑名单"
         size="small"
         extra={
-          <Button size="small" onClick={() => blacklist.refetch()}>
+          <Button size="small" loading={blacklist.isFetching} onClick={() => blacklist.refetch()}>
             刷新
           </Button>
         }
@@ -706,7 +706,7 @@ export function ConfigPage() {
             message="黑名单加载失败"
             description={(blacklist.error as Error)?.message}
             action={
-              <Button size="small" onClick={() => blacklist.refetch()}>
+              <Button size="small" loading={blacklist.isFetching} onClick={() => blacklist.refetch()}>
                 重试
               </Button>
             }

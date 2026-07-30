@@ -29,8 +29,16 @@ const {
   })),
   deleteBackupMock: vi.fn(async () => {}),
   downloadBackupMock: vi.fn(async () => {}),
-  whitelistMock: vi.fn(() => ({ data: [] as WhitelistFixture[], refetch: vi.fn() })),
-  blacklistMock: vi.fn(() => ({ data: [] as WhitelistFixture[], refetch: vi.fn() })),
+  whitelistMock: vi.fn(() => ({
+    data: [] as WhitelistFixture[],
+    refetch: vi.fn(),
+    isFetching: false,
+  })),
+  blacklistMock: vi.fn(() => ({
+    data: [] as WhitelistFixture[],
+    refetch: vi.fn(),
+    isFetching: false,
+  })),
 }))
 
 vi.mock('../api/config', () => ({
@@ -160,7 +168,7 @@ describe('ConfigPage', () => {
         added_at: '2026-07-28T00:00:00Z',
       },
     ]
-    whitelistMock.mockReturnValue({ data: entries, refetch: vi.fn() })
+    whitelistMock.mockReturnValue({ data: entries, refetch: vi.fn(), isFetching: false })
     const user = userEvent.setup()
     renderWithProviders(<ConfigPage />)
 
@@ -175,5 +183,21 @@ describe('ConfigPage', () => {
     await user.click((await screen.findAllByText('profile-b')).at(-1)!)
     expect(await screen.findByText('b-response')).toBeInTheDocument()
     expect(screen.queryByText('a-response-0')).not.toBeInTheDocument()
+  })
+
+  it('shows a loading spinner on the 白名单/黑名单 刷新 buttons while refetching, to prevent duplicate clicks', async () => {
+    // Regression: these 刷新 buttons called .refetch() with no `loading`
+    // prop at all, unlike e.g. Devices' refresh button — a double-click
+    // fired duplicate requests with no visual feedback either way.
+    whitelistMock.mockReturnValue({ data: [], refetch: vi.fn(), isFetching: true })
+    blacklistMock.mockReturnValue({ data: [], refetch: vi.fn(), isFetching: true })
+    const user = userEvent.setup()
+    renderWithProviders(<ConfigPage />)
+
+    await user.click(screen.getByRole('tab', { name: '白名单' }))
+    expect(screen.getByRole('button', { name: /刷\s?新/ })).toHaveClass('ant-btn-loading')
+
+    await user.click(screen.getByRole('tab', { name: '黑名单' }))
+    expect(screen.getByRole('button', { name: /刷\s?新/ })).toHaveClass('ant-btn-loading')
   })
 })
