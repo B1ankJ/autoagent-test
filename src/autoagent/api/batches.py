@@ -487,6 +487,12 @@ async def rerun(batch_id: str, status: str = "failed") -> BatchCreatedResponse:
     original = await get_batch(batch_id)
     if original is None:
         raise HTTPException(status_code=404, detail="batch not found")
+    if original.status in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail="batch is still queued/running; wait for it to finish before rerunning "
+            "it, to avoid driving the same profile/devices from two batches at once",
+        )
 
     results = await list_samples_for_batch(batch_id)
     if status == "all":
@@ -528,6 +534,12 @@ async def replay(batch_id: str) -> BatchCreatedResponse:
     original = await get_batch(batch_id)
     if original is None:
         raise HTTPException(status_code=404, detail="batch not found")
+    if original.status in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail="batch is still queued/running; wait for it to finish before replaying "
+            "it, to avoid driving the same profile/devices from two batches at once",
+        )
     if not original.samples_request_json:
         raise HTTPException(
             status_code=400,

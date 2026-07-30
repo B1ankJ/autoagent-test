@@ -175,6 +175,58 @@ async def test_replay_missing_batch_404(client):
     assert r.status_code == 404
 
 
+async def test_replay_rejects_a_still_running_batch(client):
+    # Regression: neither rerun nor replay checked the original batch's own
+    # status before resubmitting — replaying/rerunning a batch that's still
+    # queued/running would drive the same profile/devices from two batches
+    # at once, wasting device time and corrupting comparisons between runs.
+    h = await _login(client)
+    sm = get_sessionmaker()
+    from autoagent.models.db import Batch
+
+    async with sm() as s:
+        s.add(
+            Batch(
+                id="still_running",
+                name="in-flight",
+                mode="api",
+                status="running",
+                concurrency=1,
+                total=1,
+                samples_request_json=json.dumps(
+                    [{"id": "s1", "prompts": ["hi"], "mode": "api", "target_profile": "p"}]
+                ),
+            )
+        )
+        await s.commit()
+
+    r = await client.post("/api/v1/batches/still_running/replay", headers=h)
+    assert r.status_code == 409
+    assert "still queued/running" in r.json()["detail"]
+
+
+async def test_rerun_rejects_a_still_running_batch(client):
+    h = await _login(client)
+    await create_batch(
+        batch_id="still_running_2", name="in-flight-2", mode="api", concurrency=1, total=1,
+        target_profile_default=None,
+    )
+    await update_batch_status("still_running_2", "running")
+    await upsert_sample(
+        "still_running_2",
+        SampleResult(
+            id="s1", status="failed", prompts_sent=["hi"], responses=[],
+            mode="api", target_profile="p",
+        ),
+    )
+
+    r = await client.post(
+        "/api/v1/batches/still_running_2/rerun", params={"status": "failed"}, headers=h
+    )
+    assert r.status_code == 409
+    assert "still queued/running" in r.json()["detail"]
+
+
 async def test_file_upload_batch(client, httpx_mock: HTTPXMock, tmp_path):
     httpx_mock.add_response(
         url="https://api.example.com/v1/chat/completions",
