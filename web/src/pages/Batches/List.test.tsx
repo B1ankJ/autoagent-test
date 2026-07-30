@@ -81,9 +81,12 @@ describe('BatchList column visibility', () => {
   it('shows all toggleable columns by default', async () => {
     renderWithProviders(<BatchList />)
     await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
-    const table = screen.getByRole('table')
-    expect(within(table).getByText('模式')).toBeInTheDocument()
-    expect(within(table).getByText('开始时间')).toBeInTheDocument()
+    // Scoped to <thead>: rc-table also renders a hidden aria-hidden
+    // "measure row" mirroring column titles (used to compute pixel widths
+    // for horizontal-scroll tables), which would otherwise double-match.
+    const thead = screen.getByRole('table').querySelector('thead')!
+    expect(within(thead).getByText('模式')).toBeInTheDocument()
+    expect(within(thead).getByText('开始时间')).toBeInTheDocument()
   })
 
   it('hides a column via the 列 popover and remembers the choice', async () => {
@@ -93,10 +96,10 @@ describe('BatchList column visibility', () => {
     await userEvent.click(screen.getByRole('button', { name: /列/ }))
     await userEvent.click(screen.getByRole('checkbox', { name: '模式' }))
 
-    const table = screen.getByRole('table')
-    expect(within(table).queryByText('模式')).not.toBeInTheDocument()
+    const thead = screen.getByRole('table').querySelector('thead')!
+    expect(within(thead).queryByText('模式')).not.toBeInTheDocument()
     // Other toggleable columns stay visible — only the unchecked one is gone.
-    expect(within(table).getByText('开始时间')).toBeInTheDocument()
+    expect(within(thead).getByText('开始时间')).toBeInTheDocument()
 
     const saved = JSON.parse(localStorage.getItem(COLUMN_VISIBILITY_KEY) ?? '[]') as string[]
     expect(saved).not.toContain('mode')

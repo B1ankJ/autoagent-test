@@ -151,8 +151,11 @@ export function BatchDetail() {
         ),
     },
   ]
-  const { columns: resizableSampleColumns, components: sampleTableComponents } =
-    useResizableColumns(sampleColumns, 'autoagent_batch_samples_col_widths')
+  const {
+    columns: resizableSampleColumns,
+    components: sampleTableComponents,
+    scroll: sampleTableScroll,
+  } = useResizableColumns(sampleColumns, 'autoagent_batch_samples_col_widths')
 
   if (isError) {
     return (
@@ -449,6 +452,8 @@ export function BatchDetail() {
               dataSource={filteredSamples}
               columns={resizableSampleColumns}
               components={sampleTableComponents}
+              scroll={sampleTableScroll}
+              tableLayout="fixed"
               pagination={{ pageSize: 50, showSizeChanger: true }}
             />
           )}

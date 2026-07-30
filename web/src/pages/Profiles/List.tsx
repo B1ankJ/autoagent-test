@@ -175,10 +175,16 @@ export function ProfileList() {
   // Precomputed once per render (not inside renderTab) since useResizableColumns
   // is a hook — it can't be called conditionally/per-invocation from a plain
   // closure called multiple times.
-  const { columns: resizableColumnsNoDevices, components: componentsNoDevices } =
-    useResizableColumns(makeColumns(false), 'autoagent_profiles_col_widths')
-  const { columns: resizableColumnsWithDevices, components: componentsWithDevices } =
-    useResizableColumns(makeColumns(true), 'autoagent_profiles_col_widths_devices')
+  const {
+    columns: resizableColumnsNoDevices,
+    components: componentsNoDevices,
+    scroll: scrollNoDevices,
+  } = useResizableColumns(makeColumns(false), 'autoagent_profiles_col_widths')
+  const {
+    columns: resizableColumnsWithDevices,
+    components: componentsWithDevices,
+    scroll: scrollWithDevices,
+  } = useResizableColumns(makeColumns(true), 'autoagent_profiles_col_widths_devices')
 
   const renderTab = (rows: ProfileSummary[], withDevices = false) =>
     rows.length === 0 ? (
@@ -205,6 +211,8 @@ export function ProfileList() {
         dataSource={rows}
         columns={withDevices ? resizableColumnsWithDevices : resizableColumnsNoDevices}
         components={withDevices ? componentsWithDevices : componentsNoDevices}
+        scroll={withDevices ? scrollWithDevices : scrollNoDevices}
+        tableLayout="fixed"
         pagination={false}
       />
     )

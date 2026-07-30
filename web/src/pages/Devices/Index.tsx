@@ -233,8 +233,11 @@ export function DevicesPage() {
         },
       ]
 
-  const { columns: resizableSessionColumns, components: sessionTableComponents } =
-    useResizableColumns(sessionColumns, 'autoagent_device_sessions_col_widths')
+  const {
+    columns: resizableSessionColumns,
+    components: sessionTableComponents,
+    scroll: sessionTableScroll,
+  } = useResizableColumns(sessionColumns, 'autoagent_device_sessions_col_widths')
 
   const sessionsTable = (
     <Table<DeviceSession>
@@ -247,6 +250,8 @@ export function DevicesPage() {
       locale={{ emptyText: '当前没有正在占用设备的多轮对话' }}
       columns={resizableSessionColumns}
       components={sessionTableComponents}
+      scroll={sessionTableScroll}
+      tableLayout="fixed"
     />
   )
 
@@ -387,8 +392,11 @@ export function DevicesPage() {
     },
   ]
 
-  const { columns: resizableDeviceColumns, components: deviceTableComponents } =
-    useResizableColumns(deviceColumns, 'autoagent_devices_col_widths')
+  const {
+    columns: resizableDeviceColumns,
+    components: deviceTableComponents,
+    scroll: deviceTableScroll,
+  } = useResizableColumns(deviceColumns, 'autoagent_devices_col_widths')
 
   const sessionsPopoverTitle = (
     <Space style={{ width: SESSIONS_PANEL_WIDTH, justifyContent: 'space-between' }}>
@@ -531,6 +539,8 @@ export function DevicesPage() {
             }}
             columns={resizableDeviceColumns}
             components={deviceTableComponents}
+            scroll={deviceTableScroll}
+            tableLayout="fixed"
           />
         </>
       )}

@@ -579,10 +579,11 @@ export function BatchList() {
     const key = c.key as string | undefined
     return !key || visibleCols.has(key)
   })
-  const { columns: resizableColumns, components: resizableComponents } = useResizableColumns(
-    visibleColumns,
-    'autoagent_batches_col_widths',
-  )
+  const {
+    columns: resizableColumns,
+    components: resizableComponents,
+    scroll: resizableScroll,
+  } = useResizableColumns(visibleColumns, 'autoagent_batches_col_widths')
 
   // Active (non-search) filters, rendered as removable chips + counted on
   // the 筛选 button badge. Search stays on the main row.
@@ -931,6 +932,8 @@ export function BatchList() {
             dataSource={rows}
             columns={resizableColumns}
             components={resizableComponents}
+            scroll={resizableScroll}
+            tableLayout="fixed"
             rowSelection={{
               selectedRowKeys: selectedIds,
               onChange: (keys) => setSelectedIds(keys as string[]),

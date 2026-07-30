@@ -18,18 +18,41 @@ const RAW_COLUMNS: ColumnsType<Row> = [
 const DATA: Row[] = [{ key: '1', name: 'hello' }]
 
 function TestTable({ storageKey }: { storageKey?: string }) {
-  const { columns, components } = useResizableColumns(RAW_COLUMNS, storageKey)
-  return <Table<Row> rowKey="key" columns={columns} dataSource={DATA} components={components} />
+  const { columns, components, scroll } = useResizableColumns(RAW_COLUMNS, storageKey)
+  return (
+    <Table<Row>
+      rowKey="key"
+      columns={columns}
+      dataSource={DATA}
+      components={components}
+      scroll={scroll}
+      tableLayout="fixed"
+    />
+  )
 }
 
 describe('useResizableColumns', () => {
-  it('only adds a resize handle to columns with an explicit width', () => {
+  it('adds a resize handle to every column, including ones without an explicit width', () => {
     const { container } = render(<TestTable />)
     const headers = container.querySelectorAll('th')
-    // First header ("名称") has no explicit width → no drag handle span.
-    expect(headers[0].querySelector('span[style*="cursor: col-resize"]')).toBeNull()
-    // Second header ("Fixed") does.
+    // "名称" has no explicit width in RAW_COLUMNS, but every border must be
+    // draggable (a border can't be resized if only one of its two columns
+    // has a handle), so it still gets one — defaulted to DEFAULT_FLEX_WIDTH.
+    expect(headers[0].querySelector('span[style*="cursor: col-resize"]')).not.toBeNull()
     expect(headers[1].querySelector('span[style*="cursor: col-resize"]')).not.toBeNull()
+    const cols = container.querySelectorAll('colgroup col')
+    expect((cols[0] as HTMLElement).style.width).toBe('260px')
+    expect((cols[1] as HTMLElement).style.width).toBe('150px')
+  })
+
+  it('grows (not shrinks) a column when dragging its handle rightward', () => {
+    const { container } = render(<TestTable />)
+    const handle = container.querySelectorAll('th')[0].querySelector('span')!
+    fireEvent.mouseDown(handle, { clientX: 100 })
+    fireEvent.mouseMove(window, { clientX: 140 })
+    fireEvent.mouseUp(window)
+    const nameCol = container.querySelectorAll('colgroup col')[0] as HTMLElement
+    expect(nameCol.style.width).toBe('300px') // 260 + (140-100), not 260-40
   })
 
   it('resizes a column by dragging its handle and persists the new width', () => {
