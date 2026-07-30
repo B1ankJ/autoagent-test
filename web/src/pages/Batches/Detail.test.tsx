@@ -68,6 +68,46 @@ describe('BatchDetail', () => {
     expect(screen.getByText(/done 3 · failed 0/)).toBeInTheDocument()
   })
 
+  it('shows a warning banner when the SSE stream reports the batch is gone (streamGone)', async () => {
+    // Regression: useBatchStream's streamGone flag existed with no visible
+    // consequence anywhere — a batch deleted while its detail page was open
+    // just silently stopped updating, looking indistinguishable from a
+    // batch still being live-tracked normally.
+    const refetch = vi.fn()
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Test',
+        mode: 'api',
+        status: 'running',
+        total: 3,
+        done: 1,
+        failed: 0,
+        concurrency: 1,
+        samples: [],
+        seq: 4,
+      },
+      isLoading: false,
+      streamGone: true,
+      refetch,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
+    useReplayBatch.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id" element={<BatchDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1' },
+    )
+
+    expect(await screen.findByText('该批次可能已被删除或清理')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /刷\s?新/ }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
   it('replays the batch with identical config via the dropdown menu', async () => {
     useBatchStream.mockReturnValue({
       data: {

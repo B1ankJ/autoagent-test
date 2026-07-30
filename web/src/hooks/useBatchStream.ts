@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BatchDetail, SampleUpdate } from '../types/api'
 
@@ -14,6 +14,11 @@ const RECONNECT_DELAY_MS = 1500
 export function useBatchStream(id: string | undefined) {
   const queryClient = useQueryClient()
   const seqRef = useRef(0)
+  // Set once the SSE connection gets a 404 — the batch existed on initial
+  // load but is now gone (deleted/pruned by retention while the page was
+  // open). Without this, the stream just quietly stops updating and the
+  // page looks like it's still live-tracking a batch that no longer exists.
+  const [streamGone, setStreamGone] = useState(false)
 
   const query = useQuery({
     queryKey: ['batch', id],
@@ -39,6 +44,7 @@ export function useBatchStream(id: string | undefined) {
     // isSuccess flips false→true once on initial load and then stays put.
     if (!id || !query.isSuccess) return
 
+    setStreamGone(false)
     const token = localStorage.getItem('autoagent_token') ?? ''
     const abort = new AbortController()
     let stopped = false
@@ -62,7 +68,10 @@ export function useBatchStream(id: string | undefined) {
         return 'retry'
       }
       if (abort.signal.aborted) return 'stop'
-      if (response.status === 404) return 'stop'
+      if (response.status === 404) {
+        setStreamGone(true)
+        return 'stop'
+      }
       if (!response.ok || !response.body) return 'retry'
 
       const reader = response.body.getReader()
@@ -118,7 +127,7 @@ export function useBatchStream(id: string | undefined) {
     }
   }, [id, query.isSuccess, queryClient])
 
-  return query
+  return { ...query, streamGone }
 }
 
 export function applyEvent(

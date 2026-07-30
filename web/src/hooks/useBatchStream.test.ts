@@ -161,6 +161,41 @@ describe('useBatchStream', () => {
     expect(eventsCalls[1]).toContain('after_seq=1')
   })
 
+  it('sets streamGone once the /events connection 404s, instead of just quietly stopping', async () => {
+    // Regression: a batch deleted/pruned while its detail page was open had
+    // no visible signal at all — the stream just stopped updating and the
+    // page kept showing stale cached data forever with no indication
+    // anything was wrong.
+    global.fetch = vi.fn(async (url: string) => {
+      fetchCalls.push(String(url))
+      if (String(url).includes('/events')) {
+        return new Response(null, { status: 404 })
+      }
+      return new Response(
+        JSON.stringify({
+          batch_id: 'b1',
+          name: 'n',
+          mode: 'api',
+          status: 'running',
+          total: 3,
+          done: 0,
+          failed: 0,
+          seq: 0,
+          concurrency: 1,
+          samples: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+
+    const { result } = renderHook(() => useBatchStream('b1'), {
+      wrapper: ({ children }) => withProvider(children),
+    })
+
+    expect(result.current.streamGone).toBe(false)
+    await waitFor(() => expect(result.current.streamGone).toBe(true))
+  })
+
   it('applies sample_update device fields', () => {
     const next = applyEvent(
       {

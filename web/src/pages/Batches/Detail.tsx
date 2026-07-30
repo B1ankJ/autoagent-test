@@ -7,6 +7,7 @@ import {
   RedoOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -65,7 +66,7 @@ export function BatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data, isLoading, isError, error, refetch } = useBatchStream(id)
+  const { data, isLoading, isError, error, refetch, streamGone } = useBatchStream(id)
   const cancel = useCancelBatch()
   const rerun = useRerunBatch()
   const replay = useReplayBatch()
@@ -366,6 +367,21 @@ export function BatchDetail() {
           </>
         }
       />
+
+      {streamGone ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="该批次可能已被删除或清理"
+          description="下方展示的是最后已知状态,不再实时更新。刷新页面可确认当前是否仍存在。"
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              刷新
+            </Button>
+          }
+        />
+      ) : null}
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Descriptions column={3} size="small" colon={false} labelStyle={{ color: 'var(--aa-text-muted)' }}>
