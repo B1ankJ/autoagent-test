@@ -76,7 +76,13 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
         frame.close()
       },
       error: (e) => {
+        // Per the WebCodecs spec, a decode error closes the codec — without
+        // reflecting that into `state`, the canvas just freezes on the last
+        // frame with no error indicator and no way to trigger the existing
+        // manual-reconnect affordance (DeviceStreamModal already renders one
+        // for state === 'error', it just never got told this happened).
         console.error('VideoDecoder error', e)
+        setState('error')
       },
     })
     decoderRef.current = decoder
@@ -301,7 +307,12 @@ export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
         }
         frame.close()
       },
-      error: (e) => console.error('VideoDecoder error', e),
+      // See useDeviceStream's identical handler above for why this needs to
+      // update `state`, not just log.
+      error: (e) => {
+        console.error('VideoDecoder error', e)
+        setState('error')
+      },
     })
     decoderRef.current = decoder
 

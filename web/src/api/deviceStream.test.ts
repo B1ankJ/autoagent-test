@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { safeCloseDecoder } from './deviceStream'
+import { safeCloseDecoder, useDeviceHttpStream } from './deviceStream'
 
 describe('safeCloseDecoder', () => {
   it('does not throw when called twice on the same decoder (unmount-cleanup vs. read-loop race)', () => {
@@ -36,5 +37,63 @@ describe('safeCloseDecoder', () => {
 
     expect(() => safeCloseDecoder(decoder)).not.toThrow()
     expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useDeviceHttpStream', () => {
+  let capturedErrorHandler: ((e: unknown) => void) | null = null
+
+  beforeEach(() => {
+    localStorage.setItem('autoagent_token', 'tok')
+    capturedErrorHandler = null
+
+    class FakeVideoDecoder {
+      state: 'unconfigured' | 'configured' | 'closed' = 'unconfigured'
+      constructor(init: { output: (frame: unknown) => void; error: (e: unknown) => void }) {
+        capturedErrorHandler = init.error
+      }
+      configure() {
+        this.state = 'configured'
+      }
+      decode() {}
+      close() {
+        this.state = 'closed'
+      }
+    }
+    vi.stubGlobal('VideoDecoder', FakeVideoDecoder)
+
+    // A body stream that never resolves — the read loop just awaits forever,
+    // which is fine: this test only needs the hook past the point where the
+    // VideoDecoder gets constructed, not an actual completed stream.
+    const body = new ReadableStream<Uint8Array>({
+      start() {
+        /* never enqueue, never close */
+      },
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, { status: 200 })),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('sets state to "error" when the VideoDecoder reports a decode error, instead of just logging it', async () => {
+    // Regression: per the WebCodecs spec, a decode error closes the codec,
+    // but the error callback only did console.error — `state` never
+    // reflected it, so the canvas silently froze on the last frame with no
+    // error indicator and no way to reach the existing manual-reconnect
+    // affordance (DeviceStreamModal already renders one for state==='error').
+    const { result } = renderHook(() => useDeviceHttpStream('emulator-5554'))
+
+    await waitFor(() => expect(capturedErrorHandler).not.toBeNull())
+    await waitFor(() => expect(result.current.state).toBe('live'))
+
+    act(() => capturedErrorHandler!(new DOMException('decode failed', 'EncodingError')))
+
+    await waitFor(() => expect(result.current.state).toBe('error'))
   })
 })
