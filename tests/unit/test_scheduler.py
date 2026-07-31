@@ -247,6 +247,49 @@ async def test_end_session_skips_execution_and_releases_pin():
     assert pool._lookup_pin("conv-1") is None
 
 
+async def test_end_session_only_batch_leaves_avg_duration_ms_unset():
+    # Regression: avg_duration_ms used to divide total_duration_ms by
+    # done_count + failed_count, which includes end_session no-ops (no
+    # duration_ms at all) — a pure end_session batch computed avg_duration_ms
+    # = 0, which then falsely tripped Batches List's "far below profile
+    # average" duration-anomaly check. It must stay unset (None), not 0.
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(),
+        profile_lookup=lambda _name: object(),
+        device_pool=DevicePool(lambda: []),
+    )
+    sample = Sample(id="s1", prompts=["ignored"], mode="api", target_profile="p", end_session=True)
+
+    batch_id = await scheduler.submit(name="b", mode="api", concurrency=1, samples=[sample])
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    b = await get_batch(batch_id)
+    assert b.avg_duration_ms is None
+
+
+async def test_mixed_batch_avg_duration_ms_excludes_end_session_noop():
+    # A batch mixing a real sample and an end_session no-op must compute its
+    # average from the real sample's duration alone, not divide by 2.
+    await init_db()
+    scheduler = BatchScheduler(
+        executor_factory=lambda _mode: EchoExec(delay=0.05),
+        profile_lookup=lambda _name: object(),
+        device_pool=DevicePool(lambda: []),
+    )
+    samples = [
+        Sample(id="s1", prompts=["hi"], mode="api", target_profile="p"),
+        Sample(id="s2", prompts=["ignored"], mode="api", target_profile="p", end_session=True),
+    ]
+
+    batch_id = await scheduler.submit(name="b", mode="api", concurrency=1, samples=samples)
+    await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    results = {r.id: r for r in await list_samples_for_batch(batch_id)}
+    b = await get_batch(batch_id)
+    assert b.avg_duration_ms == results["s1"].duration_ms
+
+
 async def test_end_session_without_session_id_is_a_noop():
     await init_db()
     scheduler = BatchScheduler(

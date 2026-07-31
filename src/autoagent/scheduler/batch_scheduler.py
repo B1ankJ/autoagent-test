@@ -100,6 +100,15 @@ class _RunState:
     done_count: int = 0
     failed_count: int = 0
     total_duration_ms: int = 0
+    # Count of samples that actually have a duration_ms — distinct from
+    # done_count + failed_count, which also includes branches that skip
+    # execution entirely (end_session no-ops, cancelled, device-acquisition
+    # failures). avg_duration_ms must divide by this, not the sample count,
+    # or those 0-duration branches drag the average down (an end_session-only
+    # single-sample batch would otherwise compute avg_duration_ms=0, which
+    # then falsely trips the duration-anomaly "far below profile average"
+    # check on Batches List).
+    timed_count: int = 0
     results: list[SampleResult] = field(default_factory=list)
 
 
@@ -366,6 +375,7 @@ class BatchScheduler:
                         state.failed_count += 1
                     if result.duration_ms:
                         state.total_duration_ms += result.duration_ms
+                        state.timed_count += 1
 
                     try:
                         await update_batch_progress(
@@ -374,8 +384,9 @@ class BatchScheduler:
                             failed=state.failed_count,
                             total_duration_ms=state.total_duration_ms,
                             avg_duration_ms=(
-                                state.total_duration_ms
-                                // max(1, state.done_count + state.failed_count)
+                                state.total_duration_ms // state.timed_count
+                                if state.timed_count
+                                else None
                             ),
                         )
                     except Exception:
