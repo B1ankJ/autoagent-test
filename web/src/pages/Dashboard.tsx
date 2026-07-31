@@ -266,7 +266,11 @@ export function Dashboard() {
         subtitle="今日运行状态与快捷入口"
       />
 
-      {total === 0 ? (
+      {/* Gate on stats having actually loaded — `total` fell back to 0 while
+          useBatchStats was still pending, so this used to flash for every
+          user (including ones with plenty of existing batches) on every
+          page load until the real count came in. */}
+      {stats !== undefined && total === 0 ? (
         <OnboardingChecklist
           hasVlm={!!vlm}
           hasProfiles={(profiles?.length ?? 0) > 0}

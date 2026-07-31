@@ -55,6 +55,21 @@ describe('Dashboard onboarding checklist', () => {
     expect(screen.getAllByText(/去完成/)).toHaveLength(1)
   })
 
+  it('does not flash the checklist while stats are still loading', async () => {
+    // Regression: `total` fell back to 0 while useBatchStats was still
+    // pending (data undefined), so the checklist briefly rendered for
+    // every user on every page load — including ones with plenty of
+    // existing batches — until the real count came in.
+    statsMock.mockReturnValue(undefined)
+    profilesMock.mockReturnValue([])
+    vlmMock.mockReturnValue(null)
+
+    renderWithProviders(<Dashboard />)
+
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument())
+    expect(screen.queryByText('上手清单')).not.toBeInTheDocument()
+  })
+
   it('hides the checklist once at least one batch has run', async () => {
     statsMock.mockReturnValue({ total: 3, queued: 0, running: 0, done: 3, failed: 0, cancelled: 0 })
     profilesMock.mockReturnValue([])
