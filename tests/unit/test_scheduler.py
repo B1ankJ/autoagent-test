@@ -31,6 +31,34 @@ async def scheduler(monkeypatch):
     yield sch
 
 
+async def test_permanently_failed_webhook_is_logged_with_the_sample_id(
+    scheduler, monkeypatch, caplog
+):
+    # Regression: send_webhook's bool return (all retries exhausted) was
+    # never checked by its only caller — a permanently-failed delivery had
+    # no summary log tying the failure back to which sample it was for,
+    # only the generic per-attempt warnings inside send_webhook itself.
+    from autoagent.scheduler import batch_scheduler as mod
+
+    async def _always_fails(url, result, **kwargs):
+        return False
+
+    monkeypatch.setattr(mod, "send_webhook", _always_fails)
+
+    sample = Sample(
+        id="needs-callback", prompts=["x"], mode="api", target_profile="p",
+        callback_url="http://example.invalid/hook",
+    )
+    with caplog.at_level("WARNING", logger="autoagent.scheduler.batch_scheduler"):
+        batch_id = await scheduler.submit(name="b", mode="api", concurrency=1, samples=[sample])
+        await scheduler.wait_done(batch_id, timeout_sec=5)
+
+    assert any(
+        "webhook permanently failed for sample needs-callback" in r.message
+        for r in caplog.records
+    )
+
+
 async def test_run_batch_completes_all(scheduler):
     samples = [Sample(id=f"t{i}", prompts=["x"], mode="api", target_profile="p") for i in range(3)]
     batch_id = await scheduler.submit(name="b", mode="api", concurrency=2, samples=samples)

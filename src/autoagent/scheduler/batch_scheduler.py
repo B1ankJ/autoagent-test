@@ -407,7 +407,20 @@ class BatchScheduler:
 
                 if sample.callback_url:
                     try:
-                        await send_webhook(sample.callback_url, result)
+                        # send_webhook already retries with backoff and logs
+                        # a warning per failed attempt, but its bool return
+                        # (all retries exhausted) was never checked here —
+                        # the only trace of a permanently-failed delivery
+                        # was those per-attempt warnings, with no summary
+                        # tying the failure back to this specific sample.
+                        delivered = await send_webhook(sample.callback_url, result)
+                        if not delivered:
+                            log.warning(
+                                "webhook permanently failed for sample %s (callback_url=%s)"
+                                " after all retries",
+                                sample.id,
+                                sample.callback_url,
+                            )
                     except Exception:
                         log.exception("webhook failed for %s", sample.id)
 
