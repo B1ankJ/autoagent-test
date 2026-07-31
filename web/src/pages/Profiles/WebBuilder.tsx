@@ -16,7 +16,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { client } from '../../api/client'
 import { useVLM } from '../../api/config'
@@ -79,6 +79,25 @@ export default function WebBuilder() {
   const { data: vlm } = useVLM()
   const vlmReady = !!(vlm?.base_url && vlm?.model && vlm?.api_key)
   const [injectLlm, setInjectLlm] = useState(false)
+
+  // The backend's session dict has no TTL/idle reaper — its Playwright
+  // browser process only ever gets closed via an explicit close-session
+  // call (handleSave/handleClose below). Abandoning this page any other
+  // way (sidebar nav, back button, tab close) used to leak that browser
+  // process indefinitely. A ref (not sessionId directly) so this only
+  // registers once and still reads the latest id at actual unmount time;
+  // closeSession 404s harmlessly if handleSave/handleClose already closed
+  // it, so no double-close guard is needed.
+  const sessionIdRef = useRef<string | null>(null)
+  sessionIdRef.current = sessionId
+  useEffect(() => {
+    return () => {
+      if (sessionIdRef.current) {
+        closeSession.mutateAsync(sessionIdRef.current).catch(() => {})
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleStart(values: { url: string; channel: string; user_data_dir?: string }) {
     try {
