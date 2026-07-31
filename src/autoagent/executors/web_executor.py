@@ -107,15 +107,26 @@ class WebExecutor(Executor):
             return self._sessions[key]
 
         context, _browser = await self._launch_context(profile)
-        page = await context.new_page()
-        runner = ActionRunner(page)
+        try:
+            page = await context.new_page()
+            runner = ActionRunner(page)
 
-        await page.goto(profile.url, timeout=30_000)
-        await page.wait_for_selector(
-            profile.ready_check.selector,
-            timeout=int(profile.ready_check.timeout_sec * 1000),
-        )
-        await self._screenshot(page, store, "ready", verbose=True)
+            await page.goto(profile.url, timeout=30_000)
+            await page.wait_for_selector(
+                profile.ready_check.selector,
+                timeout=int(profile.ready_check.timeout_sec * 1000),
+            )
+            await self._screenshot(page, store, "ready", verbose=True)
+        except Exception:
+            # The context/browser process is only ever referenced from
+            # self._sessions, set below — if setup fails before that, close
+            # it here or it leaks for good (every failed goto/selector
+            # timeout would otherwise leave a live browser process behind).
+            try:
+                await context.close()
+            except Exception:  # noqa: BLE001
+                pass
+            raise
 
         session = _WebSession(context, page, runner)
         self._sessions[key] = session

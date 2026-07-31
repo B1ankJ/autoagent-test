@@ -99,6 +99,31 @@ async def test_happy_path_single_prompt(tmp_path: Path, monkeypatch: pytest.Monk
     page.keyboard.press.assert_awaited_with("Enter")
 
 
+async def test_session_setup_failure_closes_the_browser_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression: context/page were only ever referenced from self._sessions,
+    # set after goto/wait_for_selector/screenshot all succeed — a failure
+    # partway through setup (e.g. a bad URL, selector timeout) used to raise
+    # without ever closing the already-launched context, leaking a live
+    # browser process for good on every failed attempt.
+    page = _patch_playwright(monkeypatch)
+    page.goto = AsyncMock(side_effect=TimeoutError("navigation timed out"))
+    executor = WebExecutor(screenshots_root=tmp_path)
+    ctx = ExecutorContext(logs_dir=None, verbose_logs=False)
+
+    with pytest.raises(TimeoutError):
+        await executor.execute(_sample(["hi"]), _profile(), ctx)
+
+    from autoagent.executors import web_executor as we
+
+    pw = await we.async_playwright().start()
+    browser = await pw.chromium.launch()
+    context = await browser.new_context()
+    context.close.assert_awaited()
+    assert "fake_site" not in executor._sessions
+
+
 async def test_multi_prompt_loops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     page = _patch_playwright(monkeypatch)
     page.inner_text = AsyncMock(side_effect=["a", "a", "a", "b", "b", "b", "c", "c", "c"])
