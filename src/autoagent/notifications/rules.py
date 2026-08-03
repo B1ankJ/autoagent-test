@@ -19,6 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from autoagent.anomalies import store as anomaly_store
 from autoagent.config.settings import get_settings
 from autoagent.devices import adb
 from autoagent.models.api import SampleResult
@@ -115,6 +116,16 @@ async def _persist_state() -> None:
         await put_config(_STATE_KEY, payload)
     except Exception:  # noqa: BLE001
         _log.exception("failed to persist notification state")
+
+
+async def _safe_record_anomaly(**kwargs: Any) -> None:
+    """Persist an anomaly record for a fired rule, best-effort. A DB failure
+    here must never break the alert itself — same posture as the DingTalk
+    send being best-effort."""
+    try:
+        await anomaly_store.record_anomaly(**kwargs)
+    except Exception:  # noqa: BLE001
+        _log.exception("failed to record anomaly for a fired notification rule")
 
 
 def _is_terminal_done(result: SampleResult) -> bool:
@@ -551,6 +562,16 @@ async def _fire_same_response_alert(
         "可能页面跳到了非聊天页面 / 设备卡住,请人工排查。"
         "如果其实是正常的,可去 Config 把这条响应加入白名单。"
     )
+    ref_batch, ref_sample = refs[-1] if refs else ("", "")
+    await _safe_record_anomaly(
+        type="same_response",
+        batch_id=ref_batch,
+        sample_id=ref_sample,
+        target_profile=profile,
+        device_serial=serial,
+        summary=f"设备 {serial} 连续重复响应",
+        detail={"streak_count": len(refs), "response": response},
+    )
     sr = await send_markdown(
         webhook_url=str(config["webhook_url"]).strip(),
         secret=(str(config.get("secret")).strip() or None) if config.get("secret") else None,
@@ -598,6 +619,15 @@ async def _fire_empty_streak_alert(
         f"- **最新 prompt**: {prompt_excerpt or '_(空)_'}\n"
         f"{reinit_line}\n"
         "可能是设备卡死 / 自动化点到了奇怪的页面,需要人工介入排查。"
+    )
+    await _safe_record_anomaly(
+        type="empty_streak",
+        batch_id=batch_id,
+        sample_id=result.id,
+        target_profile=result.target_profile,
+        device_serial=serial,
+        summary=f"设备 {serial} 连续 {count} 次空响应",
+        detail={"streak_count": count, "response": ""},
     )
     sr = await send_markdown(
         webhook_url=str(config["webhook_url"]).strip(),
@@ -651,6 +681,15 @@ async def _fire_anr_alert(
         f"- **触发样本**: {sample_ref}\n"
         f"{reinit_line}\n"
         "系统日志检测到该应用触发了 ANR(Application Not Responding),已自动重启初始化。"
+    )
+    await _safe_record_anomaly(
+        type="anr",
+        batch_id=batch_id,
+        sample_id=result.id,
+        target_profile=profile_name,
+        device_serial=serial,
+        summary=f"设备 {serial} 应用无响应 (ANR): {package}",
+        detail={"package": package},
     )
     sr = await send_markdown(
         webhook_url=str(config["webhook_url"]).strip(),
