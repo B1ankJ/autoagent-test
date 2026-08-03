@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { RequireAuth } from './components/RequireAuth'
+import { Compare as BatchCompare } from './pages/Batches/Compare'
 import { BatchDetail } from './pages/Batches/Detail'
 import { BatchList } from './pages/Batches/List'
 import { BatchNew } from './pages/Batches/New'
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="tests/quick" element={<TestsQuick />} />
           <Route path="batches" element={<BatchList />} />
           <Route path="batches/new" element={<BatchNew />} />
+          <Route path="batches/compare" element={<BatchCompare />} />
           <Route path="batches/:id" element={<BatchDetail />} />
           <Route path="batches/:id/samples/:sid" element={<SampleDetail />} />
           <Route path="config" element={<ConfigPage />} />
