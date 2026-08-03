@@ -386,3 +386,24 @@ export type DeviceInputRequest =
   | DeviceInputSwipe
   | DeviceInputText
   | DeviceInputKey
+
+export type AnomalyType = 'duration' | 'empty_streak' | 'same_response' | 'anr'
+
+export interface AnomalyRecord {
+  id: number
+  type: AnomalyType
+  batch_id: string
+  sample_id: string
+  target_profile: string
+  device_serial?: string | null
+  summary: string
+  detail: Record<string, unknown>
+  acknowledged: boolean
+  acknowledged_at?: string | null
+  created_at?: string | null
+}
+
+export interface AnomalyListResponse {
+  items: AnomalyRecord[]
+  total: number
+}
