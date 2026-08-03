@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from autoagent.anomalies.duration_detector import check_duration_anomaly
 from autoagent.config.settings import get_settings
 from autoagent.devices.pool import DeviceBusy, DeviceDisabled, DevicePool, DeviceReserved
 from autoagent.events.bus import get_event_bus
@@ -366,6 +367,7 @@ class BatchScheduler:
                 # rule layer swallows its own exceptions so a misconfigured
                 # webhook can't stall batch progress.
                 await _notify_on_sample(result, batch_id)
+                await check_duration_anomaly(result, batch_id)
 
                 async with state.progress_lock:
                     state.results.append(result)
