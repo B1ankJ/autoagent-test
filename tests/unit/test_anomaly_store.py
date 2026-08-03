@@ -60,3 +60,39 @@ async def test_record_list_acknowledge_count_delete() -> None:
     assert await store.delete_for_batch("b2") == 1
     _, after = await store.list_anomalies(limit=50, offset=0)
     assert after == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_batch_rows_cascades_to_anomalies() -> None:
+    from datetime import datetime, timezone
+
+    from autoagent.models.db import Batch
+    from autoagent.storage.batches import delete_batch_rows
+    from autoagent.storage.database import get_sessionmaker
+
+    await init_db()
+    sm = get_sessionmaker()
+    async with sm() as s:
+        s.add(
+            Batch(
+                id="bx",
+                name="n",
+                mode="api",
+                status="done",
+                total=1,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        await s.commit()
+    await store.record_anomaly(
+        type="duration",
+        batch_id="bx",
+        sample_id="s1",
+        target_profile="p",
+        device_serial=None,
+        summary="x",
+        detail={},
+    )
+    assert (await store.list_anomalies(limit=10, offset=0))[1] == 1
+    assert await delete_batch_rows("bx") is True
+    assert (await store.list_anomalies(limit=10, offset=0))[1] == 0

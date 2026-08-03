@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import and_, asc, case, delete, desc, false, func, or_, select
 
-from autoagent.models.db import Batch, Sample
+from autoagent.models.db import Anomaly, Batch, Sample
 from autoagent.storage.database import get_sessionmaker
 from autoagent.storage.samples import avg_duration_by_profile
 
@@ -385,6 +385,7 @@ async def delete_batch_rows(batch_id: str) -> bool:
         if b is None:
             return False
         await s.execute(delete(Sample).where(Sample.batch_id == batch_id))
+        await s.execute(delete(Anomaly).where(Anomaly.batch_id == batch_id))
         await s.delete(b)
         await s.commit()
         return True
