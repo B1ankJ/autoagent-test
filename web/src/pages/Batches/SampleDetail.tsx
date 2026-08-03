@@ -1,18 +1,58 @@
 import { ArrowLeftOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { App, Button, Card, Collapse, Descriptions, Skeleton, Space, Typography } from 'antd'
+import { App, Button, Card, Collapse, Descriptions, Skeleton, Space, Table, Typography } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSampleArtifactContent, useSampleArtifactList } from '../../api/artifacts'
 import { downloadSampleLogs } from '../../api/batches'
 import { useBatchStream } from '../../hooks/useBatchStream'
+import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { ResponseComparison } from '../../components/ResponseComparison'
-import { SampleReplayTimeline } from '../../components/SampleReplayTimeline'
+import { ScreenshotStrip } from '../../components/ScreenshotStrip'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { hasLLMExtractionData } from '../../utils/llmExtraction'
+
+function formatLocator(locator: unknown): string {
+  if (!locator || typeof locator !== 'object') return '-'
+  const maybeLocator = locator as { type?: unknown; value?: unknown }
+  if (typeof maybeLocator.type === 'string' && typeof maybeLocator.value === 'string') {
+    return `${maybeLocator.type}:${maybeLocator.value}`
+  }
+  return '-'
+}
+
+function formatActionTarget(record: Record<string, unknown>): string {
+  if (typeof record.x === 'number' && typeof record.y === 'number') {
+    return `(${record.x}, ${record.y})`
+  }
+  if (record.locator) {
+    return formatLocator(record.locator)
+  }
+  if (typeof record.url === 'string') {
+    return record.url
+  }
+  if (
+    typeof record.x1 === 'number' &&
+    typeof record.y1 === 'number' &&
+    typeof record.x2 === 'number' &&
+    typeof record.y2 === 'number'
+  ) {
+    return `(${record.x1}, ${record.y1}) -> (${record.x2}, ${record.y2})`
+  }
+  if (typeof record.key === 'string') {
+    return record.key
+  }
+  if (typeof record.package === 'string' && typeof record.activity === 'string') {
+    return `${record.package}/${record.activity}`
+  }
+  if (typeof record.package === 'string') {
+    return record.package
+  }
+  return '-'
+}
 
 /** Fetches and shows one text artifact's content only once its Collapse
  * panel is actually expanded — `active` gates the query itself, not just
@@ -132,6 +172,43 @@ export function SampleDetail() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [goTo, prev, next])
+
+  const {
+    columns: actionLogColumns,
+    components: actionLogComponents,
+    scroll: actionLogScroll,
+  } = useResizableColumns(
+    [
+      {
+        key: 'action',
+        title: 'Action',
+        dataIndex: 'action',
+        width: 120,
+        render: (value?: string) => value ?? '-',
+      },
+      {
+        key: 'target',
+        title: 'Target',
+        width: 220,
+        render: (_value: unknown, record: Record<string, unknown>) => formatActionTarget(record),
+      },
+      {
+        key: 'result',
+        title: 'Result',
+        width: 220,
+        render: (_value: unknown, record: Record<string, unknown>) =>
+          record.ok === false ? `failed: ${String(record.error ?? '-')}` : 'ok',
+      },
+      {
+        key: 't_ms',
+        title: 't_ms',
+        dataIndex: 't_ms',
+        width: 90,
+        render: (value?: number) => value ?? '-',
+      },
+    ],
+    'autoagent_sample_action_log_col_widths',
+  )
 
   const breadcrumb = (
     <Space size={6}>
@@ -324,11 +401,7 @@ export function SampleDetail() {
       </Card>
 
       <Card size="small" title="截图" style={{ marginBottom: 16 }}>
-        <SampleReplayTimeline
-          batchId={data.batch_id}
-          sampleId={sample.id}
-          actionLog={sample.metadata?.action_log}
-        />
+        <ScreenshotStrip batchId={data.batch_id} sampleId={sample.id} />
       </Card>
 
       {artifactsQ.data && artifactsQ.data.length > 0 ? (
@@ -348,6 +421,23 @@ export function SampleDetail() {
                 />
               ),
             }))}
+          />
+        </Card>
+      ) : null}
+
+      {Array.isArray(sample.metadata?.action_log) && sample.metadata.action_log.length ? (
+        <Card size="small" title="动作日志" style={{ marginBottom: 16 }}>
+          <Table
+            size="small"
+            rowKey={(record) =>
+              `${String(record.action ?? 'action')}-${String(record.t_ms ?? '-')}-${formatActionTarget(record)}`
+            }
+            pagination={false}
+            dataSource={sample.metadata.action_log as Array<Record<string, unknown>>}
+            columns={actionLogColumns}
+            components={actionLogComponents}
+            scroll={actionLogScroll}
+            tableLayout="fixed"
           />
         </Card>
       ) : null}

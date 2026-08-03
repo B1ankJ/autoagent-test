@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
@@ -104,7 +104,7 @@ describe('SampleDetail', () => {
       expect(listScreenshots).toHaveBeenCalledWith('b1', 's1')
       expect(screen.getByRole('img', { name: 'ready' })).toHaveAttribute(
         'src',
-        '/api/v1/media/batches/b1/samples/s1/screenshot/001_ready.png',
+        '/api/v1/media/batches/b1/samples/s1/screenshot/001_ready.png?w=336',
       )
     })
 
@@ -284,14 +284,10 @@ describe('SampleDetail', () => {
     )
 
     await waitFor(() => {
-      // Default selection is the last merged event — the second action
-      // (t_ms: 456, click_locator) — so its target shows immediately.
-      expect(screen.getByText('xpath://*[@text="发送"]')).toBeInTheDocument()
+      expect(screen.getByText('动作日志')).toBeInTheDocument()
     })
-    const handle = screen.getAllByRole('slider')[0]
-    handle.focus()
-    fireEvent.keyDown(handle, { key: 'ArrowLeft', keyCode: 37, which: 37 })
-    expect(await screen.findByText('(495, 2059)')).toBeInTheDocument()
+    expect(screen.getByText('(495, 2059)')).toBeInTheDocument()
+    expect(screen.getByText('xpath://*[@text="发送"]')).toBeInTheDocument()
     expect(screen.getByText('截图数量')).toBeInTheDocument()
     expect(screen.getAllByText('2').length).toBeGreaterThan(0)
   })
