@@ -99,3 +99,21 @@ class ConfigKV(Base):
     key = Column(String, primary_key=True)
     value_json = Column(Text, nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Anomaly(Base):
+    __tablename__ = "anomalies"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # duration | empty_streak | same_response | anr
+    type = Column(String, nullable=False, index=True)
+    batch_id = Column(String, nullable=False, index=True)
+    sample_id = Column(String, nullable=False, index=True)
+    target_profile = Column(String, nullable=False, index=True)
+    device_serial = Column(String, nullable=True)
+    summary = Column(Text, nullable=False)
+    detail_json = Column(Text, nullable=True)
+    acknowledged = Column(
+        Boolean, nullable=False, default=False, server_default="0", index=True
+    )
+    acknowledged_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)

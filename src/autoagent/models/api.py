@@ -440,3 +440,22 @@ class ProfileBuilderDraftResponse(BaseModel):
         if self.new_session_strategy == "guided_tap_sequence" and not self.new_session_steps:
             raise ValueError("guided_tap_sequence requires new_session_steps")
         return self
+
+
+class AnomalyRecord(BaseModel):
+    id: int
+    type: str
+    batch_id: str
+    sample_id: str
+    target_profile: str
+    device_serial: str | None = None
+    summary: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+    acknowledged: bool = False
+    acknowledged_at: datetime | None = None
+    created_at: datetime | None = None
+
+
+class AnomalyListResponse(BaseModel):
+    items: list[AnomalyRecord]
+    total: int
