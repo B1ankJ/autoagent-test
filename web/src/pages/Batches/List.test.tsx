@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/test-utils'
 import { BatchSummary } from '../../types/api'
@@ -8,6 +9,24 @@ import { BatchList } from './List'
 const batch: BatchSummary = {
   batch_id: 'b1',
   name: 'nightly regression',
+  mode: 'api',
+  status: 'done',
+  total: 1,
+  done: 1,
+  failed: 0,
+  started_at: '2026-04-22T00:00:00Z',
+  profiles: ['p1'],
+  devices: [],
+}
+
+function CompareStub() {
+  const location = useLocation()
+  return <div>compare-page{location.search}</div>
+}
+
+const batch2: BatchSummary = {
+  batch_id: 'b2',
+  name: 'smoke run',
   mode: 'api',
   status: 'done',
   total: 1,
@@ -125,7 +144,13 @@ describe('BatchList column visibility', () => {
   it('shows the effective response for a single-sample batch and "-" for multi-sample ones', async () => {
     mockUseBatches.mockReturnValue({
       data: [
-        { ...batch, batch_id: 'b1', name: 'single sample run', total: 1, preview_response: 'llm-reviewed answer' },
+        {
+          ...batch,
+          batch_id: 'b1',
+          name: 'single sample run',
+          total: 1,
+          preview_response: 'llm-reviewed answer',
+        },
         { ...batch, batch_id: 'b2', name: 'multi sample run', total: 3, preview_response: null },
       ],
       isLoading: false,
@@ -323,9 +348,7 @@ describe('BatchList multi-turn conversation link', () => {
       refetch: vi.fn(),
     })
     mockUseSessionConversation.mockReturnValue({
-      data: [
-        { batch_id: 'b1', sample_id: 's1', status: 'done', prompt: 'hi', response: 'hello!' },
-      ],
+      data: [{ batch_id: 'b1', sample_id: 's1', status: 'done', prompt: 'hi', response: 'hello!' }],
       isLoading: false,
     })
     renderWithProviders(<BatchList />)
@@ -461,5 +484,49 @@ describe('BatchList duration column and anomaly filter', () => {
       )
     })
     expect(screen.getByText('仅耗时异常')).toBeInTheDocument()
+  })
+})
+
+describe('BatchList compare action', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockUseBatches.mockReturnValue({
+      data: [batch, batch2],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    mockUseBatchStats.mockReturnValue({ data: undefined })
+    mockUseSessionConversation.mockReturnValue({ data: undefined })
+  })
+
+  it('shows 对比 only when exactly 2 are selected and navigates with a/b', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches" element={<BatchList />} />
+        <Route path="/batches/compare" element={<CompareStub />} />
+      </Routes>,
+      { initialPath: '/batches' },
+    )
+
+    await waitFor(() => expect(screen.getByText('nightly regression')).toBeInTheDocument())
+
+    // No selection → no 对比 button.
+    expect(screen.queryByRole('button', { name: /对\s?比/ })).not.toBeInTheDocument()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    // checkboxes[0] is the header "select all"; [1] and [2] are the two rows.
+    await userEvent.click(checkboxes[1])
+
+    // One selected → still no 对比 button (needs exactly 2).
+    expect(screen.queryByRole('button', { name: /对\s?比/ })).not.toBeInTheDocument()
+
+    await userEvent.click(checkboxes[2])
+
+    const compareBtn = await screen.findByRole('button', { name: /对\s?比/ })
+    await userEvent.click(compareBtn)
+
+    expect(await screen.findByText('compare-page?a=b1&b=b2')).toBeInTheDocument()
   })
 })

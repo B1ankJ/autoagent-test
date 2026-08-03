@@ -932,6 +932,14 @@ export function BatchList() {
           {selectedIds.length > 0 ? (
             <Space style={{ marginBottom: 10 }}>
               <span style={{ fontSize: 13 }}>已选 {selectedIds.length} 项</span>
+              {selectedIds.length === 2 ? (
+                <Button
+                  size="small"
+                  onClick={() => navigate(`/batches/compare?a=${selectedIds[0]}&b=${selectedIds[1]}`)}
+                >
+                  对比
+                </Button>
+              ) : null}
               <Popconfirm
                 title={`取消选中的 ${selectedIds.length} 个批次?`}
                 description="仅对 queued/running 的批次生效。"
