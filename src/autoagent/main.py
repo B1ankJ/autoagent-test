@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from autoagent.api._deps import get_device_monitor
+from autoagent.api.anomalies import router as anomalies_router
 from autoagent.api.auth import router as auth_router
 from autoagent.api.batches import router as batches_router
 from autoagent.api.config import router as config_router
@@ -90,6 +91,7 @@ app.include_router(web_profile_builder_router, prefix="/api/v1")
 app.include_router(device_stream_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
 app.include_router(system_router, prefix="/api/v1")
+app.include_router(anomalies_router, prefix="/api/v1")
 
 
 def _mount_static(app: FastAPI) -> None:
