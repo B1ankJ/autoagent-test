@@ -10,12 +10,14 @@ import {
   MobileOutlined,
   SettingOutlined,
   ThunderboltOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { Badge, Button, Layout, Menu, Space, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logoutApi } from '../api/auth'
+import { useAnomalyCount } from '../api/anomalies'
 import { useBatchStats } from '../api/batches'
 import { useUpdateStatus } from '../api/system'
 import { useAuth } from '../hooks/useAuth'
@@ -109,11 +111,20 @@ const NAV: NavGroup[] = [
         label: '运行日志 Logs',
         icon: <FileSearchOutlined />,
       },
+      {
+        key: '/system/anomalies',
+        label: '异常中心 Anomalies',
+        icon: <WarningOutlined />,
+      },
     ],
   },
 ]
 
-function buildMenuItems(runningCount: number, updateAvailable: boolean): MenuProps['items'] {
+function buildMenuItems(
+  runningCount: number,
+  updateAvailable: boolean,
+  anomalyCount: number,
+): MenuProps['items'] {
   const withBadge = (label: string, dot?: boolean) => (
     <Space size={8}>
       <span>{label}</span>
@@ -137,6 +148,13 @@ function buildMenuItems(runningCount: number, updateAvailable: boolean): MenuPro
         )
       } else if (item.key === '/config' && updateAvailable) {
         label = withBadge(item.label, true)
+      } else if (item.key === '/system/anomalies' && anomalyCount > 0) {
+        label = (
+          <Space size={8}>
+            <span>{item.label}</span>
+            <Badge count={anomalyCount} size="small" style={{ boxShadow: 'none' }} />
+          </Space>
+        )
       }
       return { key: item.key, icon: item.icon, label }
     }),
@@ -162,9 +180,10 @@ export function AppLayout() {
   const runningCount = (stats.data?.running ?? 0) + (stats.data?.queued ?? 0)
   const update = useUpdateStatus()
   const updateAvailable = !!update.data?.enabled && update.data?.up_to_date === false
+  const anomalyCount = useAnomalyCount().data ?? 0
   const items = useMemo(
-    () => buildMenuItems(runningCount, updateAvailable),
-    [runningCount, updateAvailable],
+    () => buildMenuItems(runningCount, updateAvailable, anomalyCount),
+    [runningCount, updateAvailable, anomalyCount],
   )
   const selected = useMemo(() => [findActiveKey(location.pathname)], [location.pathname])
 
