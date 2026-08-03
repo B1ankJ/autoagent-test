@@ -1,4 +1,12 @@
-from autoagent.anomalies.duration_detector import evaluate_duration
+from datetime import datetime, timezone
+
+import pytest
+
+from autoagent.anomalies import store
+from autoagent.anomalies.duration_detector import check_duration_anomaly, evaluate_duration
+from autoagent.models.api import SampleResult
+from autoagent.storage.database import init_db
+from autoagent.storage.samples import upsert_sample
 
 
 def test_returns_none_when_history_too_small():
@@ -32,3 +40,36 @@ def test_all_equal_history_only_flags_strict_outside():
     assert evaluate_duration(500, history) is None
     assert evaluate_duration(501, history) is not None
     assert evaluate_duration(501, history)["direction"] == "high"
+
+
+def _sample(sid: str, profile: str, ms):
+    return SampleResult(
+        id=sid,
+        status="done",
+        mode="api",
+        target_profile=profile,
+        duration_ms=ms,
+        ended_at=datetime.now(timezone.utc),
+    )
+
+
+@pytest.mark.asyncio
+async def test_check_writes_record_for_outlier():
+    await init_db()
+    for i in range(25):
+        await upsert_sample("bh", _sample(f"h{i}", "p", 1000 + i))
+    outlier = _sample("s_out", "p", 50000)
+    await check_duration_anomaly(outlier, "b_out")
+
+    items, total = await store.list_anomalies(type="duration", limit=10, offset=0)
+    assert total == 1
+    assert items[0].sample_id == "s_out"
+    assert items[0].detail["direction"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_check_skips_when_no_duration():
+    await init_db()
+    await check_duration_anomaly(_sample("s_nd", "p", None), "b_nd")
+    _, total = await store.list_anomalies(type="duration", limit=10, offset=0)
+    assert total == 0

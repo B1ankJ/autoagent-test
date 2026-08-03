@@ -128,3 +128,21 @@ async def avg_duration_by_profile() -> dict[str, float]:
             .group_by(SampleRow.target_profile)
         )
         return {profile: float(avg) for profile, avg in r.all() if avg is not None}
+
+
+async def recent_durations_for_profile(profile: str, limit: int = 500) -> list[int]:
+    """The profile's most recent timed durations (ms), newest first, capped
+    at `limit`. Baseline for IQR duration-anomaly detection — 'recent' so the
+    baseline tracks a profile drifting over time, capped so the query stays
+    cheap (SQLite has no percentile function, so the list is pulled and IQR
+    computed in Python). Ordered by ended_at (a timed sample always has one)."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(SampleRow.duration_ms)
+            .where(SampleRow.duration_ms.is_not(None))
+            .where(SampleRow.target_profile == profile)
+            .order_by(SampleRow.ended_at.desc())
+            .limit(limit)
+        )
+        return [int(d) for (d,) in r.all()]

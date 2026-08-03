@@ -40,3 +40,39 @@ def evaluate_duration(value: int, history: list[int]) -> dict[str, Any] | None:
         "direction": direction,
         "sample_count": len(history),
     }
+
+
+def _format_summary(verdict: dict[str, Any]) -> str:
+    v = verdict["value"] / 1000
+    if verdict["direction"] == "high":
+        return f"耗时 {v:.1f}s，高于 P75+1.5·IQR 阈值 {verdict['fence_high'] / 1000:.1f}s"
+    return f"耗时 {v:.1f}s，低于 P25−1.5·IQR 阈值 {verdict['fence_low'] / 1000:.1f}s"
+
+
+async def check_duration_anomaly(result, batch_id: str) -> None:
+    """Scheduler hook: evaluate a finished sample's duration against its
+    profile's recent history and persist an anomaly record on a hit. Never
+    raises — a detector failure must not crash the sample run."""
+    from autoagent.anomalies import store
+    from autoagent.storage.samples import recent_durations_for_profile
+
+    try:
+        if result.duration_ms is None:
+            return
+        history = await recent_durations_for_profile(result.target_profile)
+        verdict = evaluate_duration(int(result.duration_ms), history)
+        if verdict is None:
+            return
+        await store.record_anomaly(
+            type="duration",
+            batch_id=batch_id,
+            sample_id=result.id,
+            target_profile=result.target_profile,
+            device_serial=(result.metadata or {}).get("device_serial"),
+            summary=_format_summary(verdict),
+            detail=verdict,
+        )
+    except Exception:  # noqa: BLE001
+        _log.exception(
+            "duration anomaly check failed for sample %s", getattr(result, "id", "?")
+        )
