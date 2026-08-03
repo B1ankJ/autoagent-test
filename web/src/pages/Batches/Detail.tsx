@@ -39,6 +39,7 @@ import {
   useBatchDoneNotification,
   type NotificationPermissionState,
 } from '../../hooks/useBatchDoneNotification'
+import { FailureClusterPanel } from '../../components/FailureClusterPanel'
 import { RunningThumbGrid } from '../../components/RunningThumbGrid'
 import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
@@ -47,6 +48,7 @@ import { PageHeader } from '../../components/states/PageHeader'
 import { PageSkeleton } from '../../components/states/PageSkeleton'
 import { useResizableColumns } from '../../hooks/useResizableColumns'
 import { Sample } from '../../types/api'
+import { groupFailuresByError } from '../../utils/failureClustering'
 
 type SampleFilter = 'all' | 'running' | 'done' | 'failed' | 'cancelled' | 'queued'
 
@@ -73,6 +75,7 @@ export function BatchDetail() {
   const { message } = App.useApp()
   const [filter, setFilter] = useState<SampleFilter>('all')
   const [search, setSearch] = useState('')
+  const [activeClusterId, setActiveClusterId] = useState<string | null>(null)
   const [samplePageSize, setSamplePageSize] = useState<number>(() => {
     const raw = localStorage.getItem(SAMPLE_PAGE_SIZE_KEY)
     const parsed = raw ? parseInt(raw, 10) : NaN
@@ -101,10 +104,18 @@ export function BatchDetail() {
     }
     return c
   }, [allSamples])
+  const failureClusters = useMemo(() => groupFailuresByError(allSamples), [allSamples])
+  const activeClusterSampleIds = useMemo(() => {
+    if (!activeClusterId) return null
+    const cluster = failureClusters.find((c) => c.pattern === activeClusterId)
+    return cluster ? new Set(cluster.sampleIds) : new Set<string>()
+  }, [failureClusters, activeClusterId])
+
   const filteredSamples = useMemo(() => {
     const q = search.trim().toLowerCase()
     return allSamples.filter((s) => {
       if (filter !== 'all' && s.status !== filter) return false
+      if (activeClusterSampleIds && !activeClusterSampleIds.has(s.id)) return false
       if (!q) return true
       if (s.id.toLowerCase().includes(q)) return true
       if (s.error && s.error.toLowerCase().includes(q)) return true
@@ -113,7 +124,7 @@ export function BatchDetail() {
       if (s.llm_responses?.some((r) => r?.toLowerCase().includes(q))) return true
       return false
     })
-  }, [allSamples, filter, search])
+  }, [allSamples, filter, search, activeClusterSampleIds])
 
   const sampleColumns: ColumnsType<Sample> = [
     {
@@ -438,6 +449,11 @@ export function BatchDetail() {
         />
       ) : (
         <>
+          <FailureClusterPanel
+            samples={allSamples}
+            activeClusterId={activeClusterId}
+            onSelectCluster={setActiveClusterId}
+          />
           <Space wrap style={{ marginBottom: 12 }}>
             <Segmented<SampleFilter>
               value={filter}

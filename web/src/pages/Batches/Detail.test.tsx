@@ -68,6 +68,63 @@ describe('BatchDetail', () => {
     expect(screen.getByText(/done 3 · failed 0/)).toBeInTheDocument()
   })
 
+  it('composes the failure-cluster filter with the existing status filter (AND, not OR)', async () => {
+    useBatchStream.mockReturnValue({
+      data: {
+        batch_id: 'b1',
+        name: 'Test',
+        mode: 'api',
+        status: 'done',
+        total: 3,
+        done: 1,
+        failed: 2,
+        concurrency: 1,
+        seq: 4,
+        samples: [
+          { id: 's1', prompts: ['x'], mode: 'api', target_profile: 'p', status: 'done' },
+          {
+            id: 's2',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            status: 'failed',
+            error: 'device offline: emulator-5554',
+          },
+          {
+            id: 's3',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            status: 'failed',
+            error: 'device offline: emulator-5556',
+          },
+        ],
+      },
+      isLoading: false,
+    })
+    useCancelBatch.mockReturnValue({ mutateAsync: vi.fn() })
+    useReplayBatch.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/batches/:id" element={<BatchDetail />} />
+      </Routes>,
+      { initialPath: '/batches/b1' },
+    )
+
+    await waitFor(() => expect(screen.getByText('Test')).toBeInTheDocument())
+    await userEvent.click(screen.getByText(/错误分组/))
+    await userEvent.click(screen.getByRole('button', { name: /筛\s?选/ }))
+
+    // Both s2 and s3 are in the one cluster — both should now be the only
+    // rows shown. Sample ids only ever render in the table's ID column
+    // (never inside the cluster panel itself), so no table-role scoping
+    // is needed to disambiguate.
+    expect(screen.getByText('s2')).toBeInTheDocument()
+    expect(screen.getByText('s3')).toBeInTheDocument()
+    expect(screen.queryByText('s1')).not.toBeInTheDocument()
+  })
+
   it('shows a warning banner when the SSE stream reports the batch is gone (streamGone)', async () => {
     // Regression: useBatchStream's streamGone flag existed with no visible
     // consequence anywhere — a batch deleted while its detail page was open
