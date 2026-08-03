@@ -26,12 +26,7 @@ describe('buildBatchComparison', () => {
 
     const result = buildBatchComparison(a, b)
 
-    expect(result.rows.map((r) => r.sampleId)).toEqual([
-      'only-a',
-      'only-b',
-      's1',
-      's2',
-    ])
+    expect(result.rows.map((r) => r.sampleId)).toEqual(['only-a', 'only-b', 's1', 's2'])
     expect(result.commonCount).toBe(2)
     expect(result.onlyACount).toBe(1)
     expect(result.onlyBCount).toBe(1)

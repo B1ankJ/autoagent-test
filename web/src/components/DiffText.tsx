@@ -21,10 +21,7 @@ export function DiffText({ before, after }: Props) {
       {parts.map((part, i) => {
         if (part.added) {
           return (
-            <span
-              key={i}
-              style={{ background: token.colorSuccessBg, color: token.colorSuccess }}
-            >
+            <span key={i} style={{ background: token.colorSuccessBg, color: token.colorSuccess }}>
               {part.value}
             </span>
           )

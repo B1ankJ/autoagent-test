@@ -56,15 +56,36 @@ describe('Compare', () => {
         batch_id: 'b1',
         name: 'Run A',
         samples: [
-          { id: 's1', prompts: ['x'], mode: 'api', target_profile: 'p', responses: ['hello world'], duration_ms: 100 },
-          { id: 'only-a', prompts: ['x'], mode: 'api', target_profile: 'p', responses: ['x'], duration_ms: 50 },
+          {
+            id: 's1',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            responses: ['hello world'],
+            duration_ms: 100,
+          },
+          {
+            id: 'only-a',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            responses: ['x'],
+            duration_ms: 50,
+          },
         ],
       }),
       batch({
         batch_id: 'b2',
         name: 'Run B',
         samples: [
-          { id: 's1', prompts: ['x'], mode: 'api', target_profile: 'p', responses: ['hello there'], duration_ms: 130 },
+          {
+            id: 's1',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            responses: ['hello there'],
+            duration_ms: 130,
+          },
         ],
       }),
     )
@@ -91,14 +112,28 @@ describe('Compare', () => {
         batch_id: 'b1',
         name: 'Run A',
         samples: [
-          { id: 's1', prompts: ['x'], mode: 'api', target_profile: 'p', responses: ['hello world'], duration_ms: 100 },
+          {
+            id: 's1',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            responses: ['hello world'],
+            duration_ms: 100,
+          },
         ],
       }),
       batch({
         batch_id: 'b2',
         name: 'Run B',
         samples: [
-          { id: 's1', prompts: ['x'], mode: 'api', target_profile: 'p', responses: ['hello there'], duration_ms: 130 },
+          {
+            id: 's1',
+            prompts: ['x'],
+            mode: 'api',
+            target_profile: 'p',
+            responses: ['hello there'],
+            duration_ms: 130,
+          },
         ],
       }),
     )
@@ -121,7 +156,12 @@ describe('Compare', () => {
       if (id === 'b1') {
         return { data: undefined, isLoading: false, isError: true, error: new Error('boom') }
       }
-      return { data: batch({ batch_id: 'b2', name: 'Run B' }), isLoading: false, isError: false, error: null }
+      return {
+        data: batch({ batch_id: 'b2', name: 'Run B' }),
+        isLoading: false,
+        isError: false,
+        error: null,
+      }
     })
 
     renderCompare('?a=b1&b=b2')

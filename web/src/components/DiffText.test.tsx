@@ -19,12 +19,8 @@ describe('DiffText', () => {
   })
 
   it('renders identical strings with no removed/added marks', () => {
-    const { container } = renderWithProviders(
-      <DiffText before="same text" after="same text" />,
-    )
+    const { container } = renderWithProviders(<DiffText before="same text" after="same text" />)
     expect(container.textContent).toContain('same text')
-    expect(
-      container.querySelector('[style*="line-through"]'),
-    ).toBeNull()
+    expect(container.querySelector('[style*="line-through"]')).toBeNull()
   })
 })
