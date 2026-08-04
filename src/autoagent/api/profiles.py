@@ -3,6 +3,8 @@ from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
 from autoagent.devices.init_jobs import get_job, prune_old_jobs, start_job
+from autoagent.health.profile_health import list_profile_health
+from autoagent.models.api import ProfileHealth
 from autoagent.profiles.registry import (
     delete_profile as _delete,
 )
@@ -72,6 +74,11 @@ async def list_profiles() -> list[ProfileSummary]:
             )
         )
     return profiles
+
+
+@router.get("/health", response_model=list[ProfileHealth])
+async def profiles_health() -> list[ProfileHealth]:
+    return await list_profile_health()
 
 
 @router.get("/{name}", response_model=ProfileYamlResponse)
