@@ -13,6 +13,7 @@ import { DevicesPage } from './pages/Devices/Index'
 import { Login } from './pages/Login'
 import BuilderHub from './pages/Profiles/BuilderHub'
 import { ProfileEdit } from './pages/Profiles/Edit'
+import { Health as ProfileHealth } from './pages/Profiles/Health'
 import { ProfileList } from './pages/Profiles/List'
 import { Anomalies } from './pages/System/Anomalies'
 import { LogsPage } from './pages/System/Logs'
@@ -33,6 +34,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="profiles" element={<ProfileList />} />
+          <Route path="profiles/health" element={<ProfileHealth />} />
           <Route path="profiles/builder" element={<BuilderHub />} />
           <Route path="profiles/web-builder" element={<BuilderHub />} />
           <Route path="profiles/new" element={<ProfileEdit />} />

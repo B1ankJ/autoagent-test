@@ -6,6 +6,7 @@ import {
   ExperimentOutlined,
   FileSearchOutlined,
   FileTextOutlined,
+  HeartOutlined,
   LogoutOutlined,
   MobileOutlined,
   SettingOutlined,
@@ -85,8 +86,14 @@ const NAV: NavGroup[] = [
         match: (p) =>
           p === '/profiles' ||
           (p.startsWith('/profiles/') &&
+            !p.startsWith('/profiles/health') &&
             !p.startsWith('/profiles/builder') &&
             !p.startsWith('/profiles/web-builder')),
+      },
+      {
+        key: '/profiles/health',
+        label: 'Profile 健康 Health',
+        icon: <HeartOutlined />,
       },
       {
         key: '/profiles/builder',
