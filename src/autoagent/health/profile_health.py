@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+from autoagent.anomalies import store as anomaly_store
+from autoagent.models.api import ProfileHealth
+from autoagent.profiles.registry import list_profile_names, load_profile
+from autoagent.storage.devices import list_devices
+from autoagent.storage.samples import avg_duration_by_profile, success_stats_by_profile
 
 SUCCESS_RED = 0.5
 SUCCESS_YELLOW = 0.9
@@ -59,3 +66,63 @@ def compute_health(m: HealthMetrics) -> str:
     if dev is not None:
         signals.append(dev)
     return min(signals, key=lambda s: _SEVERITY[s])
+
+
+WINDOW_DAYS = 7
+# Profile.platform values (see profiles/schemas.py) for android-backed profiles.
+# Note: this is the profile's `platform` field, not Sample.mode — a "gui_android"
+# mode sample targets a profile whose platform is "android", not "gui_android".
+_ANDROID_PLATFORMS = {"android", "agent_android"}
+
+
+async def list_profile_health(now: datetime | None = None) -> list[ProfileHealth]:
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(days=WINDOW_DAYS)
+
+    success = await success_stats_by_profile(since)
+    durations = await avg_duration_by_profile(since=since)
+    anomalies = await anomaly_store.unacked_counts_by_profile(since)
+    devices = {d.serial: d for d in await list_devices()}
+
+    out: list[ProfileHealth] = []
+    for name in list_profile_names():
+        profile = load_profile(name)
+        if profile is None:
+            continue
+        done, total = success.get(name, (0, 0))
+        rate = (done / total) if total else None
+
+        online_ct: int | None = None
+        total_ct: int | None = None
+        if str(profile.platform) in _ANDROID_PLATFORMS:
+            serial = getattr(profile, "serial", None)
+            serials = list(getattr(profile, "serials", None) or [])
+            if serial and serial not in serials:
+                serials = [serial, *serials]
+            if serials:
+                total_ct = len(serials)
+                online_ct = sum(1 for s in serials if devices.get(s) and devices[s].online)
+
+        metrics = HealthMetrics(
+            total_runs=total,
+            success_rate=rate,
+            unacked_anomalies=anomalies.get(name, 0),
+            devices_online=online_ct,
+            devices_total=total_ct,
+        )
+        out.append(
+            ProfileHealth(
+                name=name,
+                platform=str(profile.platform),
+                status=compute_health(metrics),
+                success_rate=rate,
+                total_runs=total,
+                avg_duration_ms=durations.get(name),
+                unacked_anomalies=anomalies.get(name, 0),
+                devices_online=online_ct,
+                devices_total=total_ct,
+            )
+        )
+
+    out.sort(key=lambda h: (_SEVERITY[h.status], h.name))
+    return out
