@@ -59,6 +59,7 @@ export interface DingTalkConfig {
   same_response_threshold: number
   same_response_auto_reinit: boolean
   anr_check_enabled: boolean
+  digest_interval_hours: number
   at_mobiles: string[]
   at_all: boolean
   app_base_url: string
@@ -90,8 +91,7 @@ export function useSaveNotifications() {
   return useMutation({
     mutationFn: async (body: DingTalkConfig) =>
       (await client.put<DingTalkConfig>('/config/notifications', body)).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['config', 'notifications'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'notifications'] }),
   })
 }
 
@@ -173,11 +173,9 @@ export function useRunLogsCleanup() {
   return useMutation({
     mutationFn: async (days?: number) =>
       (
-        await client.post<LogCleanupReport>(
-          '/config/logs/cleanup',
-          null,
-          { params: days ? { days } : {} },
-        )
+        await client.post<LogCleanupReport>('/config/logs/cleanup', null, {
+          params: days ? { days } : {},
+        })
       ).data,
   })
 }
@@ -226,4 +224,3 @@ export function useDeleteBackup() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'backup', 'list'] }),
   })
 }
-

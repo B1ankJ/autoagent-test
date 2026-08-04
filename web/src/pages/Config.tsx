@@ -621,6 +621,19 @@ export function ConfigPage() {
                     </Form.Item>
                   </RuleSection>
 
+                  <RuleSection
+                    title="定期异常摘要"
+                    description="每隔设定小时数,把自上次以来新增的异常汇总(按类型/profile 分组 + 举例)推送到上面的 DingTalk webhook。这段周期内没有新异常则跳过不发。"
+                  >
+                    <Form.Item
+                      name="digest_interval_hours"
+                      label="异常摘要间隔 (小时)"
+                      extra="0 = 关闭。> 0:每隔该小时数推送一次异常摘要。复用上面的 webhook / secret。"
+                    >
+                      <InputNumber min={0} max={168} />
+                    </Form.Item>
+                  </RuleSection>
+
                   <Space>
                     <Button type="primary" htmlType="submit" loading={saveNotifications.isPending}>
                       保存
