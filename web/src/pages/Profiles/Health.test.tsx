@@ -7,12 +7,32 @@ import type { ProfileHealth } from '../../types/api'
 import { Health } from './Health'
 
 const useProfileHealth = vi.fn()
+const useProfileTrends = vi.fn(() => ({ data: {} }))
 
 vi.mock('../../api/profileHealth', async () => {
   const actual =
     await vi.importActual<typeof import('../../api/profileHealth')>('../../api/profileHealth')
-  return { ...actual, useProfileHealth: () => useProfileHealth() }
+  return {
+    ...actual,
+    useProfileHealth: () => useProfileHealth(),
+    useProfileTrends: () => useProfileTrends(),
+  }
 })
+
+// Stub the lazy recharts components so the page test doesn't pull in recharts
+// (which renders nothing in jsdom anyway).
+vi.mock('../../components/ProfileSparkline', () => ({
+  __esModule: true,
+  ProfileSparkline: () => <div data-testid="sparkline" />,
+  default: () => <div data-testid="sparkline" />,
+}))
+vi.mock('../../components/ProfileTrendModal', () => ({
+  __esModule: true,
+  ProfileTrendModal: ({ profileName }: { profileName: string | null }) =>
+    profileName ? <div>trend-modal:{profileName}</div> : null,
+  default: ({ profileName }: { profileName: string | null }) =>
+    profileName ? <div>trend-modal:{profileName}</div> : null,
+}))
 
 // Stub the device-screens modal (it pulls in websocket/video-decoder
 // internals covered by its own test) — assert only that Health opens it with
@@ -55,6 +75,28 @@ function AnomaliesStub() {
 describe('Health', () => {
   afterEach(() => {
     vi.clearAllMocks()
+    useProfileTrends.mockReturnValue({ data: {} })
+  })
+
+  it('opens the trend modal when a card body is clicked', async () => {
+    useProfileHealth.mockReturnValue({
+      data: [row({ name: 'trendp', status: 'green' })],
+      isLoading: false,
+      isError: false,
+    })
+    useProfileTrends.mockReturnValue({ data: { trendp: [] } })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/profiles/health" element={<Health />} />
+      </Routes>,
+      { initialPath: '/profiles/health' },
+    )
+    // Click the platform tag inside the card body (the profile name is a
+    // stopPropagation link, so clicking it would navigate instead of opening
+    // the trend modal).
+    await userEvent.click(await screen.findByText('api'))
+    expect(await screen.findByText('trend-modal:trendp')).toBeInTheDocument()
   })
 
   it('renders cards worst-first with a summary bar', async () => {

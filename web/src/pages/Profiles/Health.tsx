@@ -1,13 +1,18 @@
 import { Card, Col, Row, Segmented, Space, Tag, Typography } from 'antd'
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { summarizeHealth, useProfileHealth } from '../../api/profileHealth'
+import { summarizeHealth, useProfileHealth, useProfileTrends } from '../../api/profileHealth'
 import { ProfileDeviceScreensModal } from '../../components/ProfileDeviceScreensModal'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
-import type { HealthStatus, ProfileHealth } from '../../types/api'
+import type { DailyPoint, HealthStatus, ProfileHealth } from '../../types/api'
 import { formatDurationMs } from '../../utils/duration'
+
+// recharts is lazy-loaded so it stays out of the main bundle (mirrors how
+// Monaco/YamlEditor are split) — it only loads when the Health page renders.
+const ProfileSparkline = lazy(() => import('../../components/ProfileSparkline'))
+const ProfileTrendModal = lazy(() => import('../../components/ProfileTrendModal'))
 
 const STATUS_META: Record<HealthStatus, { color: string; label: string }> = {
   red: { color: '#cf1322', label: '异常' },
@@ -19,15 +24,24 @@ const STATUS_META: Record<HealthStatus, { color: string; label: string }> = {
 function HealthCard({
   row,
   onOpenDevices,
+  onOpenTrend,
+  trendSeries,
 }: {
   row: ProfileHealth
   onOpenDevices: (row: ProfileHealth) => void
+  onOpenTrend: (name: string) => void
+  trendSeries: DailyPoint[]
 }) {
   const navigate = useNavigate()
   const meta = STATUS_META[row.status]
   const hasDevices = row.devices_total !== null && row.serials.length > 0
   return (
-    <Card size="small" styles={{ body: { padding: 12 } }}>
+    <Card
+      size="small"
+      styles={{ body: { padding: 12 } }}
+      style={{ cursor: 'pointer' }}
+      onClick={() => onOpenTrend(row.name)}
+    >
       <Space style={{ marginBottom: 8 }} align="center">
         <span
           style={{
@@ -38,29 +52,46 @@ function HealthCard({
             display: 'inline-block',
           }}
         />
-        <a onClick={() => navigate(`/profiles/${row.name}`)} style={{ fontWeight: 600 }}>
+        <a
+          onClick={(e) => {
+            e.stopPropagation()
+            navigate(`/profiles/${row.name}`)
+          }}
+          style={{ fontWeight: 600 }}
+        >
           {row.name}
         </a>
         <Tag>{row.platform}</Tag>
       </Space>
       <div style={{ fontSize: 13, lineHeight: 1.9 }}>
-        <div>
-          成功率 {row.success_rate === null ? '—' : `${Math.round(row.success_rate * 100)}%`}{' '}
-          <Typography.Text type="secondary">({row.total_runs} 次)</Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>
+            成功率 {row.success_rate === null ? '—' : `${Math.round(row.success_rate * 100)}%`}{' '}
+            <Typography.Text type="secondary">({row.total_runs} 次)</Typography.Text>
+          </span>
+          <Suspense fallback={null}>
+            <ProfileSparkline series={trendSeries} />
+          </Suspense>
         </div>
         <div>耗时 {row.avg_duration_ms === null ? '—' : formatDurationMs(row.avg_duration_ms)}</div>
         <div>
           <a
-            onClick={() =>
+            onClick={(e) => {
+              e.stopPropagation()
               navigate(`/system/anomalies?target_profile=${encodeURIComponent(row.name)}`)
-            }
+            }}
           >
             异常 {row.unacked_anomalies}
           </a>
         </div>
         <div>
           {hasDevices ? (
-            <a onClick={() => onOpenDevices(row)}>
+            <a
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenDevices(row)
+              }}
+            >
               设备 {row.devices_online}/{row.devices_total}
             </a>
           ) : (
@@ -76,8 +107,10 @@ function HealthCard({
 
 export function Health() {
   const { data, isLoading, isError, refetch } = useProfileHealth()
+  const trends = useProfileTrends()
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
   const [deviceModal, setDeviceModal] = useState<{ name: string; serials: string[] } | null>(null)
+  const [trendProfile, setTrendProfile] = useState<string | null>(null)
 
   // The backend already returns profiles worst-first (see profile_health.py's
   // _SEVERITY sort) — render that order as-is rather than re-sorting here, so
@@ -117,6 +150,8 @@ export function Health() {
               <HealthCard
                 row={r}
                 onOpenDevices={(row) => setDeviceModal({ name: row.name, serials: row.serials })}
+                onOpenTrend={setTrendProfile}
+                trendSeries={trends.data?.[r.name] ?? []}
               />
             </Col>
           ))}
@@ -127,6 +162,13 @@ export function Health() {
         serials={deviceModal?.serials ?? []}
         onClose={() => setDeviceModal(null)}
       />
+      <Suspense fallback={null}>
+        <ProfileTrendModal
+          profileName={trendProfile}
+          series={trendProfile ? (trends.data?.[trendProfile] ?? []) : []}
+          onClose={() => setTrendProfile(null)}
+        />
+      </Suspense>
     </div>
   )
 }
