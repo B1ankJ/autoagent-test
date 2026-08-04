@@ -60,6 +60,8 @@ async def list_anomalies(
     type: str | None = None,
     target_profile: str | None = None,
     acknowledged: bool | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int,
     offset: int,
 ) -> tuple[list[AnomalyRecord], int]:
@@ -72,6 +74,10 @@ async def list_anomalies(
             conds.append(AnomalyRow.target_profile == target_profile)
         if acknowledged is not None:
             conds.append(AnomalyRow.acknowledged == acknowledged)
+        if created_after is not None:
+            conds.append(AnomalyRow.created_at >= created_after)
+        if created_before is not None:
+            conds.append(AnomalyRow.created_at <= created_before)
 
         total = (
             await s.execute(select(func.count()).select_from(AnomalyRow).where(*conds))

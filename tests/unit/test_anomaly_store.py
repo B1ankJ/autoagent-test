@@ -118,3 +118,27 @@ async def test_unacked_counts_by_profile():
 
     counts = await store.unacked_counts_by_profile(now - timedelta(days=7))
     assert counts == {"p1": 2, "p2": 1}
+
+
+@pytest.mark.asyncio
+async def test_list_anomalies_time_filter():
+    from datetime import datetime, timedelta, timezone
+
+    await init_db()
+    await store.record_anomaly(
+        type="duration", batch_id="b", sample_id="s1", target_profile="p",
+        device_serial=None, summary="x", detail={},
+    )
+    now = datetime.now(timezone.utc)
+    _, after_future = await store.list_anomalies(
+        created_after=now + timedelta(hours=1), limit=10, offset=0
+    )
+    assert after_future == 0
+    _, after_past = await store.list_anomalies(
+        created_after=now - timedelta(hours=1), limit=10, offset=0
+    )
+    assert after_past == 1
+    _, before_past = await store.list_anomalies(
+        created_before=now - timedelta(hours=1), limit=10, offset=0
+    )
+    assert before_past == 0

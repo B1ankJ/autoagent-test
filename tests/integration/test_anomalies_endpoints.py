@@ -79,3 +79,16 @@ async def test_limit_cap(client):
 async def test_requires_auth(client):
     r = await client.get("/api/v1/anomalies")
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_list_anomalies_time_params(client):
+    h = await _login(client)
+    await store.record_anomaly(
+        type="duration", batch_id="b", sample_id="s1", target_profile="p",
+        device_serial=None, summary="x", detail={},
+    )
+    r = await client.get("/api/v1/anomalies?created_after=2099-01-01T00:00:00Z", headers=h)
+    assert r.status_code == 200 and r.json()["total"] == 0
+    r = await client.get("/api/v1/anomalies?created_after=2000-01-01T00:00:00Z", headers=h)
+    assert r.json()["total"] == 1

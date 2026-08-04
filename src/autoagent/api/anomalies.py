@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from autoagent.anomalies import store
@@ -14,6 +16,8 @@ async def list_anomalies(
     type: str | None = None,
     target_profile: str | None = None,
     acknowledged: bool | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> AnomalyListResponse:
@@ -21,6 +25,8 @@ async def list_anomalies(
         type=type,
         target_profile=target_profile,
         acknowledged=acknowledged,
+        created_after=created_after,
+        created_before=created_before,
         limit=limit,
         offset=offset,
     )
