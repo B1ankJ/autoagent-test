@@ -39,6 +39,7 @@ import {
   useVLM,
   useWhitelist,
 } from '../api/config'
+import { useBackfillAnomalies } from '../api/anomalies'
 import { PageHeader } from '../components/states/PageHeader'
 import { ResponseListPanel } from '../components/ResponseListPanel'
 import { SystemUpdatePanel } from '../components/SystemUpdatePanel'
@@ -127,6 +128,7 @@ export function ConfigPage() {
   const saveDefaults = useSaveDefaults()
   const notifications = useNotifications()
   const saveNotifications = useSaveNotifications()
+  const backfillAnomalies = useBackfillAnomalies()
   const testNotifications = useTestNotifications()
   const whitelist = useWhitelist()
   const addWhitelist = useAddWhitelist()
@@ -214,11 +216,7 @@ export function ConfigPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="系统"
-        title="设置 Config"
-        subtitle="VLM 凭据与运行时全局默认值"
-      />
+      <PageHeader eyebrow="系统" title="设置 Config" subtitle="VLM 凭据与运行时全局默认值" />
       <Tabs
         style={{ maxWidth: 760 }}
         items={[
@@ -226,504 +224,545 @@ export function ConfigPage() {
             key: 'vlm',
             label: 'VLM',
             children: (
-      <Card title="VLM" size="small">
-        {vlm.isError ? (
-          <Alert
-            style={{ marginBottom: 12 }}
-            type="error"
-            showIcon
-            message="配置加载失败"
-            description={(vlm.error as Error)?.message}
-            action={
-              <Button size="small" onClick={() => vlm.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : null}
-        <Form
-          form={vlmForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            try {
-              await saveVlm.mutateAsync(values)
-              message.success('已保存')
-            } catch (error) {
-              message.error(saveErrorMessage(error))
-            }
-          }}
-        >
-          <Form.Item name="base_url" label="Base URL" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="model" label="Model" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="api_key" label="API Key">
-            <Input.Password />
-          </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={saveVlm.isPending}>
-              保存
-            </Button>
-            <Button onClick={() => void handleTestLLM()} loading={testLlm.isPending}>
-              测试连通性
-            </Button>
-          </Space>
-          {llmTestMessage ? (
-            <Alert
-              style={{ marginTop: 12 }}
-              type={llmTestOk ? 'success' : 'error'}
-              showIcon
-              message={llmTestMessage}
-            />
-          ) : null}
-        </Form>
-      </Card>
+              <Card title="VLM" size="small">
+                {vlm.isError ? (
+                  <Alert
+                    style={{ marginBottom: 12 }}
+                    type="error"
+                    showIcon
+                    message="配置加载失败"
+                    description={(vlm.error as Error)?.message}
+                    action={
+                      <Button size="small" onClick={() => vlm.refetch()}>
+                        重试
+                      </Button>
+                    }
+                  />
+                ) : null}
+                <Form
+                  form={vlmForm}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    try {
+                      await saveVlm.mutateAsync(values)
+                      message.success('已保存')
+                    } catch (error) {
+                      message.error(saveErrorMessage(error))
+                    }
+                  }}
+                >
+                  <Form.Item name="base_url" label="Base URL" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="model" label="Model" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="api_key" label="API Key">
+                    <Input.Password />
+                  </Form.Item>
+                  <Space>
+                    <Button type="primary" htmlType="submit" loading={saveVlm.isPending}>
+                      保存
+                    </Button>
+                    <Button onClick={() => void handleTestLLM()} loading={testLlm.isPending}>
+                      测试连通性
+                    </Button>
+                  </Space>
+                  {llmTestMessage ? (
+                    <Alert
+                      style={{ marginTop: 12 }}
+                      type={llmTestOk ? 'success' : 'error'}
+                      showIcon
+                      message={llmTestMessage}
+                    />
+                  ) : null}
+                </Form>
+              </Card>
             ),
           },
           {
             key: 'defaults',
             label: '运行默认',
             children: (
-      <Card title="Global Defaults" size="small">
-        {defaults.isError ? (
-          <Alert
-            style={{ marginBottom: 12 }}
-            type="error"
-            showIcon
-            message="配置加载失败"
-            description={(defaults.error as Error)?.message}
-            action={
-              <Button size="small" onClick={() => defaults.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : null}
-        <Form
-          form={defaultsForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            try {
-              await saveDefaults.mutateAsync(values)
-              message.success('已保存')
-            } catch (error) {
-              message.error((error as Error).message)
-            }
-          }}
-        >
-          <Form.Item name="api_timeout_sec" label="API timeout (s)">
-            <InputNumber min={1} />
-          </Form.Item>
-          <Form.Item name="gui_timeout_sec" label="GUI timeout (s)">
-            <InputNumber min={1} />
-          </Form.Item>
-          <Form.Item name="retry" label="Retry">
-            <InputNumber min={0} max={10} />
-          </Form.Item>
-          <Form.Item name="concurrency" label="Concurrency">
-            <InputNumber min={1} max={10} />
-          </Form.Item>
-          <Form.Item name="verbose_logs" label="Verbose logs" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="log_retention_days"
-            label="数据保留天数"
-            extra="0 = 关闭自动清理。启用后每日一次:删除超过该天数的已完成批次(DB 记录 + 结果 JSONL + 日志),并清理 logs/ 与 data/profile_builder/ 下的过期产物。"
-          >
-            <InputNumber min={0} max={365} />
-          </Form.Item>
-          <Form.Item
-            name="archive_retention_days"
-            label="归档保留天数"
-            extra="0 = 不归档,批次直接删除。> 0:批次被清理前,先把结果 JSONL + 日志 + DB 快照打包到 data/archive/<batch>.zip;归档包本身在该天数后才删除(建议 ≥ 数据保留天数)。归档失败时会跳过删除以防丢数据。"
-          >
-            <InputNumber min={0} max={365} />
-          </Form.Item>
-          <Form.Item
-            name="backup_retention_days"
-            label="备份保留天数"
-            extra="0 = 关闭自动备份。> 0:定期(见下方间隔)把 SQLite 数据库(在线备份,WAL 安全)+ profiles/*.yaml 打包到 data/backups/<时间戳>.zip,备份包本身保留该天数。不含 results/logs——它们已有独立的保留/归档策略。"
-          >
-            <InputNumber min={0} max={365} />
-          </Form.Item>
-          <Form.Item
-            name="backup_interval_hours"
-            label="备份间隔(小时)"
-            extra="自动备份任务的运行间隔,仅在备份保留天数 > 0 时生效。"
-          >
-            <InputNumber min={1} max={168} />
-          </Form.Item>
-          <Form.Item
-            name="self_update_enabled"
-            label="启用自更新"
-            valuePropName="checked"
-            extra="打开后可在「系统更新」页从 origin/main 拉取新代码并原地重启。等同远程代码执行,仅在信任来源时开启。"
-          >
-            <Switch />
-          </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
-              保存
-            </Button>
-            <Button
-              onClick={async () => {
-                try {
-                  const days = defaultsForm.getFieldValue('log_retention_days') as number
-                  const r = await previewLogsCleanup.mutateAsync(days || undefined)
-                  const archived = r.batches_archived
-                    ? `(其中 ${r.batches_archived} 个先归档)`
-                    : ''
-                  message.info(
-                    `预览:将清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
-                  )
-                } catch (e) {
-                  message.error((e as Error).message)
-                }
-              }}
-              loading={previewLogsCleanup.isPending}
-            >
-              预览清理
-            </Button>
-            <Popconfirm
-              title="立即清理"
-              description="根据当前保留天数删除过期批次(含 DB 记录/结果)与日志/Builder 产物。不可恢复。"
-              onConfirm={async () => {
-                try {
-                  const days = defaultsForm.getFieldValue('log_retention_days') as number
-                  const r = await runLogsCleanup.mutateAsync(days || undefined)
-                  const archived = r.batches_archived
-                    ? `(其中 ${r.batches_archived} 个已归档)`
-                    : ''
-                  message.success(
-                    `已清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
-                  )
-                } catch (e) {
-                  message.error((e as Error).message)
-                }
-              }}
-              okText="删除"
-              okButtonProps={{ danger: true }}
-              cancelText="取消"
-            >
-              <Button danger loading={runLogsCleanup.isPending}>
-                立即清理
-              </Button>
-            </Popconfirm>
-            <Button
-              onClick={async () => {
-                try {
-                  const r = await runBackup.mutateAsync()
-                  message.success(
-                    r.path
-                      ? `已备份到 ${r.path.split('/').pop()}(${humanBytes(r.bytes_written)}），清理过期备份 ${r.pruned} 个`
-                      : '未找到数据库文件,跳过备份',
-                  )
-                } catch (e) {
-                  message.error((e as Error).message)
-                }
-              }}
-              loading={runBackup.isPending}
-            >
-              立即备份
-            </Button>
-          </Space>
-          {backupList.data && backupList.data.length > 0 ? (
-            <div style={{ marginTop: 12 }}>
-              <Typography.Text
-                type="secondary"
-                style={{ fontSize: 12, display: 'block', marginBottom: 6 }}
-              >
-                已有备份({backupList.data.length})
-              </Typography.Text>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
-                {backupList.data.map((b) => (
-                  <div
-                    key={b.name}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: 12,
-                      padding: '4px 4px 4px 8px',
-                      border: '1px solid var(--aa-border, #eee)',
-                      borderRadius: 4,
-                    }}
+              <Card title="Global Defaults" size="small">
+                {defaults.isError ? (
+                  <Alert
+                    style={{ marginBottom: 12 }}
+                    type="error"
+                    showIcon
+                    message="配置加载失败"
+                    description={(defaults.error as Error)?.message}
+                    action={
+                      <Button size="small" onClick={() => defaults.refetch()}>
+                        重试
+                      </Button>
+                    }
+                  />
+                ) : null}
+                <Form
+                  form={defaultsForm}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    try {
+                      await saveDefaults.mutateAsync(values)
+                      message.success('已保存')
+                    } catch (error) {
+                      message.error((error as Error).message)
+                    }
+                  }}
+                >
+                  <Form.Item name="api_timeout_sec" label="API timeout (s)">
+                    <InputNumber min={1} />
+                  </Form.Item>
+                  <Form.Item name="gui_timeout_sec" label="GUI timeout (s)">
+                    <InputNumber min={1} />
+                  </Form.Item>
+                  <Form.Item name="retry" label="Retry">
+                    <InputNumber min={0} max={10} />
+                  </Form.Item>
+                  <Form.Item name="concurrency" label="Concurrency">
+                    <InputNumber min={1} max={10} />
+                  </Form.Item>
+                  <Form.Item name="verbose_logs" label="Verbose logs" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item
+                    name="log_retention_days"
+                    label="数据保留天数"
+                    extra="0 = 关闭自动清理。启用后每日一次:删除超过该天数的已完成批次(DB 记录 + 结果 JSONL + 日志),并清理 logs/ 与 data/profile_builder/ 下的过期产物。"
                   >
-                    <span className="aa-mono">{b.name}</span>
-                    <Space size={4}>
-                      <span className="aa-muted">{humanBytes(b.bytes)}</span>
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<DownloadOutlined />}
-                        title="下载该备份"
-                        aria-label="下载该备份"
-                        onClick={() => void downloadBackup(b.name)}
-                      />
-                      <Popconfirm
-                        title="删除该备份"
-                        description="删除后不可恢复。"
-                        okText="删除"
-                        okButtonProps={{ danger: true }}
-                        cancelText="取消"
-                        onConfirm={async () => {
-                          try {
-                            await deleteBackup.mutateAsync(b.name)
-                            message.success('已删除')
-                          } catch (e) {
-                            message.error((e as Error).message)
-                          }
+                    <InputNumber min={0} max={365} />
+                  </Form.Item>
+                  <Form.Item
+                    name="archive_retention_days"
+                    label="归档保留天数"
+                    extra="0 = 不归档,批次直接删除。> 0:批次被清理前,先把结果 JSONL + 日志 + DB 快照打包到 data/archive/<batch>.zip;归档包本身在该天数后才删除(建议 ≥ 数据保留天数)。归档失败时会跳过删除以防丢数据。"
+                  >
+                    <InputNumber min={0} max={365} />
+                  </Form.Item>
+                  <Form.Item
+                    name="backup_retention_days"
+                    label="备份保留天数"
+                    extra="0 = 关闭自动备份。> 0:定期(见下方间隔)把 SQLite 数据库(在线备份,WAL 安全)+ profiles/*.yaml 打包到 data/backups/<时间戳>.zip,备份包本身保留该天数。不含 results/logs——它们已有独立的保留/归档策略。"
+                  >
+                    <InputNumber min={0} max={365} />
+                  </Form.Item>
+                  <Form.Item
+                    name="backup_interval_hours"
+                    label="备份间隔(小时)"
+                    extra="自动备份任务的运行间隔,仅在备份保留天数 > 0 时生效。"
+                  >
+                    <InputNumber min={1} max={168} />
+                  </Form.Item>
+                  <Form.Item
+                    name="self_update_enabled"
+                    label="启用自更新"
+                    valuePropName="checked"
+                    extra="打开后可在「系统更新」页从 origin/main 拉取新代码并原地重启。等同远程代码执行,仅在信任来源时开启。"
+                  >
+                    <Switch />
+                  </Form.Item>
+                  <Space>
+                    <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
+                      保存
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const days = defaultsForm.getFieldValue('log_retention_days') as number
+                          const r = await previewLogsCleanup.mutateAsync(days || undefined)
+                          const archived = r.batches_archived
+                            ? `(其中 ${r.batches_archived} 个先归档)`
+                            : ''
+                          message.info(
+                            `预览:将清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                          )
+                        } catch (e) {
+                          message.error((e as Error).message)
+                        }
+                      }}
+                      loading={previewLogsCleanup.isPending}
+                    >
+                      预览清理
+                    </Button>
+                    <Popconfirm
+                      title="立即清理"
+                      description="根据当前保留天数删除过期批次(含 DB 记录/结果)与日志/Builder 产物。不可恢复。"
+                      onConfirm={async () => {
+                        try {
+                          const days = defaultsForm.getFieldValue('log_retention_days') as number
+                          const r = await runLogsCleanup.mutateAsync(days || undefined)
+                          const archived = r.batches_archived
+                            ? `(其中 ${r.batches_archived} 个已归档)`
+                            : ''
+                          message.success(
+                            `已清理 ${r.batches_pruned} 个过期批次${archived}、${r.files_deleted} 个文件 / ${r.dirs_deleted} 个目录,释放 ${humanBytes(r.bytes_freed)}`,
+                          )
+                        } catch (e) {
+                          message.error((e as Error).message)
+                        }
+                      }}
+                      okText="删除"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                    >
+                      <Button danger loading={runLogsCleanup.isPending}>
+                        立即清理
+                      </Button>
+                    </Popconfirm>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const r = await runBackup.mutateAsync()
+                          message.success(
+                            r.path
+                              ? `已备份到 ${r.path.split('/').pop()}(${humanBytes(r.bytes_written)}），清理过期备份 ${r.pruned} 个`
+                              : '未找到数据库文件,跳过备份',
+                          )
+                        } catch (e) {
+                          message.error((e as Error).message)
+                        }
+                      }}
+                      loading={runBackup.isPending}
+                    >
+                      立即备份
+                    </Button>
+                  </Space>
+                  {backupList.data && backupList.data.length > 0 ? (
+                    <div style={{ marginTop: 12 }}>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12, display: 'block', marginBottom: 6 }}
+                      >
+                        已有备份({backupList.data.length})
+                      </Typography.Text>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          maxHeight: 220,
+                          overflowY: 'auto',
                         }}
                       >
-                        <Button
-                          type="text"
-                          size="small"
-                          danger
-                          icon={<DeleteOutlined />}
-                          title="删除该备份"
-                          aria-label="删除该备份"
-                          loading={deleteBackup.isPending}
-                        />
-                      </Popconfirm>
-                    </Space>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </Form>
-      </Card>
+                        {backupList.data.map((b) => (
+                          <div
+                            key={b.name}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              fontSize: 12,
+                              padding: '4px 4px 4px 8px',
+                              border: '1px solid var(--aa-border, #eee)',
+                              borderRadius: 4,
+                            }}
+                          >
+                            <span className="aa-mono">{b.name}</span>
+                            <Space size={4}>
+                              <span className="aa-muted">{humanBytes(b.bytes)}</span>
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<DownloadOutlined />}
+                                title="下载该备份"
+                                aria-label="下载该备份"
+                                onClick={() => void downloadBackup(b.name)}
+                              />
+                              <Popconfirm
+                                title="删除该备份"
+                                description="删除后不可恢复。"
+                                okText="删除"
+                                okButtonProps={{ danger: true }}
+                                cancelText="取消"
+                                onConfirm={async () => {
+                                  try {
+                                    await deleteBackup.mutateAsync(b.name)
+                                    message.success('已删除')
+                                  } catch (e) {
+                                    message.error((e as Error).message)
+                                  }
+                                }}
+                              >
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  title="删除该备份"
+                                  aria-label="删除该备份"
+                                  loading={deleteBackup.isPending}
+                                />
+                              </Popconfirm>
+                            </Space>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </Form>
+              </Card>
             ),
           },
           {
             key: 'notify',
             label: '钉钉通知',
             children: (
-      <Card title="钉钉通知" size="small">
-        {notifications.isError ? (
-          <Alert
-            style={{ marginBottom: 12 }}
-            type="error"
-            showIcon
-            message="配置加载失败"
-            description={(notifications.error as Error)?.message}
-            action={
-              <Button size="small" onClick={() => notifications.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : null}
-        <Form
-          form={notifyForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            try {
-              await saveNotifications.mutateAsync(values)
-              message.success('已保存')
-            } catch (error) {
-              message.error((error as Error).message)
-            }
-          }}
-        >
-          <Typography.Title level={5} style={{ marginTop: 0 }}>
-            基础设置
-          </Typography.Title>
-          <Form.Item name="enabled" label="启用通知" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="webhook_url"
-            label="Webhook URL"
-            extra="钉钉自定义机器人的 webhook 地址"
-          >
-            <Input placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." />
-          </Form.Item>
-          <Form.Item
-            name="secret"
-            label="Secret(可选,加签模式)"
-            extra="如果机器人安全设置选了「加签」,填这里;否则留空"
-          >
-            <Input.Password placeholder="SEC..." />
-          </Form.Item>
-          <Form.Item
-            name="app_base_url"
-            label="AutoAgent 访问地址(可选)"
-            extra="填了以后,告警消息里的 sample 引用会变成可点击链接,直接跳到该 sample 详情页(含截图)。钉钉自定义机器人不支持带鉴权的图片直传,所以走链接而不是内嵌图。留空则仍显示为纯文本。"
-          >
-            <Input placeholder="https://autoagent.example.com" />
-          </Form.Item>
-          <Form.Item name="at_all" label="@ 全体" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+              <Card title="钉钉通知" size="small">
+                {notifications.isError ? (
+                  <Alert
+                    style={{ marginBottom: 12 }}
+                    type="error"
+                    showIcon
+                    message="配置加载失败"
+                    description={(notifications.error as Error)?.message}
+                    action={
+                      <Button size="small" onClick={() => notifications.refetch()}>
+                        重试
+                      </Button>
+                    }
+                  />
+                ) : null}
+                <Form
+                  form={notifyForm}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    try {
+                      await saveNotifications.mutateAsync(values)
+                      message.success('已保存')
+                    } catch (error) {
+                      message.error((error as Error).message)
+                    }
+                  }}
+                >
+                  <Typography.Title level={5} style={{ marginTop: 0 }}>
+                    基础设置
+                  </Typography.Title>
+                  <Form.Item name="enabled" label="启用通知" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item
+                    name="webhook_url"
+                    label="Webhook URL"
+                    extra="钉钉自定义机器人的 webhook 地址"
+                  >
+                    <Input placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." />
+                  </Form.Item>
+                  <Form.Item
+                    name="secret"
+                    label="Secret(可选,加签模式)"
+                    extra="如果机器人安全设置选了「加签」,填这里;否则留空"
+                  >
+                    <Input.Password placeholder="SEC..." />
+                  </Form.Item>
+                  <Form.Item
+                    name="app_base_url"
+                    label="AutoAgent 访问地址(可选)"
+                    extra="填了以后,告警消息里的 sample 引用会变成可点击链接,直接跳到该 sample 详情页(含截图)。钉钉自定义机器人不支持带鉴权的图片直传,所以走链接而不是内嵌图。留空则仍显示为纯文本。"
+                  >
+                    <Input placeholder="https://autoagent.example.com" />
+                  </Form.Item>
+                  <Form.Item name="at_all" label="@ 全体" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
 
-          <RuleSection
-            title="规则 1 · 连续空响应"
-            description="同一设备连续 N 次有效响应为空(已按 LLM 复核结果判断,status=done)时触发提醒。"
-          >
-            <Form.Item name="empty_response_threshold" label="连续空响应阈值">
-              <InputNumber min={1} max={20} />
-            </Form.Item>
-            <Form.Item
-              name="empty_response_auto_reinit"
-              label="连续空响应时自动重新初始化设备"
-              valuePropName="checked"
-              extra="触发通知时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。与规则 2 的自动复位开关相互独立。"
-            >
-              <Switch />
-            </Form.Item>
-          </RuleSection>
+                  <RuleSection
+                    title="规则 1 · 连续空响应"
+                    description="同一设备连续 N 次有效响应为空(已按 LLM 复核结果判断,status=done)时触发提醒。"
+                  >
+                    <Form.Item name="empty_response_threshold" label="连续空响应阈值">
+                      <InputNumber min={1} max={20} />
+                    </Form.Item>
+                    <Form.Item
+                      name="empty_response_auto_reinit"
+                      label="连续空响应时自动重新初始化设备"
+                      valuePropName="checked"
+                      extra="触发通知时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。与规则 2 的自动复位开关相互独立。"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  </RuleSection>
 
-          <RuleSection
-            title="规则 2 · 连续相同响应"
-            description="同设备连续 N 次响应一样 → 截图交给 VLM 判断是否还停留在聊天页;白名单按 profile 维度(需 VLM 已配置)。"
-          >
-            <Form.Item name="same_response_enabled" label="启用重复响应检测" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Form.Item name="same_response_threshold" label="连续相同响应阈值">
-              <InputNumber min={1} max={20} />
-            </Form.Item>
-            <Form.Item
-              name="same_response_auto_reinit"
-              label="异常时自动重新初始化设备"
-              valuePropName="checked"
-              extra="判定页面异常时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。"
-            >
-              <Switch />
-            </Form.Item>
-          </RuleSection>
+                  <RuleSection
+                    title="规则 2 · 连续相同响应"
+                    description="同设备连续 N 次响应一样 → 截图交给 VLM 判断是否还停留在聊天页;白名单按 profile 维度(需 VLM 已配置)。"
+                  >
+                    <Form.Item
+                      name="same_response_enabled"
+                      label="启用重复响应检测"
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
+                    <Form.Item name="same_response_threshold" label="连续相同响应阈值">
+                      <InputNumber min={1} max={20} />
+                    </Form.Item>
+                    <Form.Item
+                      name="same_response_auto_reinit"
+                      label="异常时自动重新初始化设备"
+                      valuePropName="checked"
+                      extra="判定页面异常时自动运行该 profile 的初始化剧本复位设备(等当前任务结束后执行)。需 profile 配好 init_action。"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  </RuleSection>
 
-          <RuleSection
-            title="规则 3 · 应用无响应(ANR)"
-            description="仅 gui_android 模式。每个 sample 结束后(含失败/超时)读取设备 ActivityManager 日志,若该 profile 包名出现 ANR(系统自身判定,不受弹窗是否显示影响)则立即触发初始化剧本并报警——启用本规则即视为同意自动复位,不再有单独开关。"
-          >
-            <Form.Item
-              name="anr_check_enabled"
-              label="启用 ANR 检测"
-              valuePropName="checked"
-              extra="只能检测系统自身判定为 ANR 的情况(即使弹窗被厂商 ROM 隐藏也能检测到);无法检测未触发系统 ANR 判定的纯界面卡死。"
-            >
-              <Switch />
-            </Form.Item>
-          </RuleSection>
+                  <RuleSection
+                    title="规则 3 · 应用无响应(ANR)"
+                    description="仅 gui_android 模式。每个 sample 结束后(含失败/超时)读取设备 ActivityManager 日志,若该 profile 包名出现 ANR(系统自身判定,不受弹窗是否显示影响)则立即触发初始化剧本并报警——启用本规则即视为同意自动复位,不再有单独开关。"
+                  >
+                    <Form.Item
+                      name="anr_check_enabled"
+                      label="启用 ANR 检测"
+                      valuePropName="checked"
+                      extra="只能检测系统自身判定为 ANR 的情况(即使弹窗被厂商 ROM 隐藏也能检测到);无法检测未触发系统 ANR 判定的纯界面卡死。"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  </RuleSection>
 
-          <Space>
-            <Button type="primary" htmlType="submit" loading={saveNotifications.isPending}>
-              保存
-            </Button>
-            <Button
-              onClick={() => void handleTestNotify()}
-              loading={testNotifications.isPending}
-            >
-              发送测试消息
-            </Button>
-          </Space>
-          {notifyTestMsg ? (
-            <Alert
-              style={{ marginTop: 12 }}
-              type={notifyTestOk ? 'success' : 'error'}
-              showIcon
-              message={notifyTestMsg}
-            />
-          ) : null}
-        </Form>
-      </Card>
+                  <Space>
+                    <Button type="primary" htmlType="submit" loading={saveNotifications.isPending}>
+                      保存
+                    </Button>
+                    <Button
+                      onClick={() => void handleTestNotify()}
+                      loading={testNotifications.isPending}
+                    >
+                      发送测试消息
+                    </Button>
+                    <Button
+                      loading={backfillAnomalies.isPending}
+                      onClick={async () => {
+                        try {
+                          const r = await backfillAnomalies.mutateAsync()
+                          message.success(`扫描 ${r.scanned} 条,新增 ${r.created} 条异常`)
+                        } catch (e) {
+                          message.error((e as Error).message)
+                        }
+                      }}
+                    >
+                      扫描历史生成异常
+                    </Button>
+                  </Space>
+                  {notifyTestMsg ? (
+                    <Alert
+                      style={{ marginTop: 12 }}
+                      type={notifyTestOk ? 'success' : 'error'}
+                      showIcon
+                      message={notifyTestMsg}
+                    />
+                  ) : null}
+                </Form>
+              </Card>
             ),
           },
           {
             key: 'whitelist',
             label: '白名单',
             children: (
-      <Card
-        title="重复响应白名单"
-        size="small"
-        extra={
-          <Button size="small" loading={whitelist.isFetching} onClick={() => whitelist.refetch()}>
-            刷新
-          </Button>
-        }
-      >
-        <Alert
-          style={{ marginBottom: 12 }}
-          type="info"
-          showIcon
-          message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里,后续同样的响应不再触发判断/告警。也可以手动新增(比如提前知道某个响应就是正常的)。"
-        />
-        {whitelist.isError ? (
-          <Alert
-            type="error"
-            showIcon
-            message="白名单加载失败"
-            description={(whitelist.error as Error)?.message}
-            action={
-              <Button size="small" loading={whitelist.isFetching} onClick={() => whitelist.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : (
-          <ResponseListPanel
-            entries={whitelist.data}
-            addPending={addWhitelist.isPending}
-            removePending={removeWhitelist.isPending}
-            onAdd={(values) => addWhitelist.mutateAsync(values)}
-            onRemove={(entry) => removeWhitelist.mutateAsync(entry)}
-            emptyText="还没有白名单记录"
-            addButtonLabel="新增白名单"
-            addModalTitle="新增白名单记录"
-          />
-        )}
-      </Card>
+              <Card
+                title="重复响应白名单"
+                size="small"
+                extra={
+                  <Button
+                    size="small"
+                    loading={whitelist.isFetching}
+                    onClick={() => whitelist.refetch()}
+                  >
+                    刷新
+                  </Button>
+                }
+              >
+                <Alert
+                  style={{ marginBottom: 12 }}
+                  type="info"
+                  showIcon
+                  message="规则 2 命中且 VLM 判定页面正常时,响应会被自动加入这里,后续同样的响应不再触发判断/告警。也可以手动新增(比如提前知道某个响应就是正常的)。"
+                />
+                {whitelist.isError ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    message="白名单加载失败"
+                    description={(whitelist.error as Error)?.message}
+                    action={
+                      <Button
+                        size="small"
+                        loading={whitelist.isFetching}
+                        onClick={() => whitelist.refetch()}
+                      >
+                        重试
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <ResponseListPanel
+                    entries={whitelist.data}
+                    addPending={addWhitelist.isPending}
+                    removePending={removeWhitelist.isPending}
+                    onAdd={(values) => addWhitelist.mutateAsync(values)}
+                    onRemove={(entry) => removeWhitelist.mutateAsync(entry)}
+                    emptyText="还没有白名单记录"
+                    addButtonLabel="新增白名单"
+                    addModalTitle="新增白名单记录"
+                  />
+                )}
+              </Card>
             ),
           },
           {
             key: 'blacklist',
             label: '黑名单',
             children: (
-      <Card
-        title="重复响应黑名单"
-        size="small"
-        extra={
-          <Button size="small" loading={blacklist.isFetching} onClick={() => blacklist.refetch()}>
-            刷新
-          </Button>
-        }
-      >
-        <Alert
-          style={{ marginBottom: 12 }}
-          type="warning"
-          showIcon
-          message="命中黑名单的响应会跳过规则 2 的连续次数等待和 VLM 判断,第一次出现就直接告警(并按同一开关触发自动复位)。仅支持手动新增——确认过某个响应确实是异常后,把它加进来。"
-        />
-        {blacklist.isError ? (
-          <Alert
-            type="error"
-            showIcon
-            message="黑名单加载失败"
-            description={(blacklist.error as Error)?.message}
-            action={
-              <Button size="small" loading={blacklist.isFetching} onClick={() => blacklist.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : (
-          <ResponseListPanel
-            entries={blacklist.data}
-            addPending={addBlacklist.isPending}
-            removePending={removeBlacklist.isPending}
-            onAdd={(values) => addBlacklist.mutateAsync(values)}
-            onRemove={(entry) => removeBlacklist.mutateAsync(entry)}
-            emptyText="还没有黑名单记录"
-            addButtonLabel="新增黑名单"
-            addModalTitle="新增黑名单记录"
-          />
-        )}
-      </Card>
+              <Card
+                title="重复响应黑名单"
+                size="small"
+                extra={
+                  <Button
+                    size="small"
+                    loading={blacklist.isFetching}
+                    onClick={() => blacklist.refetch()}
+                  >
+                    刷新
+                  </Button>
+                }
+              >
+                <Alert
+                  style={{ marginBottom: 12 }}
+                  type="warning"
+                  showIcon
+                  message="命中黑名单的响应会跳过规则 2 的连续次数等待和 VLM 判断,第一次出现就直接告警(并按同一开关触发自动复位)。仅支持手动新增——确认过某个响应确实是异常后,把它加进来。"
+                />
+                {blacklist.isError ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    message="黑名单加载失败"
+                    description={(blacklist.error as Error)?.message}
+                    action={
+                      <Button
+                        size="small"
+                        loading={blacklist.isFetching}
+                        onClick={() => blacklist.refetch()}
+                      >
+                        重试
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <ResponseListPanel
+                    entries={blacklist.data}
+                    addPending={addBlacklist.isPending}
+                    removePending={removeBlacklist.isPending}
+                    onAdd={(values) => addBlacklist.mutateAsync(values)}
+                    onRemove={(entry) => removeBlacklist.mutateAsync(entry)}
+                    emptyText="还没有黑名单记录"
+                    addButtonLabel="新增黑名单"
+                    addModalTitle="新增黑名单记录"
+                  />
+                )}
+              </Card>
             ),
           },
           {

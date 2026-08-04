@@ -56,3 +56,14 @@ export function useAcknowledgeAnomaly() {
     },
   })
 }
+
+export function useBackfillAnomalies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      (await client.post<{ scanned: number; created: number }>('/anomalies/backfill')).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['anomalies'] })
+    },
+  })
+}
