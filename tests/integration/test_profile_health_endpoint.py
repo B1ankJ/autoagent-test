@@ -57,3 +57,28 @@ async def test_profile_health_endpoint(client):
 async def test_profile_health_requires_auth(client):
     r = await client.get("/api/v1/profiles/health")
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_profile_trends_endpoint(client):
+    from datetime import datetime, timezone
+
+    from autoagent.models.api import SampleResult
+    from autoagent.storage.samples import upsert_sample
+
+    h = await _login(client)
+    now = datetime.now(timezone.utc)
+    await upsert_sample("b", SampleResult(id="s1", status="done", mode="api",
+                                          target_profile="pt", duration_ms=100, ended_at=now))
+    r = await client.get("/api/v1/profiles/trends?days=30", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert "pt" in body
+    assert body["pt"][0]["success_rate"] == 1.0 and body["pt"][0]["sample_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_trends_days_cap(client):
+    h = await _login(client)
+    r = await client.get("/api/v1/profiles/trends?days=999", headers=h)
+    assert r.status_code == 422

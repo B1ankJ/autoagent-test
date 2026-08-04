@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from autoagent.auth.deps import require_user
 from autoagent.devices.init_jobs import get_job, prune_old_jobs, start_job
 from autoagent.health.profile_health import list_profile_health
-from autoagent.models.api import ProfileHealth
+from autoagent.models.api import DailyPoint, ProfileHealth
 from autoagent.profiles.registry import (
     delete_profile as _delete,
 )
@@ -18,7 +20,7 @@ from autoagent.profiles.registry import (
     validate_yaml,
 )
 from autoagent.profiles.schemas import AndroidProfile
-from autoagent.storage.samples import avg_duration_by_profile
+from autoagent.storage.samples import avg_duration_by_profile, daily_stats_by_profile
 
 router = APIRouter(prefix="/profiles", tags=["profiles"], dependencies=[Depends(require_user)])
 
@@ -79,6 +81,12 @@ async def list_profiles() -> list[ProfileSummary]:
 @router.get("/health", response_model=list[ProfileHealth])
 async def profiles_health() -> list[ProfileHealth]:
     return await list_profile_health()
+
+
+@router.get("/trends", response_model=dict[str, list[DailyPoint]])
+async def profiles_trends(days: int = Query(30, ge=1, le=90)) -> dict[str, list[DailyPoint]]:
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    return await daily_stats_by_profile(since)
 
 
 @router.get("/{name}", response_model=ProfileYamlResponse)
