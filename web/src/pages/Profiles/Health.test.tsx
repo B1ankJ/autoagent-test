@@ -14,6 +14,24 @@ vi.mock('../../api/profileHealth', async () => {
   return { ...actual, useProfileHealth: () => useProfileHealth() }
 })
 
+// Stub the device-screens modal (it pulls in websocket/video-decoder
+// internals covered by its own test) — assert only that Health opens it with
+// the right props.
+vi.mock('../../components/ProfileDeviceScreensModal', () => ({
+  ProfileDeviceScreensModal: ({
+    profileName,
+    serials,
+  }: {
+    profileName: string | null
+    serials: string[]
+  }) =>
+    profileName ? (
+      <div>
+        device-modal:{profileName}:{serials.join(',')}
+      </div>
+    ) : null,
+}))
+
 function row(over: Partial<ProfileHealth> & { name: string }): ProfileHealth {
   return {
     platform: 'api',
@@ -24,6 +42,7 @@ function row(over: Partial<ProfileHealth> & { name: string }): ProfileHealth {
     unacked_anomalies: 0,
     devices_online: null,
     devices_total: null,
+    serials: [],
     ...over,
   }
 }
@@ -96,5 +115,45 @@ describe('Health', () => {
     )
     await userEvent.click(await screen.findByText(/异常 3/))
     expect(await screen.findByText('anomalies-page?target_profile=bad')).toBeInTheDocument()
+  })
+
+  it('opens the device-screens modal scoped to the profile serials when the device count is clicked', async () => {
+    useProfileHealth.mockReturnValue({
+      data: [
+        row({
+          name: 'droid',
+          platform: 'android',
+          status: 'yellow',
+          devices_online: 1,
+          devices_total: 2,
+          serials: ['dev1', 'dev2'],
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/profiles/health" element={<Health />} />
+      </Routes>,
+      { initialPath: '/profiles/health' },
+    )
+    await userEvent.click(await screen.findByText(/设备 1\/2/))
+    expect(await screen.findByText('device-modal:droid:dev1,dev2')).toBeInTheDocument()
+  })
+
+  it('renders the device count as plain text (not clickable) for non-android profiles', async () => {
+    useProfileHealth.mockReturnValue({
+      data: [row({ name: 'apip', platform: 'api', devices_online: null, devices_total: null })],
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/profiles/health" element={<Health />} />
+      </Routes>,
+      { initialPath: '/profiles/health' },
+    )
+    await waitFor(() => expect(screen.getByText(/设备 —/)).toBeInTheDocument())
   })
 })

@@ -471,3 +471,6 @@ class ProfileHealth(BaseModel):
     unacked_anomalies: int = 0
     devices_online: int | None = None
     devices_total: int | None = None
+    # Bound device serials (android/agent_android only; empty otherwise) — lets
+    # the dashboard open the profile's device-screen grid scoped to this pool.
+    serials: list[str] = Field(default_factory=list)

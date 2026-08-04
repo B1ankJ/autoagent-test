@@ -420,4 +420,5 @@ export interface ProfileHealth {
   unacked_anomalies: number
   devices_online: number | null
   devices_total: number | null
+  serials: string[]
 }

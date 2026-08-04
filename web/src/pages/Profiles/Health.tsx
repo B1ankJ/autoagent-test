@@ -2,6 +2,7 @@ import { Card, Col, Row, Segmented, Space, Tag, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { summarizeHealth, useProfileHealth } from '../../api/profileHealth'
+import { ProfileDeviceScreensModal } from '../../components/ProfileDeviceScreensModal'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
@@ -15,9 +16,16 @@ const STATUS_META: Record<HealthStatus, { color: string; label: string }> = {
   nodata: { color: '#8c8c8c', label: '无数据' },
 }
 
-function HealthCard({ row }: { row: ProfileHealth }) {
+function HealthCard({
+  row,
+  onOpenDevices,
+}: {
+  row: ProfileHealth
+  onOpenDevices: (row: ProfileHealth) => void
+}) {
   const navigate = useNavigate()
   const meta = STATUS_META[row.status]
+  const hasDevices = row.devices_total !== null && row.serials.length > 0
   return (
     <Card size="small" styles={{ body: { padding: 12 } }}>
       <Space style={{ marginBottom: 8 }} align="center">
@@ -51,7 +59,15 @@ function HealthCard({ row }: { row: ProfileHealth }) {
           </a>
         </div>
         <div>
-          设备 {row.devices_total === null ? '—' : `${row.devices_online}/${row.devices_total}`}
+          {hasDevices ? (
+            <a onClick={() => onOpenDevices(row)}>
+              设备 {row.devices_online}/{row.devices_total}
+            </a>
+          ) : (
+            <>
+              设备 {row.devices_total === null ? '—' : `${row.devices_online}/${row.devices_total}`}
+            </>
+          )}
         </div>
       </div>
     </Card>
@@ -61,6 +77,7 @@ function HealthCard({ row }: { row: ProfileHealth }) {
 export function Health() {
   const { data, isLoading, isError, refetch } = useProfileHealth()
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
+  const [deviceModal, setDeviceModal] = useState<{ name: string; serials: string[] } | null>(null)
 
   // The backend already returns profiles worst-first (see profile_health.py's
   // _SEVERITY sort) — render that order as-is rather than re-sorting here, so
@@ -97,11 +114,19 @@ export function Health() {
         <Row gutter={[12, 12]}>
           {rows.map((r) => (
             <Col key={r.name} xs={24} sm={12} md={8} lg={6}>
-              <HealthCard row={r} />
+              <HealthCard
+                row={r}
+                onOpenDevices={(row) => setDeviceModal({ name: row.name, serials: row.serials })}
+              />
             </Col>
           ))}
         </Row>
       )}
+      <ProfileDeviceScreensModal
+        profileName={deviceModal?.name ?? null}
+        serials={deviceModal?.serials ?? []}
+        onClose={() => setDeviceModal(null)}
+      />
     </div>
   )
 }

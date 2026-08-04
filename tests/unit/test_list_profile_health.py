@@ -56,4 +56,6 @@ async def test_assembly_and_worst_first_order():
     assert by_name["bad"].status == "red"
     assert by_name["bad"].unacked_anomalies == 5
     assert by_name["bad"].devices_online == 0 and by_name["bad"].devices_total == 1
+    assert by_name["bad"].serials == ["dev1"]
+    assert by_name["good"].serials == []  # non-android → no serials exposed
     assert [h.name for h in health].index("bad") < [h.name for h in health].index("good")

@@ -94,6 +94,7 @@ async def list_profile_health(now: datetime | None = None) -> list[ProfileHealth
 
         online_ct: int | None = None
         total_ct: int | None = None
+        serials: list[str] = []
         if str(profile.platform) in _ANDROID_PLATFORMS:
             serial = getattr(profile, "serial", None)
             serials = list(getattr(profile, "serials", None) or [])
@@ -121,6 +122,7 @@ async def list_profile_health(now: datetime | None = None) -> list[ProfileHealth
                 unacked_anomalies=anomalies.get(name, 0),
                 devices_online=online_ct,
                 devices_total=total_ct,
+                serials=serials,
             )
         )
 

@@ -13,6 +13,7 @@ function row(status: ProfileHealth['status']): ProfileHealth {
     unacked_anomalies: 0,
     devices_online: null,
     devices_total: null,
+    serials: [],
   }
 }
 
