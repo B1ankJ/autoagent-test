@@ -459,3 +459,15 @@ class AnomalyRecord(BaseModel):
 class AnomalyListResponse(BaseModel):
     items: list[AnomalyRecord]
     total: int
+
+
+class ProfileHealth(BaseModel):
+    name: str
+    platform: str
+    status: str  # green | yellow | red | nodata
+    success_rate: float | None = None
+    total_runs: int = 0
+    avg_duration_ms: float | None = None
+    unacked_anomalies: int = 0
+    devices_online: int | None = None
+    devices_total: int | None = None
