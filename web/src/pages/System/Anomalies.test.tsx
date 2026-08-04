@@ -39,6 +39,21 @@ describe('Anomalies', () => {
     vi.clearAllMocks()
   })
 
+  it('renders a time-range picker in the filter row', async () => {
+    useAnomalies.mockReturnValue({
+      data: { items: [], total: 0 },
+      isLoading: false,
+      isError: false,
+    })
+    const { container } = renderWithProviders(
+      <Routes>
+        <Route path="/system/anomalies" element={<Anomalies />} />
+      </Routes>,
+      { initialPath: '/system/anomalies' },
+    )
+    await waitFor(() => expect(container.querySelector('.ant-picker-range')).toBeInTheDocument())
+  })
+
   it('renders rows and acknowledges one', async () => {
     useAnomalies.mockReturnValue({
       data: { items: [rec({ id: 1, summary: '慢了' })], total: 1 },

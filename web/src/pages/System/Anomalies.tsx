@@ -1,5 +1,6 @@
-import { App, Button, Segmented, Select, Space, Table, Tag } from 'antd'
+import { App, Button, DatePicker, Segmented, Select, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import dayjs, { Dayjs } from 'dayjs'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAcknowledgeAnomaly, useAnomalies } from '../../api/anomalies'
@@ -23,6 +24,7 @@ export function Anomalies() {
   const [typeFilter, setTypeFilter] = useState<AnomalyType | undefined>(undefined)
   const [showAll, setShowAll] = useState(false)
   const [page, setPage] = useState(1)
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const pageSize = 20
@@ -32,10 +34,12 @@ export function Anomalies() {
       type: typeFilter,
       target_profile: targetProfile,
       acknowledged: showAll ? undefined : false,
+      created_after: range?.[0]?.toISOString(),
+      created_before: range?.[1]?.toISOString(),
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
-    [typeFilter, targetProfile, showAll, page],
+    [typeFilter, targetProfile, showAll, range, page],
   )
 
   const { data, isLoading, isError, refetch } = useAnomalies(filters)
@@ -138,6 +142,20 @@ export function Anomalies() {
           options={[
             { value: 'unack', label: '未处理' },
             { value: 'all', label: '全部' },
+          ]}
+        />
+        <DatePicker.RangePicker
+          showTime
+          value={range}
+          onChange={(v) => {
+            setRange(v as [Dayjs, Dayjs] | null)
+            setPage(1)
+          }}
+          presets={[
+            { label: '最近 1 小时', value: [dayjs().add(-1, 'h'), dayjs()] },
+            { label: '最近 24 小时', value: [dayjs().add(-24, 'h'), dayjs()] },
+            { label: '最近 7 天', value: [dayjs().add(-7, 'd'), dayjs()] },
+            { label: '最近 30 天', value: [dayjs().add(-30, 'd'), dayjs()] },
           ]}
         />
         {selected.length > 0 ? (

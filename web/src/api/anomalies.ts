@@ -6,6 +6,8 @@ export interface AnomalyFilters {
   type?: AnomalyType
   target_profile?: string
   acknowledged?: boolean
+  created_after?: string
+  created_before?: string
   limit: number
   offset: number
 }
@@ -15,6 +17,8 @@ export function buildAnomalyParams(f: AnomalyFilters): Record<string, string | n
   if (f.type) p.type = f.type
   if (f.target_profile) p.target_profile = f.target_profile
   if (f.acknowledged !== undefined) p.acknowledged = f.acknowledged
+  if (f.created_after) p.created_after = f.created_after
+  if (f.created_before) p.created_before = f.created_before
   return p
 }
 
