@@ -8,19 +8,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
+from autoagent.anomalies import store as anomaly_store
+from autoagent.anomalies.digest import build_digest_markdown
 from autoagent.config.settings import get_settings
 from autoagent.maintenance.backup import run_backup
 from autoagent.maintenance.batch_retention import prune_old_batches
 from autoagent.maintenance.cleanup import run_cleanup
 from autoagent.models.api import DefaultsConfig
-from autoagent.storage.configs import get_config
+from autoagent.notifications.dingtalk import send_markdown
+from autoagent.storage.configs import get_config, put_config
 
 _log = logging.getLogger(__name__)
 
 _STARTUP_DELAY_SEC = 600.0  # 10 min
 _INTERVAL_SEC = 24 * 3600.0
 _BACKUP_STARTUP_DELAY_SEC = 300.0  # 5 min — sooner, and independent of the retention loop
+_DIGEST_STARTUP_DELAY_SEC = 300.0
+_DIGEST_STATE_KEY = "anomaly_digest_state"
 
 
 async def _current_days() -> tuple[int, int]:
@@ -130,5 +136,68 @@ async def run_backup_loop() -> None:
             _log.exception("backup tick failed")
         try:
             await asyncio.sleep(max(interval_hours, 1) * 3600.0)
+        except asyncio.CancelledError:
+            return
+
+
+async def _digest_tick_once() -> None:
+    cfg = await get_config("notifications") or {}
+    if not (cfg.get("enabled") and cfg.get("webhook_url")):
+        return
+    interval = int(cfg.get("digest_interval_hours") or 0)
+    if interval <= 0:
+        return
+
+    now = datetime.now(timezone.utc)
+    state = await get_config(_DIGEST_STATE_KEY) or {}
+    last_raw = state.get("last_sent")
+    if last_raw:
+        try:
+            last = datetime.fromisoformat(last_raw)
+        except ValueError:
+            last = now - timedelta(hours=interval)
+    else:
+        last = now - timedelta(hours=interval)
+
+    # Not yet due — the loop ticks more often than the interval to stay
+    # responsive to config changes, so gate on elapsed time here.
+    if last_raw and (now - last) < timedelta(hours=interval):
+        return
+
+    anomalies = await anomaly_store.anomalies_created_since(last)
+    if not anomalies:
+        # nothing to report, but advance so the window doesn't grow unbounded
+        await put_config(_DIGEST_STATE_KEY, {"last_sent": now.isoformat()})
+        return
+
+    text = build_digest_markdown(anomalies, last, str(cfg.get("app_base_url") or ""))
+    sr = await send_markdown(
+        webhook_url=str(cfg["webhook_url"]).strip(),
+        secret=(str(cfg.get("secret")).strip() or None) if cfg.get("secret") else None,
+        title="[AutoAgent] 异常摘要",
+        text=text,
+        at_mobiles=list(cfg.get("at_mobiles") or []),
+        at_all=bool(cfg.get("at_all")),
+    )
+    if sr.ok:
+        await put_config(_DIGEST_STATE_KEY, {"last_sent": now.isoformat()})
+    else:
+        _log.warning("anomaly digest send failed; will retry next tick")
+
+
+async def run_digest_loop() -> None:
+    """Periodic anomaly digest. Ticks hourly; each tick sends only if enabled
+    and digest_interval_hours has elapsed since the last send."""
+    try:
+        await asyncio.sleep(_DIGEST_STARTUP_DELAY_SEC)
+    except asyncio.CancelledError:
+        return
+    while True:
+        try:
+            await _digest_tick_once()
+        except Exception:  # noqa: BLE001
+            _log.exception("digest tick failed")
+        try:
+            await asyncio.sleep(3600.0)
         except asyncio.CancelledError:
             return
