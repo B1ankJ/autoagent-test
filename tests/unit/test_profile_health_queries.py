@@ -38,3 +38,41 @@ async def test_success_stats_and_windowed_avg():
 
     avg_all = await avg_duration_by_profile()
     assert avg_all["p"] > 200
+
+
+@pytest.mark.asyncio
+async def test_timed_samples_for_profile_ordered_with_device():
+    from autoagent.storage.samples import timed_samples_for_profile
+
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample(
+        "b",
+        SampleResult(id="s2", status="done", mode="api", target_profile="p",
+                     duration_ms=200, ended_at=now, metadata={"device_serial": "d9"}),
+    )
+    await upsert_sample(
+        "b",
+        SampleResult(id="s1", status="done", mode="api", target_profile="p",
+                     duration_ms=100, ended_at=now - timedelta(minutes=5)),
+    )
+    await upsert_sample(
+        "b", SampleResult(id="s3", status="failed", mode="api", target_profile="p")
+    )
+    rows = await timed_samples_for_profile("p")
+    assert [r.sample_id for r in rows] == ["s1", "s2"]
+    assert rows[0].duration_ms == 100 and rows[0].device_serial is None
+    assert rows[1].device_serial == "d9"
+
+
+@pytest.mark.asyncio
+async def test_distinct_sample_profiles():
+    from autoagent.storage.samples import distinct_sample_profiles
+
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample("b", SampleResult(id="a", status="done", mode="api",
+                                          target_profile="p1", duration_ms=100, ended_at=now))
+    await upsert_sample("b", SampleResult(id="c", status="failed", mode="api",
+                                          target_profile="p2"))
+    assert set(await distinct_sample_profiles()) == {"p1"}

@@ -110,6 +110,17 @@ async def acknowledge(anomaly_id: int) -> bool:
         return True
 
 
+async def existing_duration_sample_ids() -> set[str]:
+    """Sample ids that already have a type='duration' anomaly — the dedup key
+    for backfill (each sample yields at most one duration anomaly)."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(AnomalyRow.sample_id).where(AnomalyRow.type == "duration").distinct()
+        )
+        return {sid for (sid,) in r.all()}
+
+
 async def count_unacknowledged() -> int:
     sm = get_sessionmaker()
     async with sm() as s:

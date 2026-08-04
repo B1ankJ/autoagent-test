@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -153,6 +154,58 @@ async def avg_duration_by_profile(since: datetime | None = None) -> dict[str, fl
             stmt = stmt.where(SampleRow.ended_at.is_not(None)).where(SampleRow.ended_at >= since)
         r = await s.execute(stmt)
         return {profile: float(avg) for profile, avg in r.all() if avg is not None}
+
+
+@dataclass
+class TimedSample:
+    sample_id: str
+    batch_id: str
+    duration_ms: int
+    device_serial: str | None
+
+
+async def distinct_sample_profiles() -> list[str]:
+    """Every target_profile that has at least one timed sample — the set
+    backfill iterates (sample-derived, not on-disk, so it covers profiles
+    whose YAML was deleted)."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(SampleRow.target_profile)
+            .where(SampleRow.duration_ms.is_not(None))
+            .distinct()
+        )
+        return [p for (p,) in r.all()]
+
+
+async def timed_samples_for_profile(profile: str) -> list[TimedSample]:
+    """A profile's timed samples (duration_ms not null), oldest first, with
+    device_serial parsed best-effort from metadata_json. For backfill's
+    point-in-time slide."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(
+                SampleRow.id, SampleRow.batch_id, SampleRow.duration_ms, SampleRow.metadata_json
+            )
+            .where(SampleRow.duration_ms.is_not(None))
+            .where(SampleRow.target_profile == profile)
+            .order_by(SampleRow.ended_at.asc())
+        )
+        out: list[TimedSample] = []
+        for sid, bid, dur, meta_json in r.all():
+            serial = None
+            if meta_json:
+                try:
+                    serial = json.loads(meta_json).get("device_serial")
+                except (ValueError, AttributeError):
+                    serial = None
+            out.append(
+                TimedSample(
+                    sample_id=sid, batch_id=bid, duration_ms=int(dur), device_serial=serial
+                )
+            )
+        return out
 
 
 async def recent_durations_for_profile(profile: str, limit: int = 500) -> list[int]:

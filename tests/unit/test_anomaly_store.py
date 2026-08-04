@@ -142,3 +142,18 @@ async def test_list_anomalies_time_filter():
         created_before=now - timedelta(hours=1), limit=10, offset=0
     )
     assert before_past == 0
+
+
+@pytest.mark.asyncio
+async def test_existing_duration_sample_ids():
+    await init_db()
+    await store.record_anomaly(
+        type="duration", batch_id="b", sample_id="s1", target_profile="p",
+        device_serial=None, summary="x", detail={},
+    )
+    await store.record_anomaly(
+        type="anr", batch_id="b", sample_id="s2", target_profile="p",
+        device_serial=None, summary="y", detail={},
+    )
+    ids = await store.existing_duration_sample_ids()
+    assert ids == {"s1"}
