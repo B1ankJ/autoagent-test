@@ -28,6 +28,7 @@ _REMOTE = "origin"
 _BRANCH = "main"
 # A pull that touches any of these means the Python env may be stale.
 _DEP_FILES = ("pyproject.toml", "uv.lock")
+_FRONTEND_DEP_FILES = ("web/package.json", "web/pnpm-lock.yaml")
 _CHANGELOG_LIMIT = 30
 
 
@@ -182,6 +183,17 @@ def _deps_changed(old: str, new: str) -> bool:
     return any(dep in changed for dep in _DEP_FILES)
 
 
+def _frontend_deps_changed(old: str, new: str) -> bool:
+    r = _run(["git", "diff", "--name-only", old, new])
+    if not r.ok:
+        # Can't tell → assume yes so we don't skip a needed install and then
+        # build against stale node_modules (a `pnpm build` after a pull that
+        # added a dependency fails with "Cannot find module ...").
+        return True
+    changed = set(r.stdout.split())
+    return any(dep in changed for dep in _FRONTEND_DEP_FILES)
+
+
 @dataclass
 class ToolCheck:
     name: str
@@ -299,6 +311,20 @@ def apply_update() -> ApplyResult:
             return ApplyResult(ok=False, restarting=False, steps=steps, error="uv sync failed")
     else:
         steps.append("dependencies unchanged; skipping uv sync")
+
+    # Install frontend deps before building when the lockfile moved — otherwise
+    # `pnpm build` runs against stale node_modules and fails on a newly-added
+    # dependency (mirrors the uv-sync gate above for the backend).
+    if old and new and _frontend_deps_changed(old, new):
+        install = _run(
+            ["pnpm", "install", "--frozen-lockfile"], cwd=REPO_ROOT / "web", timeout=600.0
+        )
+        if not record("pnpm install", install):
+            return ApplyResult(
+                ok=False, restarting=False, steps=steps, error="pnpm install failed"
+            )
+    else:
+        steps.append("frontend dependencies unchanged; skipping pnpm install")
 
     build = _run(["pnpm", "build"], cwd=REPO_ROOT / "web", timeout=600.0)
     if not record("pnpm build", build):

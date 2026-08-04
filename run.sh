@@ -91,7 +91,10 @@ build_spa() {
     return 0
   fi
   log "building SPA (web/)"
-  (cd web && pnpm build)
+  # Install deps before building — a pull that added a frontend dependency
+  # leaves node_modules stale, and `pnpm build` then fails with "Cannot find
+  # module ...". --frozen-lockfile is a fast no-op when already in sync.
+  (cd web && pnpm install --frozen-lockfile && pnpm build)
 }
 
 start_uvicorn() {

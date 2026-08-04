@@ -20,6 +20,7 @@ class FakeGit:
         pull_ok: bool = True,
         diff_files: str = "",
         sync_ok: bool = True,
+        install_ok: bool = True,
         build_ok: bool = True,
     ):
         self.old = old
@@ -28,6 +29,7 @@ class FakeGit:
         self.pull_ok = pull_ok
         self.diff_files = diff_files
         self.sync_ok = sync_ok
+        self.install_ok = install_ok
         self.build_ok = build_ok
         self.calls: list[list[str]] = []
 
@@ -57,6 +59,8 @@ class FakeGit:
             return r(out=self.diff_files)
         if cmd[:2] == ["uv", "sync"]:
             return r(0 if self.sync_ok else 1, out="synced" if self.sync_ok else "boom")
+        if cmd[:3] == ["pnpm", "install", "--frozen-lockfile"]:
+            return r(0 if self.install_ok else 1, out="installed" if self.install_ok else "boom")
         if cmd[:2] == ["pnpm", "build"]:
             return r(0 if self.build_ok else 1, out="built" if self.build_ok else "boom")
         return r()
@@ -118,6 +122,43 @@ def test_apply_runs_uv_sync_when_deps_changed(monkeypatch):
     result = updater.apply_update()
     assert result.ok is True
     assert ["uv", "sync"] in fake.calls
+
+
+def test_apply_runs_pnpm_install_when_frontend_lockfile_changed(monkeypatch):
+    fake = FakeGit(old="aaaa", remote="bbbb", diff_files="web/pnpm-lock.yaml")
+    monkeypatch.setattr(updater, "_run", fake)
+    monkeypatch.setattr(updater, "_spawn_detached_restart", lambda: None)
+    result = updater.apply_update()
+    assert result.ok is True
+    assert ["pnpm", "install", "--frozen-lockfile"] in fake.calls
+    # install must precede build
+    assert fake.calls.index(["pnpm", "install", "--frozen-lockfile"]) < fake.calls.index(
+        ["pnpm", "build"]
+    )
+
+
+def test_apply_skips_pnpm_install_when_frontend_deps_unchanged(monkeypatch):
+    fake = FakeGit(old="aaaa", remote="bbbb", diff_files="src/autoagent/main.py")
+    monkeypatch.setattr(updater, "_run", fake)
+    monkeypatch.setattr(updater, "_spawn_detached_restart", lambda: None)
+    result = updater.apply_update()
+    assert result.ok is True
+    assert ["pnpm", "install", "--frozen-lockfile"] not in fake.calls
+    assert ["pnpm", "build"] in fake.calls
+
+
+def test_apply_aborts_when_pnpm_install_fails(monkeypatch):
+    fake = FakeGit(
+        old="aaaa", remote="bbbb", diff_files="web/package.json", install_ok=False
+    )
+    spawned = []
+    monkeypatch.setattr(updater, "_run", fake)
+    monkeypatch.setattr(updater, "_spawn_detached_restart", lambda: spawned.append(True))
+    result = updater.apply_update()
+    assert result.ok is False
+    assert result.error == "pnpm install failed"
+    assert ["pnpm", "build"] not in fake.calls  # never reached build
+    assert spawned == []
 
 
 def test_apply_aborts_when_build_fails(monkeypatch):
