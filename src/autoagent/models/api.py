@@ -477,3 +477,10 @@ class ProfileHealth(BaseModel):
     # Bound device serials (android/agent_android only; empty otherwise) — lets
     # the dashboard open the profile's device-screen grid scoped to this pool.
     serials: list[str] = Field(default_factory=list)
+
+
+class DailyPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    success_rate: float | None = None
+    avg_duration_ms: float | None = None
+    sample_count: int = 0

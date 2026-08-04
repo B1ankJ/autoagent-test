@@ -4,9 +4,9 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
-from autoagent.models.api import SampleResult
+from autoagent.models.api import DailyPoint, SampleResult
 from autoagent.models.db import Sample as SampleRow
 from autoagent.storage.database import get_sessionmaker
 
@@ -224,3 +224,37 @@ async def recent_durations_for_profile(profile: str, limit: int = 500) -> list[i
             .limit(limit)
         )
         return [int(d) for (d,) in r.all()]
+
+
+async def daily_stats_by_profile(since: datetime) -> dict[str, list[DailyPoint]]:
+    """Per profile, a daily time series (ascending) of success rate / avg
+    duration / sample count over terminal-executed samples with ended_at >=
+    since. Buckets by date(ended_at); only days with samples appear."""
+    day = func.strftime("%Y-%m-%d", SampleRow.ended_at)
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(
+                SampleRow.target_profile,
+                day.label("day"),
+                func.count().label("total"),
+                func.sum(case((SampleRow.status == "done", 1), else_=0)).label("done"),
+                func.avg(SampleRow.duration_ms).label("avg_ms"),
+            )
+            .where(SampleRow.status.in_(_TERMINAL_EXECUTED))
+            .where(SampleRow.ended_at.is_not(None))
+            .where(SampleRow.ended_at >= since)
+            .group_by(SampleRow.target_profile, "day")
+            .order_by(SampleRow.target_profile, "day")
+        )
+        out: dict[str, list[DailyPoint]] = {}
+        for profile, d, total, done, avg_ms in r.all():
+            out.setdefault(profile, []).append(
+                DailyPoint(
+                    date=d,
+                    success_rate=(done / total) if total else None,
+                    avg_duration_ms=float(avg_ms) if avg_ms is not None else None,
+                    sample_count=int(total),
+                )
+            )
+        return out

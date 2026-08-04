@@ -76,3 +76,31 @@ async def test_distinct_sample_profiles():
     await upsert_sample("b", SampleResult(id="c", status="failed", mode="api",
                                           target_profile="p2"))
     assert set(await distinct_sample_profiles()) == {"p1"}
+
+
+@pytest.mark.asyncio
+async def test_daily_stats_by_profile_buckets_by_day():
+    from autoagent.storage.samples import daily_stats_by_profile
+
+    await init_db()
+    d1 = datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc)
+    d2 = datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc)
+    old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await upsert_sample("b", SampleResult(id="a1", status="done", mode="api",
+                                          target_profile="p", duration_ms=100, ended_at=d1))
+    await upsert_sample("b", SampleResult(id="a2", status="done", mode="api",
+                                          target_profile="p", duration_ms=200, ended_at=d1))
+    await upsert_sample("b", SampleResult(id="a3", status="failed", mode="api",
+                                          target_profile="p", duration_ms=None, ended_at=d1))
+    await upsert_sample("b", SampleResult(id="a4", status="done", mode="api",
+                                          target_profile="p", duration_ms=400, ended_at=d2))
+    await upsert_sample("b", SampleResult(id="a5", status="done", mode="api",
+                                          target_profile="p", duration_ms=999, ended_at=old))
+
+    since = datetime(2026, 2, 15, tzinfo=timezone.utc)
+    trends = await daily_stats_by_profile(since)
+    pts = trends["p"]
+    assert [p.date for p in pts] == ["2026-03-01", "2026-03-02"]
+    assert pts[0].sample_count == 3 and round(pts[0].success_rate, 3) == round(2 / 3, 3)
+    assert round(pts[0].avg_duration_ms) == 150
+    assert pts[1].sample_count == 1 and pts[1].success_rate == 1.0
