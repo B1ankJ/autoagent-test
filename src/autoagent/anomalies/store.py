@@ -148,6 +148,19 @@ async def unacked_counts_by_profile(since: datetime) -> dict[str, int]:
         return {profile: int(count) for profile, count in r.all()}
 
 
+async def anomalies_created_since(since: datetime) -> list[AnomalyRecord]:
+    """All anomalies created at/after `since`, newest first — feeds the
+    periodic digest."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(AnomalyRow)
+            .where(AnomalyRow.created_at >= since)
+            .order_by(AnomalyRow.created_at.desc())
+        )
+        return [_row_to_record(row) for row in r.scalars().all()]
+
+
 async def delete_for_batch(batch_id: str) -> int:
     sm = get_sessionmaker()
     async with sm() as s:

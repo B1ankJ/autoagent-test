@@ -282,6 +282,9 @@ class DingTalkNotificationConfig(BaseModel):
     # extra toggle, since an ANR'd app can't be recovered by anything short
     # of a restart. Off by default like rule 2.
     anr_check_enabled: bool = False
+    # Periodic anomaly digest: every N hours, DingTalk a summary of anomalies
+    # created since the last digest. 0 = off. Reuses enabled/webhook_url/secret.
+    digest_interval_hours: int = 0
     # Optional @-mentions on alert (mobile numbers / "all").
     at_mobiles: list[str] = Field(default_factory=list)
     at_all: bool = False

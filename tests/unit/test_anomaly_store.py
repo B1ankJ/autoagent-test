@@ -157,3 +157,17 @@ async def test_existing_duration_sample_ids():
     )
     ids = await store.existing_duration_sample_ids()
     assert ids == {"s1"}
+
+
+@pytest.mark.asyncio
+async def test_anomalies_created_since():
+    from datetime import datetime, timedelta, timezone
+
+    await init_db()
+    await store.record_anomaly(
+        type="duration", batch_id="b", sample_id="s1", target_profile="p",
+        device_serial=None, summary="x", detail={},
+    )
+    now = datetime.now(timezone.utc)
+    assert len(await store.anomalies_created_since(now - timedelta(hours=1))) == 1
+    assert len(await store.anomalies_created_since(now + timedelta(hours=1))) == 0
