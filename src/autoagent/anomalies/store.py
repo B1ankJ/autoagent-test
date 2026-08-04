@@ -117,6 +117,20 @@ async def count_unacknowledged() -> int:
         return int(total)
 
 
+async def unacked_counts_by_profile(since: datetime) -> dict[str, int]:
+    """Per profile: number of unacknowledged anomalies created since `since`.
+    Feeds the health dashboard's anomaly signal."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        r = await s.execute(
+            select(AnomalyRow.target_profile, func.count())
+            .where(AnomalyRow.acknowledged == False)  # noqa: E712
+            .where(AnomalyRow.created_at >= since)
+            .group_by(AnomalyRow.target_profile)
+        )
+        return {profile: int(count) for profile, count in r.all()}
+
+
 async def delete_for_batch(batch_id: str) -> int:
     sm = get_sessionmaker()
     async with sm() as s:

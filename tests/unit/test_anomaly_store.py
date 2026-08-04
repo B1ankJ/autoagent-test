@@ -96,3 +96,25 @@ async def test_delete_batch_rows_cascades_to_anomalies() -> None:
     assert (await store.list_anomalies(limit=10, offset=0))[1] == 1
     assert await delete_batch_rows("bx") is True
     assert (await store.list_anomalies(limit=10, offset=0))[1] == 0
+
+
+@pytest.mark.asyncio
+async def test_unacked_counts_by_profile():
+    from datetime import datetime, timedelta, timezone
+
+    await init_db()
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        await store.record_anomaly(
+            type="duration", batch_id="b", sample_id=f"s{i}", target_profile="p1",
+            device_serial=None, summary="x", detail={},
+        )
+    await store.record_anomaly(
+        type="anr", batch_id="b", sample_id="sx", target_profile="p2",
+        device_serial=None, summary="y", detail={},
+    )
+    items, _ = await store.list_anomalies(target_profile="p1", limit=10, offset=0)
+    await store.acknowledge(items[0].id)
+
+    counts = await store.unacked_counts_by_profile(now - timedelta(days=7))
+    assert counts == {"p1": 2, "p2": 1}
