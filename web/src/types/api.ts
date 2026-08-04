@@ -407,3 +407,17 @@ export interface AnomalyListResponse {
   items: AnomalyRecord[]
   total: number
 }
+
+export type HealthStatus = 'green' | 'yellow' | 'red' | 'nodata'
+
+export interface ProfileHealth {
+  name: string
+  platform: string
+  status: HealthStatus
+  success_rate: number | null
+  total_runs: number
+  avg_duration_ms: number | null
+  unacked_anomalies: number
+  devices_online: number | null
+  devices_total: number | null
+}
