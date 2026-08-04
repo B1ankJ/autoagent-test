@@ -1,11 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { HealthStatus, ProfileHealth } from '../types/api'
+import { HealthStatus, ProfileHealth, ProfileTrends } from '../types/api'
 import { client } from './client'
 
 export function useProfileHealth() {
   return useQuery({
     queryKey: ['profiles', 'health'],
     queryFn: async () => (await client.get<ProfileHealth[]>('/profiles/health')).data,
+  })
+}
+
+export function useProfileTrends(days = 30) {
+  return useQuery({
+    queryKey: ['profiles', 'trends', days],
+    queryFn: async () =>
+      (await client.get<ProfileTrends>('/profiles/trends', { params: { days } })).data,
   })
 }
 

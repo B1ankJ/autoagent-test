@@ -422,3 +422,12 @@ export interface ProfileHealth {
   devices_total: number | null
   serials: string[]
 }
+
+export interface DailyPoint {
+  date: string
+  success_rate: number | null
+  avg_duration_ms: number | null
+  sample_count: number
+}
+
+export type ProfileTrends = Record<string, DailyPoint[]>
