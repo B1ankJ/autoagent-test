@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from autoagent.anomalies import store
+from autoagent.anomalies.backfill import backfill_duration_anomalies
 from autoagent.auth.deps import require_user
 from autoagent.models.api import AnomalyListResponse
 
@@ -41,6 +42,12 @@ async def count_anomalies(acknowledged: bool | None = None) -> dict[str, int]:
         return {"count": await store.count_unacknowledged()}
     _, total = await store.list_anomalies(acknowledged=acknowledged, limit=1, offset=0)
     return {"count": total}
+
+
+@router.post("/backfill")
+async def backfill_anomalies() -> dict[str, int]:
+    result = await backfill_duration_anomalies()
+    return {"scanned": result.scanned, "created": result.created}
 
 
 @router.post("/{anomaly_id}/acknowledge")

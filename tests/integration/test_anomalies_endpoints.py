@@ -92,3 +92,29 @@ async def test_list_anomalies_time_params(client):
     assert r.status_code == 200 and r.json()["total"] == 0
     r = await client.get("/api/v1/anomalies?created_after=2000-01-01T00:00:00Z", headers=h)
     assert r.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_backfill_endpoint(client):
+    from datetime import datetime, timedelta, timezone
+
+    from autoagent.models.api import SampleResult
+    from autoagent.storage.samples import upsert_sample
+
+    h = await _login(client)
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for i in range(25):
+        await upsert_sample(
+            "b",
+            SampleResult(id=f"h{i}", status="done", mode="api", target_profile="p",
+                         duration_ms=1000 + i, ended_at=base + timedelta(minutes=i)),
+        )
+    await upsert_sample(
+        "b",
+        SampleResult(id="out", status="done", mode="api", target_profile="p",
+                     duration_ms=50000, ended_at=base + timedelta(hours=2)),
+    )
+    r = await client.post("/api/v1/anomalies/backfill", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["scanned"] == 26 and body["created"] == 1
