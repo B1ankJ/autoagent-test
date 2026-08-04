@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
 from autoagent.models.api import SampleResult
 from autoagent.models.db import Sample as SampleRow
 from autoagent.storage.database import get_sessionmaker
+
+_TERMINAL_EXECUTED = ("done", "failed", "timeout", "extraction_failed")
 
 
 def _row_to_result(r: SampleRow) -> SampleResult:
@@ -111,22 +113,45 @@ async def list_samples_for_batches(batch_ids: list[str]) -> dict[str, list[Sampl
     return out
 
 
-async def avg_duration_by_profile() -> dict[str, float]:
-    """Average Sample.duration_ms across every recorded sample, grouped by
-    target_profile — the one number the Profiles list column and the
-    Batches list's duration-anomaly highlight/filter both compare against.
-
-    Samples with no duration_ms (never finished, or the branches that skip
-    execution entirely — cancelled, end_session, device-acquisition
-    failures) are excluded so they don't drag the average toward zero.
-    """
+async def success_stats_by_profile(since: datetime) -> dict[str, tuple[int, int]]:
+    """Per profile: (done_count, terminal_count) among samples that finished
+    executing (status in _TERMINAL_EXECUTED) with ended_at >= since. Non-
+    terminal statuses (queued/running/cancelled) are excluded from the
+    denominator — success rate is done / (things that actually ran)."""
     sm = get_sessionmaker()
     async with sm() as s:
         r = await s.execute(
+            select(SampleRow.target_profile, SampleRow.status, func.count())
+            .where(SampleRow.status.in_(_TERMINAL_EXECUTED))
+            .where(SampleRow.ended_at.is_not(None))
+            .where(SampleRow.ended_at >= since)
+            .group_by(SampleRow.target_profile, SampleRow.status)
+        )
+        out: dict[str, tuple[int, int]] = {}
+        for profile, status, count in r.all():
+            done, total = out.get(profile, (0, 0))
+            total += count
+            if status == "done":
+                done += count
+            out[profile] = (done, total)
+        return out
+
+
+async def avg_duration_by_profile(since: datetime | None = None) -> dict[str, float]:
+    """Average Sample.duration_ms grouped by target_profile. When `since` is
+    given, only samples with ended_at >= since count (the health dashboard's
+    7-day window); default None = all-time (the Profiles list / batch
+    duration-anomaly callers, unchanged)."""
+    sm = get_sessionmaker()
+    async with sm() as s:
+        stmt = (
             select(SampleRow.target_profile, func.avg(SampleRow.duration_ms))
             .where(SampleRow.duration_ms.is_not(None))
             .group_by(SampleRow.target_profile)
         )
+        if since is not None:
+            stmt = stmt.where(SampleRow.ended_at.is_not(None)).where(SampleRow.ended_at >= since)
+        r = await s.execute(stmt)
         return {profile: float(avg) for profile, avg in r.all() if avg is not None}
 
 
