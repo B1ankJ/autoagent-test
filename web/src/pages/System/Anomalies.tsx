@@ -1,7 +1,7 @@
 import { App, Button, Segmented, Select, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAcknowledgeAnomaly, useAnomalies } from '../../api/anomalies'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
@@ -17,6 +17,8 @@ const TYPE_LABELS: Record<AnomalyType, { label: string; color: string }> = {
 
 export function Anomalies() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const targetProfile = params.get('target_profile') ?? undefined
   const { message } = App.useApp()
   const [typeFilter, setTypeFilter] = useState<AnomalyType | undefined>(undefined)
   const [showAll, setShowAll] = useState(false)
@@ -28,11 +30,12 @@ export function Anomalies() {
   const filters = useMemo(
     () => ({
       type: typeFilter,
+      target_profile: targetProfile,
       acknowledged: showAll ? undefined : false,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
-    [typeFilter, showAll, page],
+    [typeFilter, targetProfile, showAll, page],
   )
 
   const { data, isLoading, isError, refetch } = useAnomalies(filters)

@@ -76,4 +76,22 @@ describe('Anomalies', () => {
     await userEvent.click(await screen.findByText('查看'))
     expect(await screen.findByText('sample-page/batches/bb/samples/ss')).toBeInTheDocument()
   })
+
+  it('prefills the profile filter from the URL target_profile query', async () => {
+    useAnomalies.mockReturnValue({
+      data: { items: [], total: 0 },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/system/anomalies" element={<Anomalies />} />
+      </Routes>,
+      { initialPath: '/system/anomalies?target_profile=qwen' },
+    )
+    await waitFor(() => {
+      const calledWith = useAnomalies.mock.calls.at(-1)?.[0]
+      expect(calledWith).toMatchObject({ target_profile: 'qwen' })
+    })
+  })
 })
