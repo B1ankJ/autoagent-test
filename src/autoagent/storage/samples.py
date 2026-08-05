@@ -308,7 +308,11 @@ async def search_samples_by_response(
                 await s.execute(
                     select(SampleRow)
                     .where(*conds)
-                    .order_by(SampleRow.ended_at.desc().nullslast())
+                    # NOT .nullslast(): "NULLS LAST" is a SQLite 3.30+ syntax
+                    # (production may run older sqlite → "near NULLS: syntax
+                    # error"). SQLite already sorts NULL as the smallest value,
+                    # so DESC puts NULL-ended_at rows last anyway.
+                    .order_by(SampleRow.ended_at.desc())
                     .limit(limit)
                     .offset(offset)
                 )

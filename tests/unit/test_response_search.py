@@ -48,6 +48,20 @@ async def test_search_profile_filter_and_pagination():
 
 
 @pytest.mark.asyncio
+async def test_search_handles_null_ended_at_and_sorts_it_last():
+    # Regression: the ordering must not use "NULLS LAST" SQL (SQLite 3.30+
+    # only; older production sqlite raises "near NULLS: syntax error").
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample("b", _s("timed", "p", ["hit here"], ended=now))
+    await upsert_sample("b", _s("nulltime", "p", ["hit here"], ended=None))
+    hits, total = await search_samples_by_response("hit", limit=20, offset=0)
+    assert total == 2
+    # both returned; the NULL-ended_at row sorts after the timed one under DESC
+    assert [h.sample_id for h in hits] == ["timed", "nulltime"]
+
+
+@pytest.mark.asyncio
 async def test_search_escapes_like_metachars():
     await init_db()
     now = datetime.now(timezone.utc)
