@@ -19,6 +19,7 @@ from autoagent.api.media import router as media_router
 from autoagent.api.openai_compat import router as openai_compat_router
 from autoagent.api.profile_builder import router as profile_builder_router
 from autoagent.api.profiles import router as profiles_router
+from autoagent.api.search import router as search_router
 from autoagent.api.system import router as system_router
 from autoagent.api.tests import router as tests_router
 from autoagent.api.web_profile_builder import router as web_profile_builder_router
@@ -93,6 +94,7 @@ app.include_router(device_stream_router, prefix="/api/v1")
 app.include_router(media_router, prefix="/api/v1")
 app.include_router(system_router, prefix="/api/v1")
 app.include_router(anomalies_router, prefix="/api/v1")
+app.include_router(search_router, prefix="/api/v1")
 
 
 def _mount_static(app: FastAPI) -> None:
