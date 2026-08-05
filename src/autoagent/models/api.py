@@ -484,3 +484,18 @@ class DailyPoint(BaseModel):
     success_rate: float | None = None
     avg_duration_ms: float | None = None
     sample_count: int = 0
+
+
+class SampleSearchHit(BaseModel):
+    batch_id: str
+    sample_id: str
+    target_profile: str
+    status: str
+    ended_at: datetime | None = None
+    source: str  # "response" | "llm_response"
+    snippet: str
+
+
+class SampleSearchResponse(BaseModel):
+    items: list[SampleSearchHit]
+    total: int

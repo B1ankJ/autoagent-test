@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select
 
-from autoagent.models.api import DailyPoint, SampleResult
+from autoagent.models.api import DailyPoint, SampleResult, SampleSearchHit
 from autoagent.models.db import Sample as SampleRow
 from autoagent.storage.database import get_sessionmaker
 
@@ -258,3 +258,82 @@ async def daily_stats_by_profile(since: datetime) -> dict[str, list[DailyPoint]]
                 )
             )
         return out
+
+
+def _like_term(q: str) -> str:
+    # Local copy (batches.py has the same helper, but importing it here would
+    # be circular since batches imports from this module). Escapes LIKE
+    # metacharacters so a "%foo" query doesn't match everything.
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _snippet(text: str, q: str, radius: int = 40) -> str:
+    lo = text.lower().find(q.lower())
+    if lo < 0:
+        return text[: radius * 2] + ("…" if len(text) > radius * 2 else "")
+    start = max(0, lo - radius)
+    end = min(len(text), lo + len(q) + radius)
+    return ("…" if start > 0 else "") + text[start:end] + ("…" if end < len(text) else "")
+
+
+def _first_match(items: list, q: str) -> str | None:
+    ql = q.lower()
+    for it in items:
+        if isinstance(it, str) and ql in it.lower():
+            return it
+    return None
+
+
+async def search_samples_by_response(
+    q: str, target_profile: str | None = None, *, limit: int, offset: int
+) -> tuple[list[SampleSearchHit], int]:
+    """Cross-batch search over responses_json + llm_responses_json (substring
+    LIKE, escaped). Returns matching samples (newest first) with a snippet of
+    the matched response and its source, plus a total count."""
+    term = _like_term(q)
+    match = SampleRow.responses_json.like(term, escape="\\") | SampleRow.llm_responses_json.like(
+        term, escape="\\"
+    )
+    sm = get_sessionmaker()
+    async with sm() as s:
+        conds = [match]
+        if target_profile is not None:
+            conds.append(SampleRow.target_profile == target_profile)
+        total = (
+            await s.execute(select(func.count()).select_from(SampleRow).where(*conds))
+        ).scalar_one()
+        rows = (
+            (
+                await s.execute(
+                    select(SampleRow)
+                    .where(*conds)
+                    .order_by(SampleRow.ended_at.desc().nullslast())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        hits: list[SampleSearchHit] = []
+        for r in rows:
+            raw = json.loads(r.responses_json or "[]")
+            llm = json.loads(r.llm_responses_json or "[]")
+            matched = _first_match(raw, q)
+            source = "response"
+            if matched is None:
+                matched = _first_match(llm, q)
+                source = "llm_response"
+            hits.append(
+                SampleSearchHit(
+                    batch_id=r.batch_id,
+                    sample_id=r.id,
+                    target_profile=r.target_profile,
+                    status=r.status,
+                    ended_at=r.ended_at.replace(tzinfo=timezone.utc) if r.ended_at else None,
+                    source=source,
+                    snippet=_snippet(matched or "", q),
+                )
+            )
+        return hits, int(total)
