@@ -17,6 +17,7 @@ import { Health as ProfileHealth } from './pages/Profiles/Health'
 import { ProfileList } from './pages/Profiles/List'
 import { Anomalies } from './pages/System/Anomalies'
 import { LogsPage } from './pages/System/Logs'
+import { ResponseSearch } from './pages/Search/ResponseSearch'
 import { TestsQuick } from './pages/Tests/Quick'
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="profiles/new" element={<ProfileEdit />} />
           <Route path="profiles/:name" element={<ProfileEdit />} />
           <Route path="tests/quick" element={<TestsQuick />} />
+          <Route path="search/responses" element={<ResponseSearch />} />
           <Route path="batches" element={<BatchList />} />
           <Route path="batches/new" element={<BatchNew />} />
           <Route path="batches/compare" element={<BatchCompare />} />

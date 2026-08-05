@@ -1,0 +1,59 @@
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Route, Routes, useLocation } from 'react-router-dom'
+import { renderWithProviders } from '../../test/test-utils'
+import type { SampleSearchHit } from '../../types/api'
+import { ResponseSearch } from './ResponseSearch'
+
+const useSampleSearch = vi.fn()
+
+vi.mock('../../api/search', () => ({
+  useSampleSearch: (...a: unknown[]) => useSampleSearch(...a),
+}))
+vi.mock('../../api/profiles', () => ({ useProfiles: () => ({ data: [] }) }))
+
+function hit(over: Partial<SampleSearchHit> & { sample_id: string }): SampleSearchHit {
+  return {
+    batch_id: 'b1',
+    target_profile: 'p1',
+    status: 'done',
+    ended_at: '2026-08-05T00:00:00Z',
+    source: 'response',
+    snippet: '…前面 抱歉我无法 后面…',
+    ...over,
+  }
+}
+
+function SampleStub() {
+  const loc = useLocation()
+  return <div>sample-page{loc.pathname}</div>
+}
+
+describe('ResponseSearch', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders hits with a snippet and links to the sample', async () => {
+    useSampleSearch.mockReturnValue({
+      data: { items: [hit({ sample_id: 's1', batch_id: 'bb' })], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/search/responses" element={<ResponseSearch />} />
+        <Route path="/batches/:id/samples/:sid" element={<SampleStub />} />
+      </Routes>,
+      { initialPath: '/search/responses' },
+    )
+    await userEvent.type(screen.getByPlaceholderText(/搜索响应/), '抱歉我无法')
+    await userEvent.keyboard('{Enter}')
+    // the source tag and 共 N 条 render once results are shown
+    await waitFor(() => expect(screen.getByText('原始响应')).toBeInTheDocument())
+    expect(screen.getByText(/共 1 条命中/)).toBeInTheDocument()
+    await userEvent.click(screen.getByText('查看'))
+    expect(await screen.findByText('sample-page/batches/bb/samples/s1')).toBeInTheDocument()
+  })
+})
