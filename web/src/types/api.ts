@@ -431,3 +431,18 @@ export interface DailyPoint {
 }
 
 export type ProfileTrends = Record<string, DailyPoint[]>
+
+export interface SampleSearchHit {
+  batch_id: string
+  sample_id: string
+  target_profile: string
+  status: SampleStatus
+  ended_at: string | null
+  source: 'response' | 'llm_response'
+  snippet: string
+}
+
+export interface SampleSearchResponse {
+  items: SampleSearchHit[]
+  total: number
+}
