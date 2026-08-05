@@ -74,6 +74,16 @@ export function ResponseSearch() {
       render: (s: SampleSearchHit['status']) => <StatusTag status={s} />,
     },
     {
+      title: '时间',
+      dataIndex: 'ended_at',
+      width: 170,
+      render: (v: string | null) => (
+        <span className="aa-mono" style={{ fontSize: 12 }}>
+          {v ? new Date(v).toLocaleString() : '-'}
+        </span>
+      ),
+    },
+    {
       title: '操作',
       width: 90,
       render: (_v, row) => (
