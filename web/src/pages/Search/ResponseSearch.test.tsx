@@ -56,4 +56,25 @@ describe('ResponseSearch', () => {
     await userEvent.click(screen.getByText('查看'))
     expect(await screen.findByText('sample-page/batches/bb/samples/s1')).toBeInTheDocument()
   })
+
+  it('restores the query from the URL (survives navigating away and back)', async () => {
+    useSampleSearch.mockReturnValue({
+      data: { items: [hit({ sample_id: 's1' })], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/search/responses" element={<ResponseSearch />} />
+      </Routes>,
+      // as if the browser restored the URL that carried the search
+      { initialPath: '/search/responses?q=抱歉我无法' },
+    )
+    // results show immediately without re-typing, and the box is prefilled
+    await waitFor(() => expect(screen.getByText('原始响应')).toBeInTheDocument())
+    expect(screen.getByDisplayValue('抱歉我无法')).toBeInTheDocument()
+    // the hook was driven by the URL's q
+    const lastArgs = useSampleSearch.mock.calls.at(-1)?.[0] as { q: string } | undefined
+    expect(lastArgs?.q).toBe('抱歉我无法')
+  })
 })
