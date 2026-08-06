@@ -17,11 +17,15 @@ class DeviceMonitor:
         mark_missing_offline,
         interval_sec: float = 5.0,
         on_state_change: Callable[[str, str, str], Awaitable[None]] | None = None,
+        on_tick: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._list_devices = list_devices
         self._upsert_device = upsert_device
         self._mark_missing_offline = mark_missing_offline
         self._interval_sec = interval_sec
+        # Optional hook fired at the end of every sync_once (after transitions),
+        # e.g. the device auto-heal pass. Guarded so it can't stall the loop.
+        self._on_tick = on_tick
         # Optional hook fired on any online↔offline / online↔missing transition
         # for a given serial. Called as (serial, prev_state, new_state) where
         # states are "online", "offline", "missing". Never raises out; the
@@ -61,6 +65,11 @@ class DeviceMonitor:
                 current[serial] = "missing"
         await self._emit_transitions(current)
         self._last_state = current
+        if self._on_tick is not None:
+            try:
+                await self._on_tick()
+            except Exception:  # noqa: BLE001
+                log.exception("device monitor on_tick failed")
 
     async def _emit_transitions(self, current: dict[str, str]) -> None:
         if self._on_state_change is None:

@@ -66,3 +66,26 @@ async def test_sync_once_upserts_and_marks_missing_offline() -> None:
 
     assert events[0][:6] == ("emulator-5554", True, "sdk", "14", True, False)
     assert gone[-1] == []
+
+
+@pytest.mark.asyncio
+async def test_sync_once_awaits_on_tick():
+    ticked = []
+
+    def _list():
+        return []
+
+    async def _upsert(**kw):
+        pass
+
+    async def _mark(seen):
+        pass
+
+    async def _on_tick():
+        ticked.append(True)
+
+    mon = DeviceMonitor(
+        list_devices=_list, upsert_device=_upsert, mark_missing_offline=_mark, on_tick=_on_tick
+    )
+    await mon.sync_once()
+    assert ticked == [True]

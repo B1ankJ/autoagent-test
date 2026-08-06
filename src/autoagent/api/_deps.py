@@ -102,13 +102,27 @@ def get_device_monitor() -> DeviceMonitor:
             await mark_missing_devices_offline(seen_serials)
             await _refresh_pool()
 
+        from autoagent.devices.healer import DeviceHealer
+        from autoagent.models.api import DefaultsConfig
         from autoagent.notifications.device_state import on_device_state_change
+        from autoagent.storage.configs import get_config
+
+        async def _autoheal_enabled() -> bool:
+            cfg = await get_config("defaults")
+            return DefaultsConfig.model_validate(cfg).device_autoheal_enabled if cfg else False
+
+        _healer = DeviceHealer(
+            list_devices=list_stored_devices,
+            is_locked=pool.is_locked,
+            is_enabled=_autoheal_enabled,
+        )
 
         _device_monitor = DeviceMonitor(
             list_devices=adb_list_devices,
             upsert_device=_upsert_and_refresh,
             mark_missing_offline=_mark_missing_and_refresh,
             on_state_change=on_device_state_change,
+            on_tick=_healer.maybe_heal,
         )
     return _device_monitor
 
