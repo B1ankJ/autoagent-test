@@ -285,21 +285,63 @@ def _first_match(items: list, q: str) -> str | None:
     return None
 
 
+def _match_columns(fields: str):
+    """Columns the keyword LIKEs against, by scope."""
+    if fields == "prompt":
+        return [SampleRow.prompts_sent_json]
+    if fields == "response":
+        return [SampleRow.responses_json, SampleRow.llm_responses_json]
+    return [SampleRow.prompts_sent_json, SampleRow.responses_json, SampleRow.llm_responses_json]
+
+
+def _pick_source(row, q: str, fields: str) -> tuple[str, str]:
+    """Return (source, matched_string) — checks prompt/raw/llm in scope order."""
+    if fields != "response":
+        m = _first_match(json.loads(row.prompts_sent_json or "[]"), q)
+        if m is not None:
+            return "prompt", m
+    if fields != "prompt":
+        m = _first_match(json.loads(row.responses_json or "[]"), q)
+        if m is not None:
+            return "response", m
+        m = _first_match(json.loads(row.llm_responses_json or "[]"), q)
+        if m is not None:
+            return "llm_response", m
+    return ("prompt" if fields == "prompt" else "response"), ""
+
+
 async def search_samples_by_response(
-    q: str, target_profile: str | None = None, *, limit: int, offset: int
+    q: str,
+    target_profile: str | None = None,
+    *,
+    fields: str = "all",
+    status: list[str] | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+    limit: int,
+    offset: int,
 ) -> tuple[list[SampleSearchHit], int]:
-    """Cross-batch search over responses_json + llm_responses_json (substring
-    LIKE, escaped). Returns matching samples (newest first) with a snippet of
-    the matched response and its source, plus a total count."""
+    """Cross-batch search over prompt/response/llm-response content (substring
+    LIKE, escaped), scoped by `fields` (all|response|prompt), optionally
+    filtered by status and ended_at range. Newest first, with a snippet + the
+    matched source, plus a total count."""
     term = _like_term(q)
-    match = SampleRow.responses_json.like(term, escape="\\") | SampleRow.llm_responses_json.like(
-        term, escape="\\"
-    )
+    cols = _match_columns(fields)
+    match = cols[0].like(term, escape="\\")
+    for c in cols[1:]:
+        match = match | c.like(term, escape="\\")
+
     sm = get_sessionmaker()
     async with sm() as s:
         conds = [match]
         if target_profile is not None:
             conds.append(SampleRow.target_profile == target_profile)
+        if status:
+            conds.append(SampleRow.status.in_(status))
+        if created_after is not None:
+            conds.append(SampleRow.ended_at >= created_after)
+        if created_before is not None:
+            conds.append(SampleRow.ended_at <= created_before)
         total = (
             await s.execute(select(func.count()).select_from(SampleRow).where(*conds))
         ).scalar_one()
@@ -322,13 +364,7 @@ async def search_samples_by_response(
         )
         hits: list[SampleSearchHit] = []
         for r in rows:
-            raw = json.loads(r.responses_json or "[]")
-            llm = json.loads(r.llm_responses_json or "[]")
-            matched = _first_match(raw, q)
-            source = "response"
-            if matched is None:
-                matched = _first_match(llm, q)
-                source = "llm_response"
+            source, matched = _pick_source(r, q, fields)
             hits.append(
                 SampleSearchHit(
                     batch_id=r.batch_id,
@@ -337,7 +373,7 @@ async def search_samples_by_response(
                     status=r.status,
                     ended_at=r.ended_at.replace(tzinfo=timezone.utc) if r.ended_at else None,
                     source=source,
-                    snippet=_snippet(matched or "", q),
+                    snippet=_snippet(matched, q),
                 )
             )
         return hits, int(total)

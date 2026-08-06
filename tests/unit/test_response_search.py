@@ -68,3 +68,60 @@ async def test_search_escapes_like_metachars():
     await upsert_sample("b", _s("s1", "p", ["no percent here"], ended=now))
     _, total = await search_samples_by_response("%", limit=20, offset=0)
     assert total == 0
+
+
+@pytest.mark.asyncio
+async def test_search_fields_scope():
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample(
+        "b",
+        SampleResult(id="pq", status="done", mode="api", target_profile="p",
+                     prompts_sent=["问一下 唯一词A"], responses=["无关"], ended_at=now),
+    )
+    await upsert_sample(
+        "b",
+        SampleResult(id="rq", status="done", mode="api", target_profile="p",
+                     prompts_sent=["无关"], responses=["答案 唯一词A"], ended_at=now),
+    )
+
+    _, all_total = await search_samples_by_response("唯一词A", fields="all", limit=20, offset=0)
+    assert all_total == 2
+    p_hits, p_total = await search_samples_by_response(
+        "唯一词A", fields="prompt", limit=20, offset=0
+    )
+    assert p_total == 1 and p_hits[0].sample_id == "pq" and p_hits[0].source == "prompt"
+    assert "唯一词A" in p_hits[0].snippet
+    r_hits, r_total = await search_samples_by_response(
+        "唯一词A", fields="response", limit=20, offset=0
+    )
+    assert r_total == 1 and r_hits[0].sample_id == "rq" and r_hits[0].source == "response"
+
+
+@pytest.mark.asyncio
+async def test_search_status_filter():
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample("b", SampleResult(id="d", status="done", mode="api",
+                                          target_profile="p", responses=["找我"], ended_at=now))
+    await upsert_sample("b", SampleResult(id="f", status="failed", mode="api",
+                                          target_profile="p", responses=["找我"], ended_at=now))
+    _, total = await search_samples_by_response("找我", status=["failed"], limit=20, offset=0)
+    assert total == 1
+
+
+@pytest.mark.asyncio
+async def test_search_time_range_filter():
+    await init_db()
+    now = datetime.now(timezone.utc)
+    await upsert_sample("b", SampleResult(id="recent", status="done", mode="api",
+                                          target_profile="p", responses=["找我"], ended_at=now))
+    await upsert_sample("b", SampleResult(id="old", status="done", mode="api",
+                                          target_profile="p", responses=["找我"],
+                                          ended_at=now - timedelta(days=30)))
+    await upsert_sample("b", SampleResult(id="none", status="done", mode="api",
+                                          target_profile="p", responses=["找我"], ended_at=None))
+    _, total = await search_samples_by_response(
+        "找我", created_after=now - timedelta(days=7), limit=20, offset=0
+    )
+    assert total == 1
