@@ -407,3 +407,14 @@ async def test_session_pins_bounded_evicts_oldest(monkeypatch) -> None:
 
     assert pool._lookup_pin("conv-0") is None
     assert pool._lookup_pin("conv-3") == "d"
+
+
+@pytest.mark.asyncio
+async def test_is_locked_reflects_the_per_serial_lock():
+    from autoagent.devices.pool import DevicePool
+
+    pool = DevicePool()
+    assert pool.is_locked("dev1") is False
+    async with pool.hold("dev1"):
+        assert pool.is_locked("dev1") is True
+    assert pool.is_locked("dev1") is False

@@ -231,6 +231,11 @@ class DefaultsConfig(BaseModel):
     # origin/main and restart the service in place. This is RCE-by-design
     # (whoever controls the remote controls the box), so it stays opt-in.
     self_update_enabled: bool = False
+    # Auto-reconnect offline network (wifi) devices via `adb connect` on the
+    # device-monitor loop (exponential backoff). Off by default — opt-in, like
+    # every other auto-action here. Only touches network serials; skips
+    # disabled / planned-reboot / in-use devices. No reboot.
+    device_autoheal_enabled: bool = False
     # 0 disables. Positive = a background task periodically zips the SQLite
     # DB (via sqlite's online backup API, safe under WAL) + data/profiles
     # into data/backups/<timestamp>.zip, keeping backups for this many

@@ -48,6 +48,12 @@ class DevicePool:
     def update_snapshot(self, devices: list[DeviceInfo]) -> None:
         self._snapshot = {device.serial: device for device in devices}
 
+    def is_locked(self, serial: str) -> bool:
+        """True when this serial's per-serial lock is currently held (a sample
+        is running on it or it's fenced by hold())."""
+        lock = self._locks.get(serial)
+        return lock is not None and lock.locked()
+
     def available_count_sync(self) -> int:
         count = 0
         for device in self._list_devices():
