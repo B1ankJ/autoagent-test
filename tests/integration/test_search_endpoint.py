@@ -53,3 +53,29 @@ async def test_search_rejects_short_query(client):
 async def test_search_requires_auth(client):
     r = await client.get("/api/v1/samples/search?q=abc")
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_new_params(client):
+    from datetime import datetime, timezone
+
+    from autoagent.models.api import SampleResult
+    from autoagent.storage.samples import upsert_sample
+
+    h = await _login(client)
+    now = datetime.now(timezone.utc)
+    await upsert_sample(
+        "b",
+        SampleResult(id="pq", status="done", mode="api", target_profile="p",
+                     prompts_sent=["提示 关键字K"], responses=["无关"], ended_at=now),
+    )
+    await upsert_sample(
+        "b",
+        SampleResult(id="rq", status="failed", mode="api", target_profile="p",
+                     prompts_sent=["无关"], responses=["答案 关键字K"], ended_at=now),
+    )
+
+    r = await client.get("/api/v1/samples/search?q=关键字K&fields=prompt", headers=h)
+    assert r.json()["total"] == 1 and r.json()["items"][0]["source"] == "prompt"
+    r = await client.get("/api/v1/samples/search?q=关键字K&status=failed", headers=h)
+    assert r.json()["total"] == 1 and r.json()["items"][0]["sample_id"] == "rq"

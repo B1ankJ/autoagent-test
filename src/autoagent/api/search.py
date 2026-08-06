@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query
 
 from autoagent.auth.deps import require_user
@@ -13,10 +15,21 @@ router = APIRouter(prefix="/samples", tags=["search"], dependencies=[Depends(req
 async def search_responses(
     q: str = Query(..., min_length=2),
     target_profile: str | None = None,
+    fields: str = "all",
+    status: list[str] | None = Query(None),
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> SampleSearchResponse:
     items, total = await search_samples_by_response(
-        q.strip(), target_profile=target_profile, limit=limit, offset=offset
+        q.strip(),
+        target_profile=target_profile,
+        fields=fields,
+        status=status,
+        created_after=created_after,
+        created_before=created_before,
+        limit=limit,
+        offset=offset,
     )
     return SampleSearchResponse(items=items, total=total)
