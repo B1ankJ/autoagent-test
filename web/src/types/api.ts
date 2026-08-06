@@ -438,7 +438,7 @@ export interface SampleSearchHit {
   target_profile: string
   status: SampleStatus
   ended_at: string | null
-  source: 'response' | 'llm_response'
+  source: 'prompt' | 'response' | 'llm_response'
   snippet: string
 }
 
