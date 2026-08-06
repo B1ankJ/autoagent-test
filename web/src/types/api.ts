@@ -167,6 +167,7 @@ export interface GlobalDefaults {
   log_retention_days?: number
   archive_retention_days?: number
   self_update_enabled?: boolean
+  device_autoheal_enabled?: boolean
   backup_retention_days?: number
   backup_interval_hours?: number
 }

@@ -362,6 +362,14 @@ export function ConfigPage() {
                   >
                     <Switch />
                   </Form.Item>
+                  <Form.Item
+                    name="device_autoheal_enabled"
+                    label="设备自动重连"
+                    valuePropName="checked"
+                    extra="开启后,离线的网络(wifi)设备会在设备监控轮询里自动 adb connect 重连(指数退避)。只对网络设备生效,跳过 USB/已禁用/初始化中/占用中的设备,不 reboot。默认关。"
+                  >
+                    <Switch />
+                  </Form.Item>
                   <Space>
                     <Button type="primary" htmlType="submit" loading={saveDefaults.isPending}>
                       保存
