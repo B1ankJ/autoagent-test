@@ -77,4 +77,24 @@ describe('ResponseSearch', () => {
     const lastArgs = useSampleSearch.mock.calls.at(-1)?.[0] as { q: string } | undefined
     expect(lastArgs?.q).toBe('抱歉我无法')
   })
+
+  it('renders the Prompt source tag and restores scope/status from the URL', async () => {
+    useSampleSearch.mockReturnValue({
+      data: { items: [hit({ sample_id: 's1', source: 'prompt' })], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/search/responses" element={<ResponseSearch />} />
+      </Routes>,
+      { initialPath: '/search/responses?q=abc&fields=prompt&status=failed' },
+    )
+    await waitFor(() => expect(screen.getByText('Prompt')).toBeInTheDocument())
+    const args = useSampleSearch.mock.calls.at(-1)?.[0] as
+      | { fields?: string; status?: string[] }
+      | undefined
+    expect(args?.fields).toBe('prompt')
+    expect(args?.status).toEqual(['failed'])
+  })
 })

@@ -1,5 +1,6 @@
-import { Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { DatePicker, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import dayjs from 'dayjs'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useProfiles } from '../../api/profiles'
@@ -8,8 +9,16 @@ import { StatusTag } from '../../components/StatusTag'
 import { EmptyState } from '../../components/states/EmptyState'
 import { ErrorState } from '../../components/states/ErrorState'
 import { PageHeader } from '../../components/states/PageHeader'
-import type { SampleSearchHit } from '../../types/api'
+import type { SampleSearchHit, SampleStatus } from '../../types/api'
 import { splitHighlight } from '../../utils/highlight'
+
+const STATUS_OPTIONS: SampleStatus[] = [
+  'done',
+  'failed',
+  'timeout',
+  'extraction_failed',
+  'cancelled',
+]
 
 function Snippet({ text, term }: { text: string; term: string }) {
   return (
@@ -28,6 +37,10 @@ export function ResponseSearch() {
   // (browser back) restores the query/filter/page instead of clearing it.
   const q = params.get('q') ?? ''
   const profile = params.get('target_profile') ?? undefined
+  const fields = params.get('fields') ?? 'all'
+  const status = (params.get('status') ?? '').split(',').filter(Boolean)
+  const createdAfter = params.get('created_after') ?? undefined
+  const createdBefore = params.get('created_before') ?? undefined
   const page = Math.max(1, Number(params.get('page')) || 1)
   const pageSize = 20
   // `draft` is the uncommitted input text; seed it from the URL on mount so a
@@ -37,6 +50,10 @@ export function ResponseSearch() {
   const { data, isLoading, isError, refetch } = useSampleSearch({
     q,
     targetProfile: profile,
+    fields,
+    status,
+    createdAfter,
+    createdBefore,
     page,
     pageSize,
   })
@@ -64,7 +81,9 @@ export function ResponseSearch() {
       title: '来源',
       dataIndex: 'source',
       width: 100,
-      render: (s: string) => <Tag>{s === 'llm_response' ? 'LLM 提取' : '原始响应'}</Tag>,
+      render: (s: string) => (
+        <Tag>{s === 'prompt' ? 'Prompt' : s === 'llm_response' ? 'LLM 提取' : '原始响应'}</Tag>
+      ),
     },
     { title: 'Profile', dataIndex: 'target_profile', width: 130 },
     {
@@ -116,6 +135,43 @@ export function ResponseSearch() {
           value={profile}
           onChange={(v) => patch({ target_profile: v || undefined, page: undefined })}
           options={(profiles.data ?? []).map((p) => ({ value: p.name, label: p.name }))}
+        />
+        <Select
+          style={{ width: 130 }}
+          value={fields}
+          onChange={(v) => patch({ fields: v === 'all' ? undefined : v, page: undefined })}
+          options={[
+            { value: 'all', label: '全部字段' },
+            { value: 'response', label: '仅响应' },
+            { value: 'prompt', label: '仅 Prompt' },
+          ]}
+        />
+        <Select
+          mode="multiple"
+          allowClear
+          placeholder="全部状态"
+          style={{ minWidth: 180 }}
+          value={status}
+          onChange={(v: string[]) =>
+            patch({ status: v.length ? v.join(',') : undefined, page: undefined })
+          }
+          options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+        />
+        <DatePicker.RangePicker
+          showTime
+          value={createdAfter && createdBefore ? [dayjs(createdAfter), dayjs(createdBefore)] : null}
+          onChange={(v) =>
+            patch({
+              created_after: v?.[0]?.toISOString(),
+              created_before: v?.[1]?.toISOString(),
+              page: undefined,
+            })
+          }
+          presets={[
+            { label: '最近 24 小时', value: [dayjs().add(-24, 'h'), dayjs()] },
+            { label: '最近 7 天', value: [dayjs().add(-7, 'd'), dayjs()] },
+            { label: '最近 30 天', value: [dayjs().add(-30, 'd'), dayjs()] },
+          ]}
         />
       </Space>
       {isError ? (
