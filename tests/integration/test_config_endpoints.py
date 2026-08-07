@@ -42,6 +42,7 @@ async def test_defaults_roundtrip(client):
         "log_retention_days": 7,
         "archive_retention_days": 0,
         "self_update_enabled": False,
+        "device_autoheal_enabled": True,
         "backup_retention_days": 14,
         "backup_interval_hours": 24,
     }
