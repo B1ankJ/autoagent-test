@@ -247,6 +247,11 @@ class DefaultsConfig(BaseModel):
     backup_retention_days: int = 14
     # How often the backup job runs, independent of backup_retention_days.
     backup_interval_hours: int = 24
+    # Keep at most this many of the newest backups (0 = no count cap). Applied
+    # in addition to backup_retention_days — a backup is pruned if it's older
+    # than the retention window OR beyond the newest N, whichever removes more.
+    # Bounds disk growth when backups run more often than the retention window.
+    backup_max_count: int = 3
 
 
 class DingTalkNotificationConfig(BaseModel):

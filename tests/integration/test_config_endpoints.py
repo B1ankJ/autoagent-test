@@ -45,6 +45,7 @@ async def test_defaults_roundtrip(client):
         "device_autoheal_enabled": True,
         "backup_retention_days": 14,
         "backup_interval_hours": 24,
+        "backup_max_count": 3,
     }
     r = await client.put("/api/v1/config/defaults", json=new_vals, headers=h)
     assert r.status_code == 200

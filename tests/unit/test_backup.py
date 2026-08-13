@@ -86,6 +86,59 @@ async def test_backup_zero_retention_skips_pruning(tmp_path):
     assert report.path is not None
 
 
+def _seed_backups(backups_dir: Path, count: int) -> list[Path]:
+    """Create `count` zips with strictly increasing mtimes (oldest first)."""
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    made = []
+    for i in range(count):
+        p = backups_dir / f"seed{i}.zip"
+        p.write_bytes(b"x")
+        # older files first: seed0 is the oldest
+        mtime = now - (count - i) * 3600
+        os.utime(p, (mtime, mtime))
+        made.append(p)
+    return made
+
+
+async def test_backup_count_cap_keeps_only_newest_n(tmp_path):
+    _make_db(tmp_path)
+    backups_dir = tmp_path / "backups"
+    # 3 pre-existing recent backups; none old enough for the days-prune.
+    old0, old1, old2 = _seed_backups(backups_dir, 3)
+
+    # Writing a 4th with max_count=3 should drop exactly the oldest one.
+    report = await run_backup(data_root=tmp_path, retention_days=14, max_count=3)
+
+    assert report.pruned == 1
+    assert not old0.exists()  # oldest seeded backup removed
+    assert old1.exists() and old2.exists()
+    assert Path(report.path).exists()  # the fresh backup is kept
+    assert len(list(backups_dir.glob("*.zip"))) == 3
+
+
+async def test_backup_count_cap_zero_means_unlimited(tmp_path):
+    _make_db(tmp_path)
+    backups_dir = tmp_path / "backups"
+    _seed_backups(backups_dir, 5)
+
+    report = await run_backup(data_root=tmp_path, retention_days=14, max_count=0)
+
+    assert report.pruned == 0
+    assert len(list(backups_dir.glob("*.zip"))) == 6  # 5 seeded + 1 fresh
+
+
+async def test_backup_count_cap_applies_even_when_db_missing(tmp_path):
+    backups_dir = tmp_path / "backups"
+    _seed_backups(backups_dir, 5)  # no db.sqlite → no fresh backup written
+
+    report = await run_backup(data_root=tmp_path, retention_days=0, max_count=3)
+
+    assert report.path is None
+    assert report.pruned == 2  # trimmed 5 → 3
+    assert len(list(backups_dir.glob("*.zip"))) == 3
+
+
 async def test_list_backups_returns_newest_first(tmp_path):
     assert list_backups(tmp_path) == []
 

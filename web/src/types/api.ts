@@ -170,6 +170,7 @@ export interface GlobalDefaults {
   device_autoheal_enabled?: boolean
   backup_retention_days?: number
   backup_interval_hours?: number
+  backup_max_count?: number
 }
 
 export interface ProfileBuilderCaptureArtifact {

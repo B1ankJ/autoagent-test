@@ -63,6 +63,33 @@ def _prune_old_backups(backups_dir: Path, retention_days: int) -> int:
     return pruned
 
 
+def _prune_excess_backups(backups_dir: Path, max_count: int) -> int:
+    """Keep only the newest `max_count` zips; delete the rest.
+
+    Run *after* a fresh backup is written so the new one counts toward the
+    cap. `max_count <= 0` disables the count cap entirely.
+    """
+    if max_count <= 0 or not backups_dir.exists():
+        return 0
+    zips: list[tuple[float, Path]] = []
+    for zip_path in backups_dir.glob("*.zip"):
+        try:
+            zips.append((zip_path.stat().st_mtime, zip_path))
+        except OSError:
+            continue
+    if len(zips) <= max_count:
+        return 0
+    zips.sort(key=lambda t: t[0], reverse=True)  # newest first
+    pruned = 0
+    for _, zip_path in zips[max_count:]:
+        try:
+            zip_path.unlink(missing_ok=True)
+            pruned += 1
+        except OSError:
+            continue
+    return pruned
+
+
 def resolve_backup_path(data_root: Path, name: str) -> Path | None:
     """Resolve `name` to a backup zip inside data_root/backups.
 
@@ -105,7 +132,7 @@ def list_backups(data_root: Path) -> list[dict]:
     return out
 
 
-def _run_backup_sync(*, data_root: Path, retention_days: int) -> BackupReport:
+def _run_backup_sync(*, data_root: Path, retention_days: int, max_count: int) -> BackupReport:
     db_path = data_root / "db.sqlite"
     backups_dir = data_root / "backups"
     backups_dir.mkdir(parents=True, exist_ok=True)
@@ -113,6 +140,7 @@ def _run_backup_sync(*, data_root: Path, retention_days: int) -> BackupReport:
     pruned = _prune_old_backups(backups_dir, retention_days)
 
     if not db_path.exists():
+        pruned += _prune_excess_backups(backups_dir, max_count)
         return BackupReport(pruned=pruned)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -129,10 +157,19 @@ def _run_backup_sync(*, data_root: Path, retention_days: int) -> BackupReport:
                 for f in sorted(profiles_dir.glob("*.yaml")):
                     zf.write(f, arcname=f"profiles/{f.name}")
 
+    # Count cap runs *after* the new zip is written so it counts toward the
+    # newest-N kept (it never prunes the fresh backup itself).
+    pruned += _prune_excess_backups(backups_dir, max_count)
+
     return BackupReport(path=str(zip_path), bytes_written=zip_path.stat().st_size, pruned=pruned)
 
 
-async def run_backup(*, data_root: Path, retention_days: int) -> BackupReport:
+async def run_backup(
+    *, data_root: Path, retention_days: int, max_count: int = 0
+) -> BackupReport:
     return await asyncio.to_thread(
-        _run_backup_sync, data_root=data_root, retention_days=retention_days
+        _run_backup_sync,
+        data_root=data_root,
+        retention_days=retention_days,
+        max_count=max_count,
     )

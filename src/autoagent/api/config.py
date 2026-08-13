@@ -195,7 +195,9 @@ async def run_backup_now() -> dict:
     v = await get_config("defaults")
     cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
     report = await run_backup(
-        data_root=get_settings().data_root, retention_days=cfg.backup_retention_days
+        data_root=get_settings().data_root,
+        retention_days=cfg.backup_retention_days,
+        max_count=cfg.backup_max_count,
     )
     return {
         "path": report.path,

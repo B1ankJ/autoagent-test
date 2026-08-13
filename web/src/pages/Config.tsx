@@ -355,6 +355,13 @@ export function ConfigPage() {
                     <InputNumber min={1} max={168} />
                   </Form.Item>
                   <Form.Item
+                    name="backup_max_count"
+                    label="最多保留备份数"
+                    extra="0 = 不限数量,仅按保留天数清理。> 0:只保留最新的这么多个备份,多余的自动删除(与保留天数同时生效,谁删得多算谁)。默认 3。"
+                  >
+                    <InputNumber min={0} max={100} />
+                  </Form.Item>
+                  <Form.Item
                     name="self_update_enabled"
                     label="启用自更新"
                     valuePropName="checked"

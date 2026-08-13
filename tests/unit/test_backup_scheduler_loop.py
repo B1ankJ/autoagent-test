@@ -23,12 +23,12 @@ async def test_run_backup_loop_survives_a_config_read_failure(monkeypatch):
 
     config_calls = 0
 
-    async def _fake_config() -> tuple[int, int]:
+    async def _fake_config() -> tuple[int, int, int]:
         nonlocal config_calls
         config_calls += 1
         if config_calls == 1:
             raise RuntimeError("transient db error")
-        return 14, 24
+        return 14, 24, 3
 
     sleep_calls = 0
     real_sleep = asyncio.sleep

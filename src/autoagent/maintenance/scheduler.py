@@ -90,18 +90,20 @@ async def run_retention_loop() -> None:
             return
 
 
-async def _current_backup_config() -> tuple[int, int]:
+async def _current_backup_config() -> tuple[int, int, int]:
     v = await get_config("defaults")
     cfg = DefaultsConfig.model_validate(v) if v else DefaultsConfig()
-    return cfg.backup_retention_days, cfg.backup_interval_hours
+    return cfg.backup_retention_days, cfg.backup_interval_hours, cfg.backup_max_count
 
 
 async def _backup_tick_once() -> None:
-    retention_days, _interval_hours = await _current_backup_config()
+    retention_days, _interval_hours, max_count = await _current_backup_config()
     if retention_days <= 0:
         return
     settings = get_settings()
-    report = await run_backup(data_root=settings.data_root, retention_days=retention_days)
+    report = await run_backup(
+        data_root=settings.data_root, retention_days=retention_days, max_count=max_count
+    )
     _log.info(
         "backup tick: wrote=%s bytes=%d pruned=%d",
         report.path,
@@ -131,7 +133,7 @@ async def run_backup_loop() -> None:
         interval_hours = 24
         try:
             await _backup_tick_once()
-            _, interval_hours = await _current_backup_config()
+            _, interval_hours, _ = await _current_backup_config()
         except Exception:  # noqa: BLE001
             _log.exception("backup tick failed")
         try:
