@@ -7,7 +7,7 @@ from typing import Any
 _log = logging.getLogger(__name__)
 
 MIN_HISTORY = 20
-IQR_MULTIPLIER = 1.5
+IQR_MULTIPLIER = 3.0
 
 
 def evaluate_duration(value: int, history: list[int]) -> dict[str, Any] | None:
@@ -26,8 +26,6 @@ def evaluate_duration(value: int, history: list[int]) -> dict[str, Any] | None:
     fence_low = q1 - IQR_MULTIPLIER * iqr
     if value > fence_high:
         direction = "high"
-    elif value < fence_low:
-        direction = "low"
     else:
         return None
     return {
@@ -44,9 +42,10 @@ def evaluate_duration(value: int, history: list[int]) -> dict[str, Any] | None:
 
 def _format_summary(verdict: dict[str, Any]) -> str:
     v = verdict["value"] / 1000
-    if verdict["direction"] == "high":
-        return f"耗时 {v:.1f}s，高于 P75+1.5·IQR 阈值 {verdict['fence_high'] / 1000:.1f}s"
-    return f"耗时 {v:.1f}s，低于 P25−1.5·IQR 阈值 {verdict['fence_low'] / 1000:.1f}s"
+    return (
+        f"耗时 {v:.1f}s，高于 P75+{IQR_MULTIPLIER:g}·IQR "
+        f"阈值 {verdict['fence_high'] / 1000:.1f}s"
+    )
 
 
 async def check_duration_anomaly(result, batch_id: str) -> None:

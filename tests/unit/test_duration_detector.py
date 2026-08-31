@@ -23,11 +23,10 @@ def test_flags_high_outlier():
     assert verdict["sample_count"] == len(history)
 
 
-def test_flags_low_outlier():
+def test_ignores_low_outlier():
     history = list(range(1000, 1030))  # 30 samples ~1000-1029
     verdict = evaluate_duration(1, history)
-    assert verdict is not None
-    assert verdict["direction"] == "low"
+    assert verdict is None
 
 
 def test_normal_value_returns_none():
@@ -40,6 +39,7 @@ def test_all_equal_history_only_flags_strict_outside():
     assert evaluate_duration(500, history) is None
     assert evaluate_duration(501, history) is not None
     assert evaluate_duration(501, history)["direction"] == "high"
+    assert evaluate_duration(499, history) is None
 
 
 def _sample(sid: str, profile: str, ms):
