@@ -9,6 +9,7 @@ const { postDeviceInputMock } = vi.hoisted(() => ({ postDeviceInputMock: vi.fn()
 
 vi.mock('../api/deviceStream', () => ({
   postDeviceInput: postDeviceInputMock,
+  STREAM_QUALITY_PRESETS: { smooth: {}, balanced: {}, sharp: {} },
   useDeviceHttpStream: () => ({
     canvasRef: { current: null },
     state: 'live' as const,

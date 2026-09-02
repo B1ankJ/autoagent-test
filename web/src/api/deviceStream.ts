@@ -12,6 +12,38 @@ export interface DeviceStreamHandle {
   reconnect: () => void
 }
 
+// Stream quality knobs forwarded to the backend as query params. width is the
+// stream's pixel width (height scales to keep aspect); bitrateMbps caps the
+// on-device H264 encoder. Lower both to cut latency / raise frame rate on
+// wifi-adb devices, at the cost of sharpness. Omitting either uses the
+// backend defaults (720px / 6Mbps).
+export interface StreamQualityOptions {
+  width?: number
+  bitrateMbps?: number
+}
+
+// Shared quality presets. `balanced` omits both params so the backend applies
+// its own defaults (720px / 6Mbps). `smooth` trades sharpness for lower latency
+// / higher frame rate (best for wifi devices and the N-up grid); `sharp` is for
+// reading fine text in the full single-device view.
+export type StreamQualityKey = 'smooth' | 'balanced' | 'sharp'
+
+export const STREAM_QUALITY_PRESETS: Record<StreamQualityKey, StreamQualityOptions> = {
+  smooth: { width: 540, bitrateMbps: 4 },
+  balanced: {},
+  sharp: { width: 1080, bitrateMbps: 12 },
+}
+
+/** Append width/bitrate params to a stream URL. Pure — unit-tested. */
+export function appendStreamQuality(url: string, opts?: StreamQualityOptions): string {
+  if (!opts) return url
+  const parts: string[] = []
+  if (opts.width != null) parts.push(`width=${opts.width}`)
+  if (opts.bitrateMbps != null) parts.push(`bitrate=${opts.bitrateMbps}`)
+  if (parts.length === 0) return url
+  return `${url}&${parts.join('&')}`
+}
+
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
 
@@ -30,7 +62,10 @@ export function safeCloseDecoder(decoder: VideoDecoder | null | undefined): void
   }
 }
 
-export function useDeviceStream(serial: string | null): DeviceStreamHandle {
+export function useDeviceStream(
+  serial: string | null,
+  quality?: StreamQualityOptions,
+): DeviceStreamHandle {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [state, setState] = useState<StreamState>('closed')
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
@@ -53,7 +88,10 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
     setState('connecting')
     const token = getToken()
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const wsUrl = `${proto}://${window.location.host}/api/v1/devices/${encodeURIComponent(serial)}/stream?token=${token}`
+    const wsUrl = appendStreamQuality(
+      `${proto}://${window.location.host}/api/v1/devices/${encodeURIComponent(serial)}/stream?token=${token}`,
+      quality,
+    )
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
     ws.binaryType = 'arraybuffer'
@@ -133,7 +171,10 @@ export function useDeviceStream(serial: string | null): DeviceStreamHandle {
     ws.onerror = () => {
       ws.close()
     }
-  }, [serial])
+    // Depend on primitive quality values, not the object: an inline {width}
+    // prop is a new ref every render and would reconnect on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serial, quality?.width, quality?.bitrateMbps])
 
   const reconnect = useCallback(() => {
     retryCount.current = 0
@@ -269,7 +310,10 @@ export async function postDeviceInput(serial: string, cmd: DeviceInputRequest): 
 // reverse proxies that strip WebSocket Upgrade headers. Browser uses
 // WebCodecs VideoDecoder via the existing NAL parser.
 
-export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
+export function useDeviceHttpStream(
+  serial: string | null,
+  quality?: StreamQualityOptions,
+): DeviceStreamHandle {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [state, setState] = useState<StreamState>('closed')
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
@@ -317,7 +361,10 @@ export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
     decoderRef.current = decoder
 
     const token = getToken()
-    const url = `/api/v1/devices/${encodeURIComponent(serial)}/stream.h264?token=${token}`
+    const url = appendStreamQuality(
+      `/api/v1/devices/${encodeURIComponent(serial)}/stream.h264?token=${token}`,
+      quality,
+    )
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
@@ -361,7 +408,10 @@ export function useDeviceHttpStream(serial: string | null): DeviceStreamHandle {
         }
       }
     })()
-  }, [serial])
+    // Depend on primitive quality values, not the object: an inline {width}
+    // prop is a new ref every render and would reconnect on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serial, quality?.width, quality?.bitrateMbps])
 
   const reconnect = useCallback(() => {
     retryCount.current = 0

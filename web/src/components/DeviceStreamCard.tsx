@@ -2,7 +2,7 @@ import { ExpandOutlined } from '@ant-design/icons'
 import { Button, Card, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 
-import { useDeviceHttpStream } from '../api/deviceStream'
+import { STREAM_QUALITY_PRESETS, useDeviceHttpStream } from '../api/deviceStream'
 import { usePageVisible } from '../hooks/usePageVisible'
 import type { Device } from '../types/api'
 
@@ -23,7 +23,12 @@ export function DeviceStreamCard({ device, onOpenFullView }: Props) {
   // stream down, so a hidden tab stops burning CPU/adb bandwidth on N decoders.
   const visible = usePageVisible()
   const serial = device.online && visible ? device.serial : null
-  const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(serial)
+  // Grid tiles run N decoders + N screenrecord processes in parallel, so use
+  // the low-bitrate/low-res 'smooth' preset here to keep many streams fluid.
+  const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(
+    serial,
+    STREAM_QUALITY_PRESETS.smooth,
+  )
   const [hovered, setHovered] = useState(false)
 
   const title = device.label || device.model || device.serial

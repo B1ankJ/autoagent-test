@@ -1,7 +1,27 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { safeCloseDecoder, useDeviceHttpStream } from './deviceStream'
+import { appendStreamQuality, safeCloseDecoder, useDeviceHttpStream } from './deviceStream'
+
+describe('appendStreamQuality', () => {
+  const base = '/api/v1/devices/x/stream.h264?token=t'
+
+  it('returns the url unchanged when no options given', () => {
+    expect(appendStreamQuality(base)).toBe(base)
+    expect(appendStreamQuality(base, {})).toBe(base)
+  })
+
+  it('appends width and bitrate when provided', () => {
+    expect(appendStreamQuality(base, { width: 540, bitrateMbps: 4 })).toBe(
+      `${base}&width=540&bitrate=4`,
+    )
+  })
+
+  it('appends only the params that are set', () => {
+    expect(appendStreamQuality(base, { width: 720 })).toBe(`${base}&width=720`)
+    expect(appendStreamQuality(base, { bitrateMbps: 8 })).toBe(`${base}&bitrate=8`)
+  })
+})
 
 describe('safeCloseDecoder', () => {
   it('does not throw when called twice on the same decoder (unmount-cleanup vs. read-loop race)', () => {

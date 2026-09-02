@@ -1,7 +1,12 @@
-import { useCallback, useRef } from 'react'
-import { Alert, App, Button, Modal, Space, Tag } from 'antd'
+import { useCallback, useRef, useState } from 'react'
+import { Alert, App, Button, Modal, Segmented, Space, Tag } from 'antd'
 
-import { postDeviceInput, useDeviceHttpStream } from '../api/deviceStream'
+import {
+  postDeviceInput,
+  STREAM_QUALITY_PRESETS,
+  useDeviceHttpStream,
+  type StreamQualityKey,
+} from '../api/deviceStream'
 import type { DeviceInputKey } from '../types/api'
 
 interface Props {
@@ -18,7 +23,11 @@ const KEY_BUTTONS: Array<{ label: string; keycode: DeviceInputKey['keycode'] }> 
 ]
 
 export function DeviceStreamModal({ serial, onClose }: Props) {
-  const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(serial)
+  const [quality, setQuality] = useState<StreamQualityKey>('balanced')
+  const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(
+    serial,
+    STREAM_QUALITY_PRESETS[quality],
+  )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dragRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const { message } = App.useApp()
@@ -155,6 +164,16 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
               </Button>
             ))}
           </Space>
+          <Segmented
+            size="small"
+            value={quality}
+            onChange={(v) => setQuality(v as StreamQualityKey)}
+            options={[
+              { label: '流畅', value: 'smooth' },
+              { label: '均衡', value: 'balanced' },
+              { label: '清晰', value: 'sharp' },
+            ]}
+          />
           {state === 'error' && <Button onClick={reconnect}>重新连接</Button>}
         </div>
 

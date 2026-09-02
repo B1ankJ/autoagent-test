@@ -22,6 +22,34 @@ _SERIAL_RE = re.compile(r"^[a-zA-Z0-9._:\-]+$")
 # serial → active screenrecord asyncio subprocess
 _active_streams: dict[str, asyncio.subprocess.Process] = {}
 
+# Stream tuning bounds. Default width 720 / bitrate 6 Mbps is a balance: high
+# enough to read text, low enough that a wifi-adb device (common here) doesn't
+# choke on the ~20 Mbps screenrecord default, which inflates both latency and
+# effective frame rate over the network.
+_DEFAULT_WIDTH = 720
+_MIN_WIDTH = 240
+_MAX_WIDTH = 1080
+_DEFAULT_BITRATE_MBPS = 6
+_MIN_BITRATE_MBPS = 1
+_MAX_BITRATE_MBPS = 20
+
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, value))
+
+
+def _resolve_stream_params(width: int | None, bitrate: int | None) -> tuple[int, int]:
+    """Clamp caller-supplied width (px) and bitrate (Mbps) to safe bounds.
+
+    Falls back to the defaults when a param is omitted. Pure — unit-tested.
+    """
+    w = _DEFAULT_WIDTH if width is None else _clamp(width, _MIN_WIDTH, _MAX_WIDTH)
+    if bitrate is None:
+        b = _DEFAULT_BITRATE_MBPS
+    else:
+        b = _clamp(bitrate, _MIN_BITRATE_MBPS, _MAX_BITRATE_MBPS)
+    return w, b
+
 
 def _validate_serial(serial: str) -> None:
     if not _SERIAL_RE.fullmatch(serial):
@@ -105,13 +133,18 @@ async def device_screenshot(serial: str, token: str | None = None) -> Response:
     )
 
 
-async def _spawn_screenrecord(serial: str) -> tuple[asyncio.subprocess.Process, int, int]:
+async def _spawn_screenrecord(
+    serial: str,
+    *,
+    width: int = _DEFAULT_WIDTH,
+    bitrate_mbps: int = _DEFAULT_BITRATE_MBPS,
+) -> tuple[asyncio.subprocess.Process, int, int]:
     """Start `screenrecord` on the device and return (proc, width, height).
 
     Replaces any prior stream for the same serial to avoid two screenrecord
     processes fighting for the encoder.
     """
-    w, h = await asyncio.to_thread(get_screen_resolution, serial, 720)
+    w, h = await asyncio.to_thread(get_screen_resolution, serial, width)
     old = _active_streams.pop(serial, None)
     if old is not None:
         await _kill_proc(old)
@@ -127,6 +160,7 @@ async def _spawn_screenrecord(serial: str) -> tuple[asyncio.subprocess.Process, 
         "screenrecord",
         "--output-format=h264",
         f"--size={w}x{h}",
+        f"--bit-rate={bitrate_mbps * 1_000_000}",
         "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -136,7 +170,12 @@ async def _spawn_screenrecord(serial: str) -> tuple[asyncio.subprocess.Process, 
 
 
 @router.get("/{serial}/stream.h264")
-async def device_stream_http(serial: str, token: str | None = None) -> StreamingResponse:
+async def device_stream_http(
+    serial: str,
+    token: str | None = None,
+    width: int | None = None,
+    bitrate: int | None = None,
+) -> StreamingResponse:
     """H.264 Annex-B byte stream over plain HTTP chunked transfer.
 
     Same capture pipeline as the WebSocket endpoint, but works through L7
@@ -149,8 +188,9 @@ async def device_stream_http(serial: str, token: str | None = None) -> Streaming
     """
     _require_query_token(token)
     _validate_serial(serial)
+    req_w, req_b = _resolve_stream_params(width, bitrate)
     try:
-        proc, w, h = await _spawn_screenrecord(serial)
+        proc, w, h = await _spawn_screenrecord(serial, width=req_w, bitrate_mbps=req_b)
     except AdbCommandError as e:
         raise HTTPException(status_code=502, detail=f"device not reachable: {e}") from e
     log.info("device_stream_http %s started pid=%s size=%sx%s", serial, proc.pid, w, h)
@@ -241,35 +281,19 @@ async def _kill_proc(proc: asyncio.subprocess.Process) -> None:
         pass
 
 
-async def _stream_h264(ws: WebSocket, serial: str) -> None:
+async def _stream_h264(
+    ws: WebSocket,
+    serial: str,
+    *,
+    width: int = _DEFAULT_WIDTH,
+    bitrate_mbps: int = _DEFAULT_BITRATE_MBPS,
+) -> None:
     try:
-        w, h = await asyncio.to_thread(get_screen_resolution, serial, 720)
+        proc, w, h = await _spawn_screenrecord(serial, width=width, bitrate_mbps=bitrate_mbps)
     except AdbCommandError as exc:
         await ws.send_text(json.dumps({"error": "device_not_found", "detail": str(exc)}))
         await ws.close()
         return
-
-    old = _active_streams.pop(serial, None)
-    if old is not None:
-        await _kill_proc(old)
-
-    # Use exec-out directly; the prior shell wrapper that staged stderr through
-    # /tmp/sr_err.txt failed on devices where /tmp is not writable (busybox
-    # would emit "sh: can't create ..." to stdout and contaminate the H264
-    # stream). adb's exec-out already keeps stdout/stderr cleanly separated.
-    proc = await asyncio.create_subprocess_exec(
-        "adb",
-        "-s",
-        serial,
-        "exec-out",
-        "screenrecord",
-        "--output-format=h264",
-        f"--size={w}x{h}",
-        "-",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _active_streams[serial] = proc
     log.info("device_stream %s started pid=%s size=%sx%s", serial, proc.pid, w, h)
     first = True
     try:
@@ -320,7 +344,13 @@ async def _stream_h264(ws: WebSocket, serial: str) -> None:
 
 
 @router.websocket("/{serial}/stream")
-async def device_stream(websocket: WebSocket, serial: str, token: str | None = None) -> None:
+async def device_stream(
+    websocket: WebSocket,
+    serial: str,
+    token: str | None = None,
+    width: int | None = None,
+    bitrate: int | None = None,
+) -> None:
     from autoagent.auth.jwt import decode_token
 
     try:
@@ -333,9 +363,10 @@ async def device_stream(websocket: WebSocket, serial: str, token: str | None = N
         return
 
     _validate_serial(serial)
+    req_w, req_b = _resolve_stream_params(width, bitrate)
     await websocket.accept()
     try:
-        await _stream_h264(websocket, serial)
+        await _stream_h264(websocket, serial, width=req_w, bitrate_mbps=req_b)
     except WebSocketDisconnect:
         pass
     except Exception as exc:

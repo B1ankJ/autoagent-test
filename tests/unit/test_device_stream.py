@@ -4,7 +4,29 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import WebSocketDisconnect
 
+from autoagent.api.device_stream import (
+    _DEFAULT_BITRATE_MBPS,
+    _DEFAULT_WIDTH,
+    _MAX_BITRATE_MBPS,
+    _MAX_WIDTH,
+    _MIN_BITRATE_MBPS,
+    _MIN_WIDTH,
+    _resolve_stream_params,
+)
 from autoagent.devices.adb import AdbCommandError, get_screen_resolution, run_input_command
+
+
+def test_resolve_stream_params_defaults_when_omitted():
+    assert _resolve_stream_params(None, None) == (_DEFAULT_WIDTH, _DEFAULT_BITRATE_MBPS)
+
+
+def test_resolve_stream_params_passes_through_in_range():
+    assert _resolve_stream_params(540, 4) == (540, 4)
+
+
+def test_resolve_stream_params_clamps_out_of_range():
+    assert _resolve_stream_params(99999, 99999) == (_MAX_WIDTH, _MAX_BITRATE_MBPS)
+    assert _resolve_stream_params(1, 0) == (_MIN_WIDTH, _MIN_BITRATE_MBPS)
 
 
 def test_get_screen_resolution_parses_portrait():
