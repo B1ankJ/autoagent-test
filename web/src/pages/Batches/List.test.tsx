@@ -70,6 +70,7 @@ vi.mock('../../api/deviceStream', () => {
     reconnect: vi.fn(),
   }
   return {
+    STREAM_QUALITY_PRESETS: { smooth: {}, balanced: {}, sharp: {} },
     useDeviceHttpStream: () => stubHandle,
     postDeviceInput: vi.fn(),
   }
