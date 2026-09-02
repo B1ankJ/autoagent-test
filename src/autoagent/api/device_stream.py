@@ -11,7 +11,8 @@ from pydantic import BaseModel
 
 from autoagent.auth.bearer import BearerAuthError, resolve_bearer_subject
 from autoagent.auth.deps import require_user
-from autoagent.devices.adb import AdbCommandError, get_screen_resolution, run_input_command
+from autoagent.devices.adb import AdbCommandError, get_screen_resolution
+from autoagent.devices.u2_input import send_input
 
 log = logging.getLogger(__name__)
 
@@ -265,7 +266,10 @@ async def device_input(serial: str, body: DeviceInputRequest) -> None:
     _validate_serial(serial)
     cmd = body.to_cmd()
     try:
-        await asyncio.to_thread(run_input_command, serial, cmd)
+        # Prefer the persistent u2 connection (warm JVM ≈ 30-80ms/tap vs the
+        # 200-500ms app_process cold start of `adb shell input`); u2_input
+        # falls back to the shell path internally on any u2 failure.
+        await asyncio.to_thread(send_input, serial, cmd)
     except AdbCommandError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

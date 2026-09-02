@@ -29,7 +29,7 @@ async def _auth(client: AsyncClient) -> dict:
 
 async def test_input_tap_dispatches_adb(client):
     h = await _auth(client)
-    with patch("autoagent.api.device_stream.run_input_command") as mock_run:
+    with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
             json={"type": "tap", "x": 360, "y": 640},
@@ -41,7 +41,7 @@ async def test_input_tap_dispatches_adb(client):
 
 async def test_input_swipe_dispatches_adb(client):
     h = await _auth(client)
-    with patch("autoagent.api.device_stream.run_input_command") as mock_run:
+    with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
             json={"type": "swipe", "x1": 100, "y1": 500, "x2": 100, "y2": 200},
@@ -56,7 +56,7 @@ async def test_input_swipe_dispatches_adb(client):
 
 async def test_input_text_dispatches_adb(client):
     h = await _auth(client)
-    with patch("autoagent.api.device_stream.run_input_command") as mock_run:
+    with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
             json={"type": "text", "value": "hello"},
@@ -68,7 +68,7 @@ async def test_input_text_dispatches_adb(client):
 
 async def test_input_key_dispatches_adb(client):
     h = await _auth(client)
-    with patch("autoagent.api.device_stream.run_input_command") as mock_run:
+    with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
             json={"type": "key", "keycode": "KEYCODE_BACK"},
@@ -103,7 +103,7 @@ async def test_input_adb_error_returns_502(client):
 
     h = await _auth(client)
     with patch(
-        "autoagent.api.device_stream.run_input_command",
+        "autoagent.api.device_stream.send_input",
         side_effect=AdbCommandError("device offline"),
     ):
         r = await client.post(
