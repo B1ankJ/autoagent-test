@@ -26,9 +26,14 @@ export interface StreamQualityOptions {
 // its own defaults (720px / 6Mbps). `smooth` trades sharpness for lower latency
 // / higher frame rate (best for wifi devices and the N-up grid); `sharp` is for
 // reading fine text in the full single-device view.
-export type StreamQualityKey = 'smooth' | 'balanced' | 'sharp'
+export type StreamQualityKey = 'ultra' | 'smooth' | 'balanced' | 'sharp'
 
 export const STREAM_QUALITY_PRESETS: Record<StreamQualityKey, StreamQualityOptions> = {
+  // Smaller frames + lower bitrate = less to encode on-device, less to push
+  // over adb, less to decode — so `ultra` has the lowest end-to-end latency
+  // (at the cost of sharpness). Best for interacting, where seeing the result
+  // fast matters more than a crisp image.
+  ultra: { width: 360, bitrateMbps: 2 },
   smooth: { width: 540, bitrateMbps: 4 },
   balanced: {},
   sharp: { width: 1080, bitrateMbps: 12 },

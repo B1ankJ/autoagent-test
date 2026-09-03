@@ -23,7 +23,10 @@ const KEY_BUTTONS: Array<{ label: string; keycode: DeviceInputKey['keycode'] }> 
 ]
 
 export function DeviceStreamModal({ serial, onClose }: Props) {
-  const [quality, setQuality] = useState<StreamQualityKey>('balanced')
+  // Default to the low-latency 'smooth' preset — the full view is for
+  // interacting, where responsiveness beats sharpness; switch to 均衡/清晰 for
+  // reading fine detail, or 极速 for the lowest latency on a slow link.
+  const [quality, setQuality] = useState<StreamQualityKey>('smooth')
   const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(
     serial,
     STREAM_QUALITY_PRESETS[quality],
@@ -169,6 +172,7 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
             value={quality}
             onChange={(v) => setQuality(v as StreamQualityKey)}
             options={[
+              { label: '极速', value: 'ultra' },
               { label: '流畅', value: 'smooth' },
               { label: '均衡', value: 'balanced' },
               { label: '清晰', value: 'sharp' },
