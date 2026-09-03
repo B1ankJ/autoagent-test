@@ -46,7 +46,11 @@ export function ProfileDeviceScreensModal({ profileName, serials, onClose }: Pro
             message={`${missing} 台绑定设备当前不在 Devices 列表中(离线太久或记录已被清理),未显示。`}
           />
         ) : null}
-        <DeviceScreenGrid devices={bound} onOpenFullView={setStreamSerial} />
+        <DeviceScreenGrid
+          devices={bound}
+          onOpenFullView={setStreamSerial}
+          pausedSerial={streamSerial}
+        />
       </Modal>
     </>
   )

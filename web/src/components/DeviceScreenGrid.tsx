@@ -16,9 +16,12 @@ const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0]
 interface Props {
   devices: Device[]
   onOpenFullView: (serial: string) => void
+  // Serial currently shown in the full-view modal, if any — its card pauses so
+  // the two views don't fight over the one per-serial screenrecord.
+  pausedSerial?: string | null
 }
 
-export function DeviceScreenGrid({ devices, onOpenFullView }: Props) {
+export function DeviceScreenGrid({ devices, onOpenFullView, pausedSerial }: Props) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
@@ -41,7 +44,11 @@ export function DeviceScreenGrid({ devices, onOpenFullView }: Props) {
       <Row gutter={[12, 12]}>
         {paged.map((device) => (
           <Col xs={24} sm={12} md={12} lg={8} xl={6} key={device.serial}>
-            <DeviceStreamCard device={device} onOpenFullView={onOpenFullView} />
+            <DeviceStreamCard
+              device={device}
+              onOpenFullView={onOpenFullView}
+              paused={device.serial === pausedSerial}
+            />
           </Col>
         ))}
       </Row>

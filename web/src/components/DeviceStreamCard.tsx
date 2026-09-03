@@ -9,6 +9,11 @@ import type { Device } from '../types/api'
 interface Props {
   device: Device
   onOpenFullView: (serial: string) => void
+  // When true, this card stops streaming — used while the full-view modal is
+  // open for this same serial, so the two views don't fight over the single
+  // per-serial screenrecord process on the backend (which would make them
+  // alternate every couple seconds, i.e. "small window updates, then big").
+  paused?: boolean
 }
 
 /**
@@ -18,11 +23,12 @@ interface Props {
  * that. Streaming starts on mount when the device is online; offline rows
  * render a placeholder so the grid stays balanced.
  */
-export function DeviceStreamCard({ device, onOpenFullView }: Props) {
-  // Stream only when online AND the tab is visible — passing null tears the
-  // stream down, so a hidden tab stops burning CPU/adb bandwidth on N decoders.
+export function DeviceStreamCard({ device, onOpenFullView, paused }: Props) {
+  // Stream only when online AND the tab is visible AND not paused (see
+  // `paused` above) — passing null tears the stream down, so a hidden tab or
+  // an open full-view modal stops burning CPU/adb bandwidth on N decoders.
   const visible = usePageVisible()
-  const serial = device.online && visible ? device.serial : null
+  const serial = device.online && visible && !paused ? device.serial : null
   // Grid tiles run N decoders + N screenrecord processes in parallel, so use
   // the low-bitrate/low-res 'smooth' preset here to keep many streams fluid.
   const { canvasRef, state, latencyMs, reconnect } = useDeviceHttpStream(

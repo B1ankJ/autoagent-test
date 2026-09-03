@@ -508,7 +508,11 @@ export function DevicesPage() {
           }
         />
       ) : viewMode === 'cards' ? (
-        <DeviceScreenGrid devices={rows} onOpenFullView={setStreamSerial} />
+        <DeviceScreenGrid
+          devices={rows}
+          onOpenFullView={setStreamSerial}
+          pausedSerial={streamSerial}
+        />
       ) : (
         <>
           {selectedSerials.length > 0 ? (
