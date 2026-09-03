@@ -70,8 +70,14 @@ vi.mock('../../api/deviceStream', () => {
     reconnect: vi.fn(),
   }
   return {
-    STREAM_QUALITY_PRESETS: { smooth: {}, balanced: {}, sharp: {} },
+    STREAM_QUALITY_PRESETS: { ultra: {}, smooth: {}, balanced: {}, sharp: {} },
     useDeviceHttpStream: () => stubHandle,
+    useDeviceScreenshot: () => ({
+      imgRef: { current: null },
+      src: null,
+      state: 'closed' as const,
+      reconnect: vi.fn(),
+    }),
     postDeviceInput: vi.fn(),
   }
 })

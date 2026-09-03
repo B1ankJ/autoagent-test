@@ -449,7 +449,10 @@ export interface DeviceScreenshotHandle {
 
 const SCREENSHOT_INTERVAL_MS = 500
 
-export function useDeviceScreenshot(serial: string | null): DeviceScreenshotHandle {
+export function useDeviceScreenshot(
+  serial: string | null,
+  intervalMs: number = SCREENSHOT_INTERVAL_MS,
+): DeviceScreenshotHandle {
   const imgRef = useRef<HTMLImageElement>(null)
   const [src, setSrc] = useState<string | null>(null)
   const [state, setState] = useState<StreamState>('closed')
@@ -470,8 +473,8 @@ export function useDeviceScreenshot(serial: string | null): DeviceScreenshotHand
     failuresRef.current = 0
     tick()
     if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(tick, SCREENSHOT_INTERVAL_MS)
-  }, [serial, tick])
+    timerRef.current = setInterval(tick, intervalMs)
+  }, [serial, tick, intervalMs])
 
   useEffect(() => {
     if (!serial) {
