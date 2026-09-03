@@ -5,15 +5,25 @@ on-device `input` binary is a shell script that spins up a fresh `app_process`
 JVM and loads the framework every single time. uiautomator2 instead talks to an
 on-device server whose JVM stays warm, so each injection skips that cold start.
 
-This module keeps one cached u2 connection per serial and routes the stream
-UI's tap/swipe/key through it, falling back to `adb shell input` on any
-failure (device dropped, injection rejected on a FLAG_SECURE screen, etc.) so
-behavior is never worse than the old shell-only path. `text` deliberately
-stays on the shell path — see send_input's docstring.
+Critical subtlety (learned the hard way): in uiautomator2 3.x, `u2.connect()`
+*synchronously starts* the on-device server — the first time on a given device
+it installs the `com.github.uiautomator` apks and launches instrumentation,
+which is slow and can hang or fail on locked-down devices. So we must NEVER do
+that on the tap's critical path, or a tap just blocks until the client times
+out ("操作发送失败").
+
+Design: taps always work via `adb shell input` immediately (never worse than
+before, never blocks). The u2 connection is warmed up **in a background
+thread**; only once it's confirmed ready does subsequent input route through it
+(fast path). If warmup never succeeds (device blocks the test apk), input stays
+on the shell path forever — slower, but functional. `text` always uses the
+shell path regardless — see send_input's docstring.
 """
+
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -35,21 +45,67 @@ _KEYCODE_TO_U2: dict[str, str] = {
     "KEYCODE_DEL": "delete",
 }
 
-# serial → cached persistent u2 connection.
-_connections: dict[str, Any] = {}
+# serial → confirmed-ready u2 connection (only set by a successful warmup).
+_ready: dict[str, Any] = {}
+# serials with a warmup currently in flight (dedupes concurrent kick-offs).
+_warming: set[str] = set()
+# guards _ready / _warming across the request threads + warmup threads.
+_lock = threading.Lock()
 
 
 def reset_connections() -> None:
-    """Drop all cached connections (used by tests)."""
-    _connections.clear()
+    """Drop all cached connections and warmup flags (used by tests)."""
+    with _lock:
+        _ready.clear()
+        _warming.clear()
 
 
-def _get_connection(serial: str, connect: Callable[[str], Any]) -> Any:
-    conn = _connections.get(serial)
-    if conn is None:
+def _default_probe(conn: Any) -> None:
+    """Force the u2 server to actually come up and answer, so we only mark a
+    connection ready once it can really serve RPCs."""
+    _ = conn.info  # property access issues a jsonrpc call (the point is the call)
+
+
+def _warmup(
+    serial: str,
+    connect: Callable[[str], Any],
+    probe: Callable[[Any], None],
+) -> None:
+    """Provision + verify a u2 connection off the request path. Marks the
+    serial ready on success; always clears the in-flight flag so a later tap
+    can retry after a failure."""
+    try:
         conn = connect(serial)
-        _connections[serial] = conn
-    return conn
+        probe(conn)
+        with _lock:
+            _ready[serial] = conn
+        log.info("u2 connection ready for %s; input now uses uiautomator2", serial)
+    except Exception:
+        log.warning("u2 warmup failed for %s; input stays on adb shell", serial, exc_info=True)
+    finally:
+        with _lock:
+            _warming.discard(serial)
+
+
+def _default_spawn(
+    serial: str,
+    connect: Callable[[str], Any],
+    probe: Callable[[Any], None],
+) -> None:
+    threading.Thread(target=_warmup, args=(serial, connect, probe), daemon=True).start()
+
+
+def _start_warmup(
+    serial: str,
+    connect: Callable[[str], Any],
+    probe: Callable[[Any], None],
+    spawn: Callable[[str, Callable[[str], Any], Callable[[Any], None]], None],
+) -> None:
+    with _lock:
+        if serial in _ready or serial in _warming:
+            return
+        _warming.add(serial)
+    spawn(serial, connect, probe)
 
 
 def _dispatch_u2(conn: Any, cmd: dict) -> None:
@@ -76,29 +132,42 @@ def send_input(
     *,
     connect: Callable[[str], Any] = u2.connect,
     shell: Callable[[str, dict], None] = run_input_command,
+    probe: Callable[[Any], None] = _default_probe,
+    spawn: Callable[[str, Callable[[str], Any], Callable[[Any], None]], None] = _default_spawn,
 ) -> None:
-    """Inject an input command, preferring u2 and falling back to adb shell.
+    """Inject an input command, preferring a warm u2 connection and never
+    blocking on u2 provisioning.
 
-    tap/swipe/key go through the persistent u2 connection (warm JVM → no
-    per-call app_process cold start). `text` always uses the shell path:
-    u2.send_keys switches the device IME (FastInputIME) as a side effect,
-    which fights the executor's own ADB-Keyboard IME management, and
-    text-entry latency was never the pain point taps are.
+    tap/swipe/key use the persistent u2 connection *only once it's been warmed
+    up in the background* (warm JVM → no per-call app_process cold start). Until
+    then — and whenever u2 fails — the command goes through `adb shell input`,
+    so behavior is never worse (or slower to respond) than the old shell path.
+    `text` always uses the shell path: u2.send_keys switches the device IME
+    (FastInputIME) as a side effect, which fights the executor's own
+    ADB-Keyboard IME management, and text-entry latency was never the pain
+    point taps are.
     """
     if cmd.get("type") == "text":
         shell(serial, cmd)
         return
-    try:
-        conn = _get_connection(serial, connect)
-        _dispatch_u2(conn, cmd)
-    except Exception:
-        # Drop a possibly-dead connection so the next call reconnects, then
-        # fall back to the shell path (never worse than the old behavior).
-        _connections.pop(serial, None)
-        log.warning(
-            "u2 input failed for %s (type=%s); falling back to adb shell input",
-            serial,
-            cmd.get("type"),
-            exc_info=True,
-        )
-        shell(serial, cmd)
+
+    conn = _ready.get(serial)
+    if conn is not None:
+        try:
+            _dispatch_u2(conn, cmd)
+            return
+        except Exception:
+            with _lock:
+                _ready.pop(serial, None)
+            log.warning(
+                "u2 input failed for %s (type=%s); falling back to adb shell input",
+                serial,
+                cmd.get("type"),
+                exc_info=True,
+            )
+            # fall through to the shell path below
+    else:
+        # No warm connection yet — kick one off for next time (non-blocking).
+        _start_warmup(serial, connect, probe, spawn)
+
+    shell(serial, cmd)
