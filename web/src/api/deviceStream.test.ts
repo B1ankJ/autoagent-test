@@ -36,6 +36,31 @@ describe('useDeviceScreenshot', () => {
     expect(result.current.state).toBe('live')
     localStorage.clear()
   })
+
+  it('self-paces: fetches the next screenshot only after the current one loads', () => {
+    // Regression: a blind fixed interval swapped img.src before the previous
+    // (slow) screencap finished, so the browser cancelled it and the frame
+    // never advanced despite "直播中". Now the next fetch is scheduled from
+    // onLoad, so the src only advances after a load completes.
+    vi.useFakeTimers()
+    localStorage.setItem('autoagent_token', 'tok')
+    const { result } = renderHook(() => useDeviceScreenshot('emulator-5554', 300))
+    const first = result.current.src
+    expect(first).toBeTruthy()
+
+    // No new fetch until the current one reports done — advancing time alone
+    // does nothing while we're still "loading".
+    act(() => vi.advanceTimersByTime(1000))
+    expect(result.current.src).toBe(first)
+
+    // Load completes → next fetch scheduled → advances after the interval.
+    act(() => result.current.onLoad())
+    act(() => vi.advanceTimersByTime(300))
+    expect(result.current.src).not.toBe(first)
+
+    vi.useRealTimers()
+    localStorage.clear()
+  })
 })
 
 describe('appendStreamQuality', () => {

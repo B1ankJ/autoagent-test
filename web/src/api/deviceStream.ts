@@ -483,28 +483,42 @@ export function useDeviceScreenshot(
   const imgRef = useRef<HTMLImageElement>(null)
   const [src, setSrc] = useState<string | null>(null)
   const [state, setState] = useState<StreamState>('closed')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const failuresRef = useRef(0)
+  // Read the live serial inside the self-scheduled callback without making
+  // `tick` change identity (which would tear down/rebuild the loop).
+  const serialRef = useRef(serial)
+  serialRef.current = serial
 
+  // Self-paced polling: fetch the *next* screenshot only after the current one
+  // finishes (onLoad/onError), not on a blind fixed interval. A fixed interval
+  // faster than the device's screencap latency kept swapping img.src before the
+  // previous load completed, so the browser cancelled each in-flight load and
+  // the frame never advanced — "直播中" but frozen. This paces requests to the
+  // device's real speed so every frame completes and the image actually
+  // updates.
   const tick = useCallback(() => {
-    if (!serial) return
+    const s = serialRef.current
+    if (!s) return
     const token = getToken()
-    setSrc(
-      `/api/v1/devices/${encodeURIComponent(serial)}/screenshot.png?token=${token}&ts=${Date.now()}`,
-    )
-  }, [serial])
+    setSrc(`/api/v1/devices/${encodeURIComponent(s)}/screenshot.png?token=${token}&ts=${Date.now()}`)
+  }, [])
+
+  const scheduleNext = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(tick, intervalMs)
+  }, [tick, intervalMs])
 
   const start = useCallback(() => {
-    if (!serial) return
-    setState('connecting')
+    if (!serialRef.current) return
     failuresRef.current = 0
+    setState('connecting')
     tick()
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(tick, intervalMs)
-  }, [serial, tick, intervalMs])
+  }, [tick])
 
   useEffect(() => {
     if (!serial) {
+      if (timerRef.current) clearTimeout(timerRef.current)
       setSrc(null)
       setState('closed')
       return
@@ -512,7 +526,7 @@ export function useDeviceScreenshot(
     start()
     return () => {
       if (timerRef.current) {
-        clearInterval(timerRef.current)
+        clearTimeout(timerRef.current)
         timerRef.current = null
       }
     }
@@ -521,12 +535,17 @@ export function useDeviceScreenshot(
   const onLoad = useCallback(() => {
     failuresRef.current = 0
     setState('live')
-  }, [])
+    scheduleNext()
+  }, [scheduleNext])
 
   const onError = useCallback(() => {
     failuresRef.current += 1
-    if (failuresRef.current >= 5) setState('error')
-  }, [])
+    if (failuresRef.current >= 5) {
+      setState('error') // give up chaining; reconnect() restarts
+      return
+    }
+    scheduleNext()
+  }, [scheduleNext])
 
   // onLoad/onError are returned for the consumer to bind as React <img> props.
   // The previous approach attached them via addEventListener in a one-shot
