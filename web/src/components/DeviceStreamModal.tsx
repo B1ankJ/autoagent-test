@@ -56,6 +56,8 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
     src: snapSrc,
     state: snapState,
     reconnect: snapReconnect,
+    onLoad: snapOnLoad,
+    onError: snapOnError,
   } = useDeviceScreenshot(snapSerial, SNAPSHOT_INTERVAL_MS)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -221,6 +223,8 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
               alt="device screen"
               draggable={false}
               style={surfaceStyle}
+              onLoad={snapOnLoad}
+              onError={snapOnError}
               onMouseDown={handleSurfaceMouseDown}
               onMouseUp={handleSurfaceMouseUp}
               onDragStart={(e) => e.preventDefault()}

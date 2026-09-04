@@ -1,7 +1,24 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { appendStreamQuality, safeCloseDecoder, useDeviceHttpStream } from './deviceStream'
+import {
+  appendStreamQuality,
+  safeCloseDecoder,
+  useDeviceHttpStream,
+  useDeviceScreenshot,
+} from './deviceStream'
+
+describe('useDeviceScreenshot', () => {
+  it('goes from connecting to live when onLoad fires (regression: listeners once never attached)', () => {
+    localStorage.setItem('autoagent_token', 'tok')
+    // large interval so the poll timer doesn't churn during the test
+    const { result } = renderHook(() => useDeviceScreenshot('emulator-5554', 1_000_000))
+    expect(result.current.state).toBe('connecting')
+    act(() => result.current.onLoad())
+    expect(result.current.state).toBe('live')
+    localStorage.clear()
+  })
+})
 
 describe('appendStreamQuality', () => {
   const base = '/api/v1/devices/x/stream.h264?token=t'

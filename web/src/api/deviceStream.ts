@@ -445,6 +445,10 @@ export interface DeviceScreenshotHandle {
   src: string | null
   state: StreamState
   reconnect: () => void
+  // Wire these onto the <img> (onLoad/onError) — see the note on why the old
+  // addEventListener approach could silently never attach.
+  onLoad: () => void
+  onError: () => void
 }
 
 const SCREENSHOT_INTERVAL_MS = 500
@@ -501,17 +505,12 @@ export function useDeviceScreenshot(
     if (failuresRef.current >= 5) setState('error')
   }, [])
 
-  // Attach load/error listeners by mutating the ref's current element each tick.
-  useEffect(() => {
-    const img = imgRef.current
-    if (!img) return
-    img.addEventListener('load', onLoad)
-    img.addEventListener('error', onError)
-    return () => {
-      img.removeEventListener('load', onLoad)
-      img.removeEventListener('error', onError)
-    }
-  }, [onLoad, onError])
-
-  return { imgRef, src, state, reconnect: start }
+  // onLoad/onError are returned for the consumer to bind as React <img> props.
+  // The previous approach attached them via addEventListener in a one-shot
+  // effect keyed on [onLoad, onError] (stable) — if imgRef.current was null
+  // when it first ran (e.g. the <img> lives inside a destroyOnClose modal that
+  // wasn't open yet), it bailed and never re-ran, so the listeners were never
+  // attached and state was stuck on 'connecting'. React props bind regardless
+  // of mount timing.
+  return { imgRef, src, state, reconnect: start, onLoad, onError }
 }
