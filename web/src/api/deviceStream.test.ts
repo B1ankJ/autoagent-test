@@ -3,10 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   appendStreamQuality,
+  fillCanvasBlack,
   safeCloseDecoder,
   useDeviceHttpStream,
   useDeviceScreenshot,
 } from './deviceStream'
+
+describe('fillCanvasBlack', () => {
+  it('paints the whole canvas black', () => {
+    const fillRect = vi.fn()
+    const canvas = {
+      width: 320,
+      height: 640,
+      getContext: () => ({ fillStyle: '', fillRect }),
+    } as unknown as HTMLCanvasElement
+    fillCanvasBlack(canvas)
+    expect(fillRect).toHaveBeenCalledWith(0, 0, 320, 640)
+  })
+
+  it('is a no-op for a null canvas', () => {
+    expect(() => fillCanvasBlack(null)).not.toThrow()
+  })
+})
 
 describe('useDeviceScreenshot', () => {
   it('goes from connecting to live when onLoad fires (regression: listeners once never attached)', () => {

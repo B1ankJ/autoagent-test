@@ -58,6 +58,17 @@ const RETRY_DELAY_MS = 2000
 // cleanup just triggered. WebCodecs throws InvalidStateError ("Cannot call
 // 'close' on a closed codec") on a double-close, so whichever of those two
 // runs second needs this guard instead of calling decoder.close() directly.
+// Paint the canvas fully black. Called when a stream tears down (e.g. a grid
+// card paused because its full-view modal opened) so the tile clearly reads as
+// "disconnected" instead of freezing on its last decoded frame.
+export function fillCanvasBlack(canvas: HTMLCanvasElement | null): void {
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+}
+
 export function safeCloseDecoder(decoder: VideoDecoder | null | undefined): void {
   if (!decoder || decoder.state === 'closed') return
   try {
@@ -196,6 +207,11 @@ export function useDeviceStream(
       safeCloseDecoder(decoderRef.current)
     }
   }, [serial, connect])
+
+  // Paint black once torn down (serial → null) — see the http hook's note.
+  useEffect(() => {
+    if (!serial) fillCanvasBlack(canvasRef.current)
+  }, [serial])
 
   return { canvasRef, state, latencyMs, reconnect }
 }
@@ -433,6 +449,13 @@ export function useDeviceHttpStream(
       safeCloseDecoder(decoderRef.current)
     }
   }, [serial, connect])
+
+  // Paint black once the stream is torn down (serial → null, e.g. this grid
+  // card paused because its full-view modal opened) so it reads as
+  // disconnected instead of freezing on its last frame.
+  useEffect(() => {
+    if (!serial) fillCanvasBlack(canvasRef.current)
+  }, [serial])
 
   return { canvasRef, state, latencyMs, reconnect }
 }
