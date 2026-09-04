@@ -44,20 +44,20 @@ it('shows an error toast instead of silently dropping input when the device is u
   expect(await screen.findByText('操作发送失败: device offline')).toBeInTheDocument()
 })
 
-it('streams only the active mode: video by default, screencap after switching to 低延迟', async () => {
+it('streams only the active mode: screencap by default, video after switching to 视频', async () => {
   const user = userEvent.setup()
   renderWithProviders(<DeviceStreamModal serial="emulator-5554" onClose={vi.fn()} />)
 
-  // Default video mode: the H264 stream runs, screencap is torn down (null).
-  expect(videoSerials).toContain('emulator-5554')
-  expect(snapSerials.every((s) => s === null)).toBe(true)
+  // Default low-latency screencap mode: it runs, the H264 stream is torn down.
+  expect(snapSerials).toContain('emulator-5554')
+  expect(videoSerials.every((s) => s === null)).toBe(true)
 
   videoSerials.length = 0
   snapSerials.length = 0
-  await user.click(screen.getByText('低延迟'))
+  await user.click(screen.getByText('视频'))
 
-  // Now screencap runs and the video stream is torn down (null) — so the two
+  // Now the H264 stream runs and screencap is torn down (null) — so the two
   // captures never fight over the one per-serial pipeline.
-  expect(snapSerials).toContain('emulator-5554')
-  expect(videoSerials.every((s) => s === null)).toBe(true)
+  expect(videoSerials).toContain('emulator-5554')
+  expect(snapSerials.every((s) => s === null)).toBe(true)
 })

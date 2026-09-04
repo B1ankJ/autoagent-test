@@ -33,7 +33,10 @@ const KEY_BUTTONS: Array<{ label: string; keycode: DeviceInputKey['keycode'] }> 
 ]
 
 export function DeviceStreamModal({ serial, onClose }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>('video')
+  // Default to the low-latency screencap mode — the full view is for
+  // interacting, where "tap → see result" responsiveness matters most. It's
+  // lower frame rate but near-real-time; switch to 视频 for smooth playback.
+  const [viewMode, setViewMode] = useState<ViewMode>('snapshot')
   // Default to 均衡 (720p, a clean multiple of 16 → no macroblock-crop
   // ambiguity, sharp enough to read). Taps are accurate at any preset now
   // (normalized coords), so this is purely a latency/clarity default — switch
