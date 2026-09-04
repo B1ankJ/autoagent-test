@@ -34,10 +34,11 @@ const KEY_BUTTONS: Array<{ label: string; keycode: DeviceInputKey['keycode'] }> 
 
 export function DeviceStreamModal({ serial, onClose }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('video')
-  // Default to the low-latency 'smooth' preset — the full view is for
-  // interacting, where responsiveness beats sharpness; switch to 均衡/清晰 for
-  // reading fine detail, or 极速 for the lowest latency on a slow link.
-  const [quality, setQuality] = useState<StreamQualityKey>('smooth')
+  // Default to 均衡 (720p, a clean multiple of 16 → no macroblock-crop
+  // ambiguity, sharp enough to read). Taps are accurate at any preset now
+  // (normalized coords), so this is purely a latency/clarity default — switch
+  // to 流畅/极速 for lower latency, or 清晰 for detail.
+  const [quality, setQuality] = useState<StreamQualityKey>('balanced')
 
   // Only one capture streams at a time — pass null to the inactive hook so the
   // two don't fight over the single per-serial screenrecord/screencap.
