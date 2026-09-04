@@ -69,18 +69,19 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
     [message],
   )
 
-  // Maps a click on the display surface (canvas in video mode, img in snapshot
-  // mode) to device pixels. Both carry the device's real resolution: canvas via
-  // width/height (set to the decoded frame size), img via naturalWidth/Height
-  // (screencap returns a full-resolution PNG).
-  const toDeviceCoords = useCallback(
-    (surface: HTMLCanvasElement | HTMLImageElement, clientX: number, clientY: number) => {
+  // Maps a click on the display surface to a normalized 0-1 fraction of it —
+  // deliberately independent of the surface's pixel resolution (which is the
+  // *stream* resolution, not the device's). The backend/u2 scale these to the
+  // device's native pixels, so taps stay accurate at any quality preset and on
+  // any device. Clamped just under 1 because u2 treats a coord of exactly 1 as
+  // an absolute pixel, not a fraction.
+  const toNormCoords = useCallback(
+    (surface: HTMLElement, clientX: number, clientY: number) => {
       const rect = surface.getBoundingClientRect()
-      const devW = surface instanceof HTMLCanvasElement ? surface.width : surface.naturalWidth
-      const devH = surface instanceof HTMLCanvasElement ? surface.height : surface.naturalHeight
+      const clamp = (v: number) => Math.max(0, Math.min(0.9999, v))
       return {
-        x: Math.round(((clientX - rect.left) * devW) / rect.width),
-        y: Math.round(((clientY - rect.top) * devH) / rect.height),
+        nx: clamp((clientX - rect.left) / rect.width),
+        ny: clamp((clientY - rect.top) / rect.height),
       }
     },
     [],
@@ -99,8 +100,8 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
       e.preventDefault()
       const surface = e.currentTarget
       if (!serial || !dragRef.current) return
-      // img not loaded yet (no natural size) → can't map coords reliably
-      if (surface instanceof HTMLImageElement && surface.naturalWidth === 0) return
+      const rect = surface.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return // not laid out yet
       const start = dragRef.current
       dragRef.current = null
 
@@ -110,22 +111,22 @@ export function DeviceStreamModal({ serial, onClose }: Props) {
       const durationMs = Math.max(100, Math.min(1000, Date.now() - start.t))
 
       if (dist > 8) {
-        const p1 = toDeviceCoords(surface, start.x, start.y)
-        const p2 = toDeviceCoords(surface, e.clientX, e.clientY)
+        const p1 = toNormCoords(surface, start.x, start.y)
+        const p2 = toNormCoords(surface, e.clientX, e.clientY)
         postDeviceInput(serial, {
           type: 'swipe',
-          x1: p1.x,
-          y1: p1.y,
-          x2: p2.x,
-          y2: p2.y,
+          nx1: p1.nx,
+          ny1: p1.ny,
+          nx2: p2.nx,
+          ny2: p2.ny,
           duration_ms: durationMs,
         }).catch(onInputFailed)
       } else {
-        const p = toDeviceCoords(surface, e.clientX, e.clientY)
-        postDeviceInput(serial, { type: 'tap', x: p.x, y: p.y }).catch(onInputFailed)
+        const p = toNormCoords(surface, e.clientX, e.clientY)
+        postDeviceInput(serial, { type: 'tap', nx: p.nx, ny: p.ny }).catch(onInputFailed)
       }
     },
-    [serial, toDeviceCoords, onInputFailed],
+    [serial, toNormCoords, onInputFailed],
   )
 
   const handleKeyButton = useCallback(

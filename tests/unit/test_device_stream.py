@@ -52,22 +52,30 @@ def test_get_screen_resolution_raises_on_bad_output():
             get_screen_resolution("emulator-5554")
 
 
-def test_run_input_tap():
-    with patch("autoagent.devices.adb._run_adb") as mock:
+def test_run_input_tap_scales_normalized_coords_to_native_pixels():
+    with (
+        patch("autoagent.devices.adb._native_resolution", return_value=(1080, 1920)),
+        patch("autoagent.devices.adb._run_adb") as mock,
+    ):
         mock.return_value = MagicMock(stdout="")
-        run_input_command("emulator-5554", {"type": "tap", "x": 360, "y": 640})
-    mock.assert_called_once_with("-s", "emulator-5554", "shell", "input", "tap", "360", "640")
+        # 0.5 × 1080 = 540, 0.25 × 1920 = 480 — accurate regardless of the
+        # video stream resolution the coords were captured against.
+        run_input_command("emulator-5554", {"type": "tap", "nx": 0.5, "ny": 0.25})
+    mock.assert_called_once_with("-s", "emulator-5554", "shell", "input", "tap", "540", "480")
 
 
-def test_run_input_swipe():
-    with patch("autoagent.devices.adb._run_adb") as mock:
+def test_run_input_swipe_scales_normalized_coords_to_native_pixels():
+    with (
+        patch("autoagent.devices.adb._native_resolution", return_value=(1080, 1920)),
+        patch("autoagent.devices.adb._run_adb") as mock,
+    ):
         mock.return_value = MagicMock(stdout="")
         run_input_command(
             "emulator-5554",
-            {"type": "swipe", "x1": 100, "y1": 500, "x2": 100, "y2": 200, "duration_ms": 300},
+            {"type": "swipe", "nx1": 0.1, "ny1": 0.5, "nx2": 0.1, "ny2": 0.2, "duration_ms": 300},
         )
     mock.assert_called_once_with(
-        "-s", "emulator-5554", "shell", "input", "swipe", "100", "500", "100", "200", "300"
+        "-s", "emulator-5554", "shell", "input", "swipe", "108", "960", "108", "384", "300"
     )
 
 

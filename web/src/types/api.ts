@@ -358,18 +358,21 @@ export interface ProfileBuilderValidateResponse {
 
 export type DeviceInputType = 'tap' | 'swipe' | 'text' | 'key'
 
+// tap/swipe coordinates are normalized 0-1 fractions of the display surface, so
+// tap accuracy doesn't depend on the video stream resolution — the backend/u2
+// scales them to the device's native pixels.
 export interface DeviceInputTap {
   type: 'tap'
-  x: number
-  y: number
+  nx: number
+  ny: number
 }
 
 export interface DeviceInputSwipe {
   type: 'swipe'
-  x1: number
-  y1: number
-  x2: number
-  y2: number
+  nx1: number
+  ny1: number
+  nx2: number
+  ny2: number
   duration_ms?: number
 }
 

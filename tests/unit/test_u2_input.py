@@ -29,7 +29,7 @@ def test_text_always_uses_shell_and_never_warms_u2():
 def test_tap_with_no_ready_connection_falls_back_to_shell_and_starts_warmup():
     shell = MagicMock()
     spawn = MagicMock()
-    cmd = {"type": "tap", "x": 1, "y": 2}
+    cmd = {"type": "tap", "nx": 0.1, "ny": 0.2}
     u2_input.send_input("s1", cmd, connect=MagicMock(), shell=shell, spawn=spawn, probe=MagicMock())
     # never blocks on u2 — the tap goes straight to shell
     shell.assert_called_once_with("s1", cmd)
@@ -37,25 +37,27 @@ def test_tap_with_no_ready_connection_falls_back_to_shell_and_starts_warmup():
     spawn.assert_called_once()
 
 
-def test_tap_uses_u2_when_a_ready_connection_exists():
+def test_tap_uses_u2_with_normalized_coords_when_a_ready_connection_exists():
     conn = MagicMock()
     shell = MagicMock()
     u2_input._ready["s1"] = conn
-    u2_input.send_input("s1", {"type": "tap", "x": 10, "y": 20}, shell=shell, spawn=MagicMock())
-    conn.click.assert_called_once_with(10, 20)
+    # normalized 0-1 coords are passed straight to u2 (it scales to native)
+    cmd = {"type": "tap", "nx": 0.5, "ny": 0.25}
+    u2_input.send_input("s1", cmd, shell=shell, spawn=MagicMock())
+    conn.click.assert_called_once_with(0.5, 0.25)
     shell.assert_not_called()
 
 
-def test_ready_swipe_converts_duration_ms_to_seconds():
+def test_ready_swipe_passes_normalized_coords_and_converts_duration_to_seconds():
     conn = MagicMock()
     u2_input._ready["s1"] = conn
     u2_input.send_input(
         "s1",
-        {"type": "swipe", "x1": 1, "y1": 2, "x2": 3, "y2": 4, "duration_ms": 500},
+        {"type": "swipe", "nx1": 0.1, "ny1": 0.2, "nx2": 0.3, "ny2": 0.4, "duration_ms": 500},
         shell=MagicMock(),
         spawn=MagicMock(),
     )
-    conn.swipe.assert_called_once_with(1, 2, 3, 4, duration=0.5)
+    conn.swipe.assert_called_once_with(0.1, 0.2, 0.3, 0.4, duration=0.5)
 
 
 def test_ready_key_maps_keycode_to_u2_symbolic_name():
@@ -82,7 +84,7 @@ def test_ready_dispatch_failure_drops_connection_and_falls_back_to_shell():
     conn.click.side_effect = RuntimeError("device offline")
     shell = MagicMock()
     u2_input._ready["s1"] = conn
-    cmd = {"type": "tap", "x": 1, "y": 2}
+    cmd = {"type": "tap", "nx": 0.1, "ny": 0.2}
     u2_input.send_input("s1", cmd, shell=shell, spawn=MagicMock())
     shell.assert_called_once_with("s1", cmd)
     # the dead connection is dropped so a later tap re-warms instead of reusing it
@@ -110,7 +112,7 @@ def test_warmup_failure_leaves_no_ready_and_clears_warming_flag():
 
 def test_warmup_is_not_started_twice_concurrently():
     spawn = MagicMock()
-    cmd = {"type": "tap", "x": 1, "y": 2}
+    cmd = {"type": "tap", "nx": 0.1, "ny": 0.2}
     # First tap kicks off a warmup; second tap (while still warming) must not.
     u2_input.send_input(
         "s1", cmd, connect=MagicMock(), shell=MagicMock(), spawn=spawn, probe=MagicMock()

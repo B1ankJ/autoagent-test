@@ -254,22 +254,47 @@ def _escape_text_for_adb(text: str) -> str:
     return "".join(result)
 
 
+# serial → native (width, height), so normalized 0-1 tap/swipe coords can be
+# converted to absolute pixels for `adb shell input`. Cached because otherwise
+# every tap would shell out an extra `wm size`. (The u2 path doesn't need this —
+# u2 scales 0-1 floats to the live window size itself.)
+_native_res_cache: dict[str, tuple[int, int]] = {}
+
+
+def _native_resolution(serial: str) -> tuple[int, int]:
+    res = _native_res_cache.get(serial)
+    if res is None:
+        res = get_screen_resolution(serial, 0)
+        _native_res_cache[serial] = res
+    return res
+
+
 def run_input_command(serial: str, cmd: dict) -> None:
-    """Execute an adb input command on the device."""
+    """Execute an adb input command on the device.
+
+    tap/swipe coords are normalized 0-1 fractions (`nx`/`ny`/...), so accuracy
+    doesn't depend on the video stream's resolution — they're scaled to the
+    device's native pixels here.
+    """
     t = cmd.get("type")
     if t == "tap":
-        _run_adb("-s", serial, "shell", "input", "tap", str(cmd["x"]), str(cmd["y"]))
+        w, h = _native_resolution(serial)
+        _run_adb(
+            "-s", serial, "shell", "input", "tap",
+            str(int(cmd["nx"] * w)), str(int(cmd["ny"] * h)),
+        )
     elif t == "swipe":
+        w, h = _native_resolution(serial)
         _run_adb(
             "-s",
             serial,
             "shell",
             "input",
             "swipe",
-            str(cmd["x1"]),
-            str(cmd["y1"]),
-            str(cmd["x2"]),
-            str(cmd["y2"]),
+            str(int(cmd["nx1"] * w)),
+            str(int(cmd["ny1"] * h)),
+            str(int(cmd["nx2"] * w)),
+            str(int(cmd["ny2"] * h)),
             str(cmd.get("duration_ms", 300)),
         )
     elif t == "text":

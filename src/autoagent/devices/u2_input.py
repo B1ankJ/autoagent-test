@@ -109,15 +109,19 @@ def _start_warmup(
 
 
 def _dispatch_u2(conn: Any, cmd: dict) -> None:
+    # tap/swipe coords are normalized 0-1 fractions. u2's click/swipe treat a
+    # coord < 1 as a fraction of the live window size (pos_rel2abs), so passing
+    # them straight through scales to the device's real resolution for free —
+    # accuracy is independent of the video stream resolution.
     t = cmd.get("type")
     if t == "tap":
-        conn.click(cmd["x"], cmd["y"])
+        conn.click(cmd["nx"], cmd["ny"])
     elif t == "swipe":
         conn.swipe(
-            cmd["x1"],
-            cmd["y1"],
-            cmd["x2"],
-            cmd["y2"],
+            cmd["nx1"],
+            cmd["ny1"],
+            cmd["nx2"],
+            cmd["ny2"],
             duration=cmd.get("duration_ms", 300) / 1000,
         )
     elif t == "key":

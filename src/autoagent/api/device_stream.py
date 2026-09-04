@@ -58,27 +58,31 @@ def _validate_serial(serial: str) -> None:
 
 
 class DeviceInputRequest(BaseModel):
+    # tap/swipe coords are normalized 0-1 fractions of the display surface, so
+    # accuracy is independent of the video stream's resolution (the backend/u2
+    # scales them to the device's native pixels). See the frontend
+    # toDeviceCoords + adb.run_input_command / u2_input._dispatch_u2.
     type: str
-    x: int | None = None
-    y: int | None = None
-    x1: int | None = None
-    y1: int | None = None
-    x2: int | None = None
-    y2: int | None = None
+    nx: float | None = None
+    ny: float | None = None
+    nx1: float | None = None
+    ny1: float | None = None
+    nx2: float | None = None
+    ny2: float | None = None
     duration_ms: int = 300
     value: str | None = None
     keycode: str | None = None
 
     def to_cmd(self) -> dict:
         if self.type == "tap":
-            return {"type": "tap", "x": self.x, "y": self.y}
+            return {"type": "tap", "nx": self.nx, "ny": self.ny}
         if self.type == "swipe":
             return {
                 "type": "swipe",
-                "x1": self.x1,
-                "y1": self.y1,
-                "x2": self.x2,
-                "y2": self.y2,
+                "nx1": self.nx1,
+                "ny1": self.ny1,
+                "nx2": self.nx2,
+                "ny2": self.ny2,
                 "duration_ms": self.duration_ms,
             }
         if self.type == "text":

@@ -32,11 +32,11 @@ async def test_input_tap_dispatches_adb(client):
     with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
-            json={"type": "tap", "x": 360, "y": 640},
+            json={"type": "tap", "nx": 0.5, "ny": 0.25},
             headers=h,
         )
     assert r.status_code == 204
-    mock_run.assert_called_once_with("emulator-5554", {"type": "tap", "x": 360, "y": 640})
+    mock_run.assert_called_once_with("emulator-5554", {"type": "tap", "nx": 0.5, "ny": 0.25})
 
 
 async def test_input_swipe_dispatches_adb(client):
@@ -44,13 +44,13 @@ async def test_input_swipe_dispatches_adb(client):
     with patch("autoagent.api.device_stream.send_input") as mock_run:
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
-            json={"type": "swipe", "x1": 100, "y1": 500, "x2": 100, "y2": 200},
+            json={"type": "swipe", "nx1": 0.1, "ny1": 0.5, "nx2": 0.1, "ny2": 0.2},
             headers=h,
         )
     assert r.status_code == 204
     mock_run.assert_called_once_with(
         "emulator-5554",
-        {"type": "swipe", "x1": 100, "y1": 500, "x2": 100, "y2": 200, "duration_ms": 300},
+        {"type": "swipe", "nx1": 0.1, "ny1": 0.5, "nx2": 0.1, "ny2": 0.2, "duration_ms": 300},
     )
 
 
@@ -83,7 +83,7 @@ async def test_input_key_dispatches_adb(client):
 async def test_input_requires_auth(client):
     r = await client.post(
         "/api/v1/devices/emulator-5554/input",
-        json={"type": "tap", "x": 0, "y": 0},
+        json={"type": "tap", "nx": 0, "ny": 0},
     )
     assert r.status_code == 401
 
@@ -92,7 +92,7 @@ async def test_input_rejects_invalid_serial(client):
     h = await _auth(client)
     r = await client.post(
         "/api/v1/devices/bad..serial!/input",
-        json={"type": "tap", "x": 0, "y": 0},
+        json={"type": "tap", "nx": 0, "ny": 0},
         headers=h,
     )
     assert r.status_code == 400
@@ -108,7 +108,7 @@ async def test_input_adb_error_returns_502(client):
     ):
         r = await client.post(
             "/api/v1/devices/emulator-5554/input",
-            json={"type": "tap", "x": 0, "y": 0},
+            json={"type": "tap", "nx": 0, "ny": 0},
             headers=h,
         )
     assert r.status_code == 502
